@@ -1,0 +1,19 @@
+[flake8]
+# Ignore warnings that are not compatible with black
+# E203: whitespace before ':'
+# W503: line break before binary operator
+ignore = E203, W503
+max-line-length = 80
+select = C,E,F,W,B,B950
+max-complexity = 10
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .venv,
+    venv,
+    _sacred,
+    docs,
+    .eggs,
+    *.egg-info

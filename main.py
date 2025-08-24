@@ -6,10 +6,11 @@ from src.tui import run_tui_configurator, print_final_config_panel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
+console = Console()
+
 
 @ex.main
 def main(_config, _run):
-    console = Console()
     console.print(
         "[bold green]Starting Genetic Hyperparameter Optimization...[/bold green]"
     )
@@ -23,7 +24,11 @@ def main(_config, _run):
 
 
 if __name__ == "__main__":
-    config_overrides = run_tui_configurator()
+    try:
+        config_overrides = run_tui_configurator()
 
-    if config_overrides is not None:
-        ex.run(config_updates=config_overrides)
+        if config_overrides is not None:
+            ex.run(config_updates=config_overrides)
+    except KeyboardInterrupt:
+        console.print("\n[bold red]Interrupted by user. Exiting...[/bold red]")
+        sys.exit(0)

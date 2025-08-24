@@ -58,7 +58,13 @@ def _prompt_for_numeric(
         return None  # User hit Enter
 
     try:
-        return value_type(val_str)
+        value = value_type(val_str)
+        if value < 0:
+            console.print(
+                f"[yellow]Wartość ujemna nie jest dozwolona. Użyto domyślnej: {default_value}.[/yellow]"
+            )
+            return None
+        return value
     except (ValueError, TypeError):
         console.print(
             f"[red]Nieprawidłowa wartość. Użyto domyślnej: {default_value}.[/red]"
@@ -134,9 +140,9 @@ def _prompt_for_cpu_cores(max_cores: int) -> Optional[int]:
         if 0 < requested_cores <= max_cores:
             return requested_cores
     console.print(
-        f"[yellow]Nieprawidłowa wartość. Użyto wartości domyślnej.[/yellow]"
+        f"[yellow]Nieprawidłowa wartość. Użyto wartości {max_cores}.[/yellow]"
     )
-    return None
+    return max_cores
 
 
 def _prompt_for_gpu_settings(
@@ -327,7 +333,7 @@ def _select_active_operators(
 
     # TODO: Czy pisać, że w każdej epoce są losowe, czy nie?
     console.print(
-        "[R] Wybierz losowe operatory (wartości z pliku konfiguracyjnego)"
+        "[[bold cyan]R[/bold cyan]] Wybierz losowe operatory (wartości z pliku konfiguracyjnego)"
     )
 
     while True:
@@ -443,7 +449,15 @@ def _prompt_for_stop_conditions(defaults: Dict[str, Any]) -> Dict[str, Any]:
 
     for key, (desc, val_type) in params.items():
         val = _prompt_for_numeric(desc, stop_defaults.get(key), val_type)
+
         if val is not None:
+            if key == "fitness_goal" and val > 1.0:
+                console.print(
+                    f"[yellow]Wartość funkcji celu nie może być większa niż 1.0! Użytwo wartości {stop_defaults.get(key)}.[/yellow]"
+                )
+                stop_updates[key] = stop_defaults.get(key)
+                continue
+
             stop_updates[key] = val
 
     return stop_updates
@@ -482,6 +496,13 @@ def _get_algorithm_settings(
     for key, (desc, val_type) in params.items():
         val = _prompt_for_numeric(desc, algo_defaults.get(key), val_type)
         if val is not None:
+            if key == "data_subset_percentage" and val > 1.0:
+                console.print(
+                    f"[yellow]Procent podzbioru danych nie może być większy niż 1.0! Użytwo wartości {algo_defaults.get(key)}.[/yellow]"
+                )
+                updates[key] = algo_defaults.get(key)
+                continue
+
             updates[key] = val
 
     # Stop conditions
@@ -543,7 +564,7 @@ def _prompt_and_save_json_config(config_data: Dict):
         default_filename = f"config_{timestamp}.json"
 
         user_filename = console.input(
-            f"Podaj nazwę pliku (Enter = {default_filename}): "
+            f"Podaj nazwę pliku (Enter = [bold cyan]{default_filename}[/bold cyan]): ",
         )
         filename = user_filename or default_filename
         if not filename.endswith(".json"):
@@ -642,20 +663,21 @@ def print_final_config_panel(_config: Dict[str, Any]):
         f"-------------------\n"
         f"[bold]Main Algorithm:[/bold]\n"
         f"  [cyan]Calibration Enabled:[/cyan] {_get_nested_config(_config, [GA_CONFIG, CALIBRATION, 'enabled'])}\n"
-        f"  [bold]Genetic Operators Active:[/bold] {', '.join(_get_nested_config(_config, [GA_CONFIG, GENETIC_OPERATORS, 'active'], []))}\n"
+        f"  [cyan]Genetic Operators Active:[/cyan] {', '.join(_get_nested_config(_config, [GA_CONFIG, GENETIC_OPERATORS, 'active'], []))}\n"
         f"  [cyan]Population Size:[/cyan] {_get_nested_config(_config, main_algo_path + ['population_size'])}\n"
         f"  [cyan]Generations:[/cyan] {_get_nested_config(_config, main_algo_path + ['generations'])}\n"
         f"  [cyan]Training Epochs:[/cyan] {_get_nested_config(_config, main_algo_path + ['training_epochs'])}\n"
         f"  [cyan]Stop Conditions:[/cyan]\n"
-        f"    Max Gen: {_get_nested_config(_config, stop_cond_path + ['max_generations'])}\n"
-        f"    Early Stop Gen: {_get_nested_config(_config, stop_cond_path + ['early_stop_generations'])}\n"
-        f"    Fitness Goal: {_get_nested_config(_config, stop_cond_path + ['fitness_goal'])}\n"
-        f"    Time Limit (min): {_get_nested_config(_config, stop_cond_path + ['time_limit_minutes'])}"
+        f"    [cyan]Max Gen:[/cyan] {_get_nested_config(_config, stop_cond_path + ['max_generations'])}\n"
+        f"    [cyan]Early Stop Gen:[/cyan] {_get_nested_config(_config, stop_cond_path + ['early_stop_generations'])}\n"
+        f"    [cyan]Fitness Goal:[/cyan] {_get_nested_config(_config, stop_cond_path + ['fitness_goal'])}\n"
+        f"    [cyan]Time Limit (min):[/cyan] {_get_nested_config(_config, stop_cond_path + ['time_limit_minutes'])}"
     )
 
     panel = Panel(
         config_details,
         title="[bold green]Final Configuration[/bold green]",
         border_style="bright_blue",
+        expand=False,
     )
     console.print(panel)

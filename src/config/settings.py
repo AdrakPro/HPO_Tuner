@@ -5,7 +5,7 @@ This file defines the experiment and its configuration based on the provided spe
 
 from sacred import Experiment
 
-ex = Experiment("Optymalizacja_CNN")
+ex = Experiment("Konfiguracja optymalizatora")
 
 
 @ex.config

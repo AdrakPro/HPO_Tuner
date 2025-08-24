@@ -1,34 +1,35 @@
 import sys
 from pathlib import Path
-from rich.console import Console
 from src.config.settings import ex
 from src.tui import run_tui_configurator, print_final_config_panel
+from src.logger.experiment_logger import logger
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-console = Console()
-
 
 @ex.main
-def main(_config, _run):
-    console.print(
-        "[bold green]Starting Genetic Hyperparameter Optimization...[/bold green]"
-    )
-
+def run_optimization(_config, _run):
     print_final_config_panel(_config)
 
     # ... (optimization logic) ...
-    console.print("1. Initializing population...")
+    logger.info("1. Inicjalizacja populacji...")
     # ...
-    console.print("[bold green]Optimization finished.[/bold green]")
+    logger.success("Optymalizacja zakończona.")
 
 
-if __name__ == "__main__":
+def main():
     try:
         config_overrides = run_tui_configurator()
 
         if config_overrides is not None:
-            ex.run(config_updates=config_overrides)
+            # loglevel: supress Sacred built-in logger
+            ex.run(
+                config_updates=config_overrides, options={"--loglevel": "ERROR"}
+            )
     except KeyboardInterrupt:
-        console.print("\n[bold red]Interrupted by user. Exiting...[/bold red]")
+        logger.error("\nUżytkownik zakończył działanie programu.")
         sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

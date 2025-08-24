@@ -16,8 +16,9 @@ import torch
 from rich.console import Console
 from rich.panel import Panel
 from src.config.settings import ex as default_experiment
+from src.logger.experiment_logger import logger
 
-console = Console()
+console = Console(highlight=False)
 
 # --- Constants ---
 CONFIG_DIR = os.path.abspath("configs")
@@ -45,7 +46,7 @@ def _prompt_for_validated_input(
         user_input = console.input(prompt)
         if validation_callable(user_input):
             return user_input
-        console.print(f"[red]{error_message}[/red]")
+        logger.error(error_message)
 
 
 def _prompt_for_numeric(
@@ -66,8 +67,8 @@ def _prompt_for_numeric(
             return None
         return value
     except (ValueError, TypeError):
-        console.print(
-            f"[red]Nieprawidłowa wartość. Użyto domyślnej: {default_value}.[/red]"
+        logger.error(
+            f"Nieprawidłowa wartość. Użyto domyślnej: {default_value}."
         )
         return None
 
@@ -104,8 +105,8 @@ def _detect_hardware_resources() -> Dict[str, Any]:
             # In a real scenario, this might involve a device query.
             max_block_size = 512
         except Exception as e:
-            console.print(
-                f"[red]Nie udało się określić maks. rozmiaru bloku GPU: {e}[/red]"
+            logger.error(
+                f"Nie udało się określić maks. rozmiaru bloku GPU: {e}"
             )
 
     return {
@@ -247,8 +248,8 @@ def _prompt_for_hyperparameter_range(
             value_caster = float if param_type == "float" else int
             low, high = map(value_caster, new_range_str.split("-"))
             if low > high:
-                console.print(
-                    "[red]Nie zastosowano zmiany. Wartość 'max' musi być większa od wartości 'min'.[/red]"
+                logger.error(
+                    "Nie zastosowano zmiany. Wartość 'max' musi być większa od wartości 'min'."
                 )
                 return None
 
@@ -257,8 +258,8 @@ def _prompt_for_hyperparameter_range(
             )
             return {"range": [low, high]}
         except ValueError:
-            console.print(
-                "[red]Błędny format. Użyj formatu 'min-max' z odpowiednimi liczbami.[/red]"
+            logger.error(
+                "Błędny format. Użyj formatu 'min-max' z odpowiednimi liczbami."
             )
     return None
 
@@ -333,7 +334,7 @@ def _select_active_operators(
 
     # TODO: Czy pisać, że w każdej epoce są losowe, czy nie?
     console.print(
-        "[[bold cyan]R[/bold cyan]] Wybierz losowe operatory (wartości z pliku konfiguracyjnego)"
+        "[R] Wybierz losowe operatory (wartości z pliku konfiguracyjnego)"
     )
 
     while True:
@@ -343,16 +344,14 @@ def _select_active_operators(
         try:
             chosen_indices = [int(i.strip()) - 1 for i in choice_str.split(",")]
             if len(chosen_indices) < 2:
-                console.print(
-                    "[red]Musisz wybrać co najmniej 2 operatory.[/red]"
-                )
+                logger.error("Musisz wybrać co najmniej 2 operatory.")
                 continue
             if all(0 <= i < len(op_keys) for i in chosen_indices):
                 return [op_keys[i] for i in chosen_indices]
-            console.print("[red]Podano nieprawidłowy numer operatora.[/red]")
+            logger.error("Podano nieprawidłowy numer operatora.")
         except ValueError:
-            console.print(
-                "[red]Nieprawidłowy format. Podaj numery oddzielone przecinkami lub 'R'.[/red]"
+            logger.error(
+                "Nieprawidłowy format. Podaj numery oddzielone przecinkami lub 'R'."
             )
 
 
@@ -373,9 +372,7 @@ def _tune_mutation_parameters(defaults: Dict[str, Any]) -> Dict[str, float]:
         val = _prompt_for_numeric(prompt, default_val, float)
         if val is not None:
             if is_prob and not (0.0 <= val <= 1.0):
-                console.print(
-                    "[red]Prawdopodobieństwo musi być w zakresie [0, 1].[/red]"
-                )
+                logger.error("Prawdopodobieństwo musi być w zakresie [0, 1].")
             else:
                 mutation_updates[param] = val
     return mutation_updates
@@ -519,7 +516,7 @@ def _ensure_config_dir_exists():
     """Creates the CONFIG_DIR if it does not already exist."""
     if not os.path.exists(CONFIG_DIR):
         os.makedirs(CONFIG_DIR)
-        console.print(
+        logger.info(
             f"Utworzono katalog '{CONFIG_DIR}' na pliki konfiguracyjne."
         )
 
@@ -528,29 +525,25 @@ def _prompt_and_load_json_config(default_config: Dict) -> Dict:
     """Asks user to load a config from JSON, looking inside CONFIG_DIR."""
     while True:
         filename = console.input(
-            f"Podaj nazwę pliku .json w folderze '{CONFIG_DIR}': "
+            f"Podaj nazwę pliku konfiguracji w folderze '{CONFIG_DIR}': "
         )
         print(filename)
         if not filename:
-            console.print(
-                "[red]Nazwa pliku nie może być pusta. Spróboj ponownie.[/red]"
-            )
+            logger.error("Nazwa pliku nie może być pusta. Spróboj ponownie.")
             continue
 
         path = os.path.join(CONFIG_DIR, filename)
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:
-                    console.print(
-                        f"[green]Wczytano konfigurację z {path}[/green]"
-                    )
+                    logger.success(f"Wczytano konfigurację z {path}")
                     return json.load(f)
             except (json.JSONDecodeError, IOError) as e:
-                console.print(f"[red]Błąd podczas wczytywania pliku: {e}[/red]")
+                logger.error(f"Błąd podczas wczytywania pliku: {e}")
         else:
-            console.print(f"[red]Plik '{path}' nie istnieje.[/red]")
+            logger.error(f"Plik '{path}' nie istnieje.")
 
-    console.print("[yellow]Wczytano domyślną konfigurację.[/yellow]")
+    logger.warning("Wczytano domyślną konfigurację.")
     return default_config
 
 
@@ -574,11 +567,9 @@ def _prompt_and_save_json_config(config_data: Dict):
         try:
             with open(path, "w") as f:
                 json.dump(config_data, f, indent=4)
-            console.print(
-                f"[bold green]Konfiguracja została zapisana w '{path}'[/bold green]"
-            )
+            logger.success(f"Konfiguracja została zapisana w '{path}'")
         except IOError as e:
-            console.print(f"[red]Błąd podczas zapisu pliku: {e}[/red]")
+            logger.error(f"Błąd podczas zapisu pliku: {e}")
 
 
 def run_tui_configurator() -> Optional[Dict[str, Any]]:
@@ -596,10 +587,12 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     )
 
     if choice == "3":
-        console.print("[yellow]Zamykanie programu.[/yellow]")
+        logger.warning("Zamykanie programu.")
         return None
     if choice == "2":
         return _prompt_and_load_json_config(default_config)
+
+    logger.log_file("Rozpoczęto nowa konfiguracje")
 
     # Interactive configuration
     config_updates: Dict[str, Any] = {}
@@ -676,8 +669,9 @@ def print_final_config_panel(_config: Dict[str, Any]):
 
     panel = Panel(
         config_details,
-        title="[bold green]Final Configuration[/bold green]",
-        border_style="bright_blue",
+        title="[bold cyan]Final Configuration[/bold cyan]",
+        border_style="cyan",
         expand=False,
     )
     console.print(panel)
+    logger.log_file(f"Konfiguracja\n: {json.dumps(_config, indent=4)}")

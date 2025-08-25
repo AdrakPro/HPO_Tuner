@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from rich.console import Console
 from rich.panel import Panel
-from src.config.settings import ex as default_experiment
+from src.config.settings import ex
 from src.logger.experiment_logger import logger
 
 console = Console(highlight=False)
@@ -575,7 +575,7 @@ def _prompt_and_save_json_config(config_data: Dict):
 def run_tui_configurator() -> Optional[Dict[str, Any]]:
     """Main function to run the TUI and collect all configuration overrides."""
     _ensure_config_dir_exists()
-    default_config = default_experiment.configurations[0]()
+    default_config = ex.configurations[0]()
 
     _print_header("GENETYCZNA OPTYMALIZACJA SIECI CNN")
     prompt = (

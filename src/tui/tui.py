@@ -9,14 +9,19 @@ This module collects user input and returns a dictionary of configuration overri
 import collections
 import json
 import os
-from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 from rich.console import Console
 from rich.panel import Panel
+
+from src.config.load_config import (
+    prompt_and_load_json_config,
+    prompt_and_save_json_config,
+)
 from src.config.settings import ex
 from src.logger.experiment_logger import logger
+from src.utils.ensure_dir import ensure_dir_exists
 
 console = Console(highlight=False)
 
@@ -512,69 +517,9 @@ def _get_algorithm_settings(
 
 
 # --- Main TUI Runner ---
-def _ensure_config_dir_exists():
-    """Creates the CONFIG_DIR if it does not already exist."""
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
-        logger.info(
-            f"Utworzono katalog '{CONFIG_DIR}' na pliki konfiguracyjne."
-        )
-
-
-def _prompt_and_load_json_config(default_config: Dict) -> Dict:
-    """Asks user to load a config from JSON, looking inside CONFIG_DIR."""
-    while True:
-        filename = console.input(
-            f"Podaj nazwę pliku konfiguracji w folderze '{CONFIG_DIR}': "
-        )
-        print(filename)
-        if not filename:
-            logger.error("Nazwa pliku nie może być pusta. Spróboj ponownie.")
-            continue
-
-        path = os.path.join(CONFIG_DIR, filename)
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    logger.success(f"Wczytano konfigurację z {path}")
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                logger.error(f"Błąd podczas wczytywania pliku: {e}")
-        else:
-            logger.error(f"Plik '{path}' nie istnieje.")
-
-    logger.warning("Wczytano domyślną konfigurację.")
-    return default_config
-
-
-def _prompt_and_save_json_config(config_data: Dict):
-    """Asks user to save the final configuration to a JSON file in CONFIG_DIR."""
-    choice = console.input(
-        "\nCzy chcesz zapisać finalną konfigurację do pliku? (t/n): "
-    ).lower()
-    if choice == "t":
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        default_filename = f"config_{timestamp}.json"
-
-        user_filename = console.input(
-            f"Podaj nazwę pliku (Enter = [bold cyan]{default_filename}[/bold cyan]): ",
-        )
-        filename = user_filename or default_filename
-        if not filename.endswith(".json"):
-            filename += ".json"
-
-        path = os.path.join(CONFIG_DIR, filename)
-        try:
-            with open(path, "w") as f:
-                json.dump(config_data, f, indent=4)
-            logger.success(f"Konfiguracja została zapisana w '{path}'")
-        except IOError as e:
-            logger.error(f"Błąd podczas zapisu pliku: {e}")
-
-
 def run_tui_configurator() -> Optional[Dict[str, Any]]:
     """Main function to run the TUI and collect all configuration overrides."""
-    _ensure_config_dir_exists()
+    ensure_dir_exists(CONFIG_DIR)
     default_config = ex.configurations[0]()
 
     _print_header("GENETYCZNA OPTYMALIZACJA SIECI CNN")
@@ -590,7 +535,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
         logger.warning("Zamykanie programu.")
         return None
     if choice == "2":
-        return _prompt_and_load_json_config(default_config)
+        return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
 
     logger.log_file("Rozpoczęto nowa konfiguracje")
 
@@ -619,7 +564,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
         "\n[bold green]Interaktywna konfiguracja zakończona.[/bold green]"
     )
     final_config = _deep_merge_dicts(default_config, config_updates)
-    _prompt_and_save_json_config(final_config)
+    prompt_and_save_json_config(final_config, console, CONFIG_DIR)
     return final_config
 
 

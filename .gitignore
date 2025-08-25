@@ -6,6 +6,7 @@ __pycache__/
 todo.txt
 /logs
 /model_data
+/saved_models
 
 # C extensions
 *.so

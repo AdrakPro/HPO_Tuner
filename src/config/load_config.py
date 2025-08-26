@@ -19,7 +19,8 @@ def prompt_and_load_json_config(
             logger.error("Nazwa pliku nie może być pusta. Spróboj ponownie.")
             continue
 
-        path = os.path.join(config_dir, filename)
+        # Temporary for testing purposes (filename)
+        path = os.path.join(config_dir, "config_2025-08-25_20-43-00.json")
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:

@@ -12,8 +12,9 @@ ex = Experiment("Optymalizacja")
 def config():
     project = {"name": "Eksperyment 1.0", "seed": 2137}
 
+    # TODO: integrate
     environment = {
-        "data_source": {"dataset": "CIFAR-10", "path": "./data"},
+        "data_source": {"dataset": "CIFAR-10", "path": "./model_data"},
         "logging": {
             "log_file": "logs/experiment.log",
             "error_log_file": "logs/error.log",
@@ -29,7 +30,6 @@ def config():
     }
 
     neural_network_config = {
-        "base_architecture": "CNN",
         "input_shape": [3, 32, 32],  # (channels, height, width)
         "output_classes": 10,
         "conv_blocks": 2,
@@ -122,7 +122,7 @@ def config():
         "main_algorithm": {
             "population_size": 50,
             "generations": 50,
-            "training_epochs": 25,
+            "training_epochs": 100,
             "stop_conditions": {
                 "max_generations": 50,
                 "early_stop_generations": 10,

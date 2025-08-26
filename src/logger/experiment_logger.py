@@ -15,6 +15,7 @@ class LogLevel(Enum):
     NORMAL = auto()
 
 
+# TODO: Enhancement observe the folder, keep only 'x' logs files
 class ExperimentLogger:
     """
     A singleton logger class for experiments with Rich formatting.

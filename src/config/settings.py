@@ -9,7 +9,7 @@ ex = Experiment("Optymalizacja")
 
 
 @ex.config
-def config():
+def default_config():
     project = {"name": "Eksperyment 1.0", "seed": 2137}
 
     # TODO: integrate
@@ -36,13 +36,16 @@ def config():
         # Parameters not subject to optimization
         "fixed_parameters": {
             "activation_function": "ReLu",
-            "padding": 1,
+            "padding": "a",
             "stride": 2,
         },
         "hyperparameter_space": {
             "width_scale": {
                 "type": "float",
-                "range": [0.5, 2.0],
+                "range": [
+                    0.5,
+                    2.0,
+                ],  # Can have negative range to lower base filters
                 "description": "Skaluje liczbę filtrów w warstawach conv",
             },
             "fc1_units": {

@@ -272,22 +272,64 @@ def _prompt_for_hyperparameter_range(
 def _prompt_for_hyperparameter_enum(
     name: str, current_values: List
 ) -> Optional[Dict[str, List]]:
-    """Prompts for new categorical values for a hyperparameter."""
-    prompt = f"  Podaj nowe wartości oddzielone przecinkami (domyślnie: {current_values}): "
-    new_values_str = console.input(prompt)
-    if new_values_str:
-        new_values = [v.strip() for v in new_values_str.split(",")]
-        if current_values:
-            try:
-                original_type = type(current_values[0])
-                new_values = [original_type(v) for v in new_values]
-            except (ValueError, IndexError):
-                pass
-        console.print(
-            f"  [green]Zaktualizowano wartości dla {name} na {new_values}.[/green]"
-        )
-        return {"values": new_values}
-    return None
+    """
+    Prompts for new categorical values, validating against a predefined set for specific parameters.
+    """
+    allowed_values = {
+        "optimizer_schedule": [
+            "SGD_STEP",
+            "SGD_COSINE",
+            "ADAMW_COSINE",
+            "ADAMW_ONECYCLE",
+        ],
+        "aug_intensity": ["NONE", "LIGHT", "MEDIUM", "STRONG"],
+        "batch_size": [32, 64, 128, 256, 512],
+    }
+
+    new_values = None
+
+    if name in allowed_values:
+        allowed = allowed_values[name]
+        prompt = f"Podaj nowe wartości oddzielone przecinkami (dostępne: {allowed}): "
+
+        new_values_str = console.input(prompt)
+
+        if not new_values_str:
+            # User pressed Enter, no changes
+            return None
+        raw_new_values = [v.strip() for v in new_values_str.split(",")]
+
+        try:
+            if name == "batch_size":
+                processed_values = [int(v) for v in raw_new_values]
+            else:
+                processed_values = [v.upper() for v in raw_new_values]
+
+            invalid_values = [v for v in processed_values if v not in allowed]
+
+            if invalid_values:
+                logger.error(
+                    f"Podano nieprawidłowe wartości: {invalid_values}. Dozwolone wartości dla '{name}' to: {allowed}."
+                )
+                logger.warning(
+                    f"Przywrócono wartości domyślne: {current_values}."
+                )
+                return None
+
+            new_values = processed_values
+
+        except ValueError:
+            console.print(
+                f"  [red]Błąd: Wprowadzono nieprawidłowy format danych dla '{name}'.[/red]"
+            )
+            console.print(
+                f"  [yellow]Przywrócono wartości domyślne: {current_values}.[/yellow]"
+            )
+            return None
+    console.print(
+        f"  [green]Zaktualizowano wartości dla {name} na {new_values}.[/green]"
+    )
+    return {"values": new_values}
 
 
 def _get_hyperparameter_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
@@ -475,12 +517,14 @@ def _get_algorithm_settings(
 
     if config_key == CALIBRATION:
         enabled_choice = console.input(
-            "Czy włączyć kalibrację? (t/n): "
+            "Czy włączyć kalibrację? (t/n): (Enter = tak)"
         ).lower()
         if enabled_choice == "n":
             updates["enabled"] = False
             return {GA_CONFIG: {CALIBRATION: updates}}
         elif enabled_choice == "t":
+            updates["enabled"] = True
+        else:
             updates["enabled"] = True
 
     # Parameter prompts

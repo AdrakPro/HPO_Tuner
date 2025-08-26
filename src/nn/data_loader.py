@@ -1,0 +1,126 @@
+"""
+Data loader module for CIFAR-10 using PyTorch.
+Responsible for downloading, loading, and batching the CIFAR-10 dataset.
+"""
+
+import os
+
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+
+from src.logger.experiment_logger import logger
+from src.model.chromosome import BatchSize, AugmentationIntensity
+from src.utils.seed import seed_worker
+
+# Rule of thumb: cpu cores // 2
+NUM_WORKERS = os.cpu_count() // 2
+
+# Precomputed statistics, ensuring images are normalized consistently for CIFAR-10
+MEANS = (0.4914, 0.4822, 0.4465)
+STDS = (0.2023, 0.1994, 0.2010)
+
+IMG_SIZE = 32
+
+
+def get_dataset_loaders(
+    batch_size: BatchSize,
+    aug_intensity: AugmentationIntensity,
+    is_gpu: bool,
+    padding: int,
+) -> tuple[DataLoader, DataLoader]:
+    """
+    Get CIFAR-10 train/test DataLoaders.
+
+    Returns:
+        (train_loader, test_loader): Tuple of DataLoaders.
+    """
+
+    data_dir: str = "./model_data"
+
+    transform_train, transform_test = get_transforms(aug_intensity, padding)
+
+    train_set = datasets.CIFAR10(
+        root=data_dir, train=True, download=True, transform=transform_train
+    )
+    test_set = datasets.CIFAR10(
+        root=data_dir, train=False, download=True, transform=transform_test
+    )
+
+    train_loader = DataLoader(
+        train_set,
+        batch_size=batch_size.value,
+        shuffle=True,
+        num_workers=NUM_WORKERS,
+        worker_init_fn=seed_worker,
+        pin_memory=is_gpu,
+    )
+
+    test_loader = DataLoader(
+        test_set,
+        batch_size=batch_size.value,
+        shuffle=False,
+        num_workers=NUM_WORKERS,
+    )
+
+    return train_loader, test_loader
+
+
+def get_transforms(
+    aug_intensity: AugmentationIntensity, padding: int
+) -> tuple[transforms.Compose, transforms.Compose]:
+    """
+    Get train and test transforms based on augmentation intensity.
+
+    Args:
+        aug_intensity: AugmentationIntensity Enum.
+
+    Returns:
+        Tuple of train and test transforms.
+    """
+    if aug_intensity == AugmentationIntensity.NONE:
+        train_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(MEANS, STDS),
+            ]
+        )
+    elif aug_intensity == AugmentationIntensity.LIGHT:
+        train_transform = transforms.Compose(
+            [
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(MEANS, STDS),
+            ]
+        )
+    elif aug_intensity == AugmentationIntensity.MEDIUM:
+        train_transform = transforms.Compose(
+            [
+                transforms.RandomCrop(IMG_SIZE, padding=padding),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(MEANS, STDS),
+            ]
+        )
+    elif aug_intensity == AugmentationIntensity.STRONG:
+        train_transform = transforms.Compose(
+            [
+                transforms.RandomCrop(IMG_SIZE, padding=padding),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(
+                    brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
+                ),
+                transforms.ToTensor(),
+                transforms.Normalize(MEANS, STDS),
+            ]
+        )
+    else:
+        logger.error("Invalid AugmentationIntensity")
+        raise ValueError("Invalid AugmentationIntensity")
+
+    test_transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(MEANS, STDS),
+        ]
+    )
+    return train_transform, test_transform

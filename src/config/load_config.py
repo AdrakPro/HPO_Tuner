@@ -163,6 +163,11 @@ def _validate_neural_network_config(config: Dict):
                     raise ValueError(
                         f"'{name}' jest typu 'enum' z liczbami całkowitymi, ale lista 'values' zawiera inne typy."
                     )
+        if "step" in params:
+            if not isinstance(params["step"], int) or params["step"] <= 0:
+                raise ValueError(
+                    f"Wartośc 'step' musi być liczbą naturalną oraz nie może być zerem."
+                )
 
 
 def _validate_nested_validation_config(config: Dict):

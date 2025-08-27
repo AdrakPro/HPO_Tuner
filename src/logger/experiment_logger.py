@@ -55,7 +55,7 @@ class ExperimentLogger:
 
         os.makedirs(logs_dir, exist_ok=True)
         self.success(
-            f"Logger został zainicjalizowany. Ścieżka plików log: {self.log_path}"
+            f"Logger has been initialized. Log file path: {self.log_path}"
         )
 
     def log_console(self, msg: str, level: LogLevel = LogLevel.INFO) -> None:

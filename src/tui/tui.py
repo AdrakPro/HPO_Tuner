@@ -19,7 +19,7 @@ from src.config.load_config import (
     prompt_and_load_json_config,
     prompt_and_save_json_config,
 )
-from src.config.settings import ex
+from src.config.default_config import ex
 from src.logger.experiment_logger import logger
 from src.utils.ensure_dir import ensure_dir_exists
 
@@ -67,13 +67,13 @@ def _prompt_for_numeric(
         value = value_type(val_str)
         if value < 0:
             console.print(
-                f"[yellow]Wartość ujemna nie jest dozwolona. Użyto domyślnej: {default_value}.[/yellow]"
+                f"[yellow]Negative value is not allowed. Using default: {default_value}.[/yellow]"
             )
             return None
         return value
     except (ValueError, TypeError):
         logger.error(
-            f"Nieprawidłowa wartość. Użyto domyślnej: {default_value}."
+            f"Invalid value. Using default: {default_value}."
         )
         return None
 
@@ -111,7 +111,7 @@ def _detect_hardware_resources() -> Dict[str, Any]:
             max_block_size = 512
         except Exception as e:
             logger.error(
-                f"Nie udało się określić maks. rozmiaru bloku GPU: {e}"
+                f"Failed to determine max GPU block size: {e}"
             )
 
     return {
@@ -125,8 +125,8 @@ def _detect_hardware_resources() -> Dict[str, Any]:
 def _prompt_for_evaluation_mode() -> str:
     """Prompts the user to select the evaluation mode (CPU, GPU, or both)."""
     mode_map = {"1": "CPU", "2": "GPU", "3": "CPU+GPU"}
-    prompt = "Wykorzystaj:\n[1] CPU\n[2] GPU\n[3] CPU+GPU\n> "
-    error_msg = "Nieprawidłowy wybór. Wprowadź 1, 2, lub 3."
+    prompt = "Select execution mode:\n[1] CPU\n[2] GPU\n[3] CPU+GPU\n> "
+    error_msg = "Invalid choice. Please enter 1, 2, or 3."
     choice = _prompt_for_validated_input(
         prompt, lambda x: x in mode_map, error_msg
     )
@@ -136,7 +136,7 @@ def _prompt_for_evaluation_mode() -> str:
 def _prompt_for_cpu_cores(max_cores: int) -> Optional[int]:
     """Prompts for the number of CPU cores to use."""
     prompt = (
-        f"Podaj liczbę rdzeni CPU (Dostępne: {max_cores}, Enter = {max_cores}):"
+        f"Enter the number of CPU cores (Available: {max_cores}, Enter = {max_cores}):"
     )
     cpu_input = console.input(prompt)
     if not cpu_input:
@@ -146,7 +146,7 @@ def _prompt_for_cpu_cores(max_cores: int) -> Optional[int]:
         if 0 < requested_cores <= max_cores:
             return requested_cores
     console.print(
-        f"[yellow]Nieprawidłowa wartość. Użyto wartości {max_cores}.[/yellow]"
+        f"[yellow]Invalid value. Using value {max_cores}.[/yellow]"
     )
     return max_cores
 
@@ -157,12 +157,12 @@ def _prompt_for_gpu_settings(
     """Prompts for GPU device count and block size."""
     gpu_updates: Dict[str, Any] = {}
     if max_devices == 0:
-        console.print("[yellow]Nie wykryto dostępnych urządzeń CUDA.[/yellow]")
+        console.print("[yellow]No available CUDA devices detected.[/yellow]")
         return {"gpu_devices": "-", "gpu_block_size": "-"}
 
     # Prompt for GPU devices
     gpu_prompt = (
-        f"Podaj liczbę urządzeń CUDA (Dostępne: {max_devices}, Enter = 1): "
+        f"Enter the number of CUDA devices (Available: {max_devices}, Enter = 1): "
     )
     gpu_input = console.input(gpu_prompt)
     if gpu_input.isdigit():
@@ -171,12 +171,12 @@ def _prompt_for_gpu_settings(
             gpu_updates["gpu_devices"] = requested_gpus
         else:
             console.print(
-                "[yellow]Żądana liczba GPU jest nieprawidłowa. Użyto wartości '1'.[/yellow]"
+                "[yellow]The requested number of GPUs is invalid. Using '1'.[/yellow]"
             )
             gpu_updates["gpu_devices"] = 1
     elif gpu_input != "":
         console.print(
-            "[yellow]Nieprawidłowa wartość. Użyto wartości '1'.[/yellow]"
+            "[yellow]Invalid value. Using '1'.[/yellow]"
         )
         gpu_updates["gpu_devices"] = 1
     else:
@@ -185,7 +185,7 @@ def _prompt_for_gpu_settings(
     # Prompt for block size if GPUs are being used
     use_gpus = gpu_updates.get("gpu_devices", defaults.get("gpu_devices"))
     if use_gpus == "-" or (isinstance(use_gpus, int) and use_gpus > 0):
-        block_prompt = f"Podaj rozmiar bloku GPU (Max: {max_block_size}, Enter = {max_block_size}): "
+        block_prompt = f"Enter GPU block size (Max: {max_block_size}, Enter = {max_block_size}): "
         block_input = console.input(block_prompt)
         if block_input.isdigit():
             requested_size = int(block_input)
@@ -193,12 +193,12 @@ def _prompt_for_gpu_settings(
                 gpu_updates["gpu_block_size"] = requested_size
             else:
                 console.print(
-                    "[yellow]Żądany rozmiar bloku GPU jest nieprawidłowy. Użyto wartości maksymalnej.[/yellow]"
+                    "[yellow]Requested GPU block size is invalid. Using maximum value.[/yellow]"
                 )
                 gpu_updates["gpu_block_size"] = max_block_size
         elif block_input != "":
             console.print(
-                "[yellow]Nieprawidłowa wartość. Użyto wartości maksymalnej.[/yellow]"
+                "[yellow]Invalid value. Using maximum value.[/yellow]"
             )
             gpu_updates["gpu_block_size"] = max_block_size
         else:
@@ -209,7 +209,7 @@ def _prompt_for_gpu_settings(
 
 def _get_hardware_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts user for hardware settings after detecting available resources."""
-    _print_header("Wybór zasobów obliczeniowych")
+    _print_header("Computational Resources Selection")
     updates: Dict[str, Any] = {}
     hw_defaults = defaults.get(HARDWARE_CONFIG, {})
     resources = _detect_hardware_resources()
@@ -246,7 +246,7 @@ def _prompt_for_hyperparameter_range(
     name: str, param_type: str, current_range: List
 ) -> Optional[Dict[str, List]]:
     """Prompts for a new min-max range for a hyperparameter."""
-    prompt = f"  Podaj nowy zakres w formacie 'min-max' (domyślnie: {current_range}): "
+    prompt = f"  Enter new range in 'min-max' format (default: {current_range}): "
     new_range_str = console.input(prompt)
     if "-" in new_range_str:
         try:
@@ -254,17 +254,17 @@ def _prompt_for_hyperparameter_range(
             low, high = map(value_caster, new_range_str.split("-"))
             if low > high:
                 logger.error(
-                    "Nie zastosowano zmiany. Wartość 'max' musi być większa od wartości 'min'."
+                    "Change not applied. 'max' value must be greater than 'min' value."
                 )
                 return None
 
             console.print(
-                f"  [green]Zaktualizowano zakres dla {name} na [{low}, {high}].[/green]"
+                f"  [green]Updated range for {name} to [{low}, {high}].[/green]"
             )
             return {"range": [low, high]}
         except ValueError:
             logger.error(
-                "Błędny format. Użyj formatu 'min-max' z odpowiednimi liczbami."
+                "Incorrect format. Use 'min-max' format with appropriate numbers."
             )
     return None
 
@@ -290,7 +290,7 @@ def _prompt_for_hyperparameter_enum(
 
     if name in allowed_values:
         allowed = allowed_values[name]
-        prompt = f"Podaj nowe wartości oddzielone przecinkami (dostępne: {allowed}): "
+        prompt = f"Enter new comma-separated values (available: {allowed}): "
 
         new_values_str = console.input(prompt)
 
@@ -309,10 +309,10 @@ def _prompt_for_hyperparameter_enum(
 
             if invalid_values:
                 logger.error(
-                    f"Podano nieprawidłowe wartości: {invalid_values}. Dozwolone wartości dla '{name}' to: {allowed}."
+                    f"Invalid values provided: {invalid_values}. Allowed values for '{name}' are: {allowed}."
                 )
                 logger.warning(
-                    f"Przywrócono wartości domyślne: {current_values}."
+                    f"Restored default values: {current_values}."
                 )
                 return None
 
@@ -320,33 +320,33 @@ def _prompt_for_hyperparameter_enum(
 
         except ValueError:
             console.print(
-                f"  [red]Błąd: Wprowadzono nieprawidłowy format danych dla '{name}'.[/red]"
+                f"  [red]Error: Invalid data format entered for '{name}'.[/red]"
             )
             console.print(
-                f"  [yellow]Przywrócono wartości domyślne: {current_values}.[/yellow]"
+                f"  [yellow]Restored default values: {current_values}.[/yellow]"
             )
             return None
     console.print(
-        f"  [green]Zaktualizowano wartości dla {name} na {new_values}.[/green]"
+        f"  [green]Updated values for {name} to {new_values}.[/green]"
     )
     return {"values": new_values}
 
 
 def _get_hyperparameter_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts user for hyperparameter space definitions."""
-    _print_header("Definicja przestrzeni hiperparametrów")
+    _print_header("Hyperparameter Space Definition")
     hyperparam_updates: Dict[str, Any] = {}
     nn_defaults = defaults.get(NN_CONFIG, {})
     hyperparam_defaults = nn_defaults.get(HYPERPARAM_SPACE, {})
 
     for name, params in hyperparam_defaults.items():
         console.print(
-            f"\n--- [bold]{name}[/bold] ({params.get('description', 'Brak opisu')}) ---"
+            f"\n--- [bold]{name}[/bold] ({params.get('description', 'No description')}) ---"
         )
         change = console.input(
-            "Czy chcesz zmienić przestrzeń dla tego parametru? (t/n): "
+            "Do you want to change the space for this parameter? (y/n): "
         ).lower()
-        if change != "t":
+        if change != "y":
             continue
 
         param_type = params.get("type")
@@ -374,14 +374,14 @@ def _select_active_operators(
 ) -> List[str]:
     """Handles the user selection of genetic operators."""
     console.print(
-        "\n[bold]Wybierz operatory genetyczne odzielone przecinkami, które mają być użyte (min. 2):[/bold]"
+        "\n[bold]Select the genetic operators to be used, separated by commas (min. 2):[/bold]"
     )
     for i, op_name in enumerate(available_ops.values(), 1):
         console.print(f"[{i}] {op_name}")
 
     # TODO: Czy pisać, że w każdej epoce są losowe, czy nie?
     console.print(
-        "[R] Wybierz losowe operatory (wartości z pliku konfiguracyjnego)"
+        "[R] Select random operators (values from config file)"
     )
 
     while True:
@@ -391,14 +391,14 @@ def _select_active_operators(
         try:
             chosen_indices = [int(i.strip()) - 1 for i in choice_str.split(",")]
             if len(chosen_indices) < 2:
-                logger.error("Musisz wybrać co najmniej 2 operatory.")
+                logger.error("You must select at least 2 operators.")
                 continue
             if all(0 <= i < len(op_keys) for i in chosen_indices):
                 return [op_keys[i] for i in chosen_indices]
-            logger.error("Podano nieprawidłowy numer operatora.")
+            logger.error("Invalid operator number provided.")
         except ValueError:
             logger.error(
-                "Nieprawidłowy format. Podaj numery oddzielone przecinkami lub 'R'."
+                "Invalid format. Enter numbers separated by commas or 'R'."
             )
 
 
@@ -406,20 +406,20 @@ def _tune_mutation_parameters(defaults: Dict[str, Any]) -> Dict[str, float]:
     """Prompts user to tune parameters for the mutation operator."""
     mutation_updates: Dict[str, float] = {}
     params_to_ask = {
-        "mutation_prob_discrete": "prawdopodobieństwo mutacji dla parametrów dyskretnych",
-        "mutation_prob_categorical": "prawdopodobieństwo mutacji dla parametrów kategorycznych",
-        "mutation_prob_continuous": "prawdopodobieństwo mutacji dla parametrów ciągłych",
-        "mutation_sigma_continuous": "odchylenie standardowe dla mutacji parametrów ciągłych",
+        "mutation_prob_discrete": "mutation probability for discrete parameters",
+        "mutation_prob_categorical": "mutation probability for categorical parameters",
+        "mutation_prob_continuous": "mutation probability for continuous parameters",
+        "mutation_sigma_continuous": "standard deviation for continuous parameter mutation",
     }
 
     for param, desc in params_to_ask.items():
         default_val = defaults.get(param, 0.1)
         is_prob = "prob" in param
-        prompt = f"Podaj {desc}"
+        prompt = f"Enter {desc}"
         val = _prompt_for_numeric(prompt, default_val, float)
         if val is not None:
             if is_prob and not (0.0 <= val <= 1.0):
-                logger.error("Prawdopodobieństwo musi być w zakresie [0, 1].")
+                logger.error("Probability must be in the range [0, 1].")
             else:
                 mutation_updates[param] = val
     return mutation_updates
@@ -427,7 +427,7 @@ def _tune_mutation_parameters(defaults: Dict[str, Any]) -> Dict[str, float]:
 
 def _get_genetic_operators_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts user for genetic operator settings."""
-    _print_header("Wybór operatorów genetycznych")
+    _print_header("Genetic Operator Selection")
     updates: Dict[str, Any] = {}
     ga_defaults = defaults.get(GA_CONFIG, {})
     op_defaults = ga_defaults.get(GENETIC_OPERATORS, {})
@@ -446,14 +446,14 @@ def _get_genetic_operators_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     if "random" in active_ops:
         return {GA_CONFIG: {GENETIC_OPERATORS: updates}}
 
-    console.print("\n[bold]Dostosuj parametry dla wybranych operatorów:[/bold]")
+    console.print("\n[bold]Adjust parameters for the selected operators:[/bold]")
 
     if "selection" in active_ops:
         tourn_default = _get_nested_config(
             op_defaults, ["selection", "tournament_size"], 5
         )
         tourn_size = _prompt_for_numeric(
-            "Podaj rozmiar turnieju dla selekcji", tourn_default
+            "Enter tournament size for selection", tourn_default
         )
         if tourn_size is not None and tourn_size > 1:
             updates.setdefault("selection", {})["tournament_size"] = tourn_size
@@ -461,7 +461,7 @@ def _get_genetic_operators_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     if "elitism" in active_ops:
         elitism_default = op_defaults.get("elitism_percent", 0.05)
         elitism = _prompt_for_numeric(
-            "Podaj procent elitaryzmu", elitism_default, float
+            "Enter elitism percentage", elitism_default, float
         )
         if elitism is not None and 0.0 <= elitism < 1.0:
             updates["elitism_percent"] = elitism
@@ -482,13 +482,13 @@ def _prompt_for_stop_conditions(defaults: Dict[str, Any]) -> Dict[str, Any]:
     stop_defaults = defaults.get(STOP_CONDITIONS, {})
 
     params = {
-        "max_generations": ("Maksymalna liczba generacji", int),
+        "max_generations": ("Maximum number of generations", int),
         "early_stop_generations": (
-            "Liczba generacji do wczesnego zatrzymania",
+            "Number of generations for early stopping",
             int,
         ),
-        "fitness_goal": ("Docelowa wartość funkcji celu (fitness)", float),
-        "time_limit_minutes": ("Limit czasowy (w minutach)", int),
+        "fitness_goal": ("Target fitness value", float),
+        "time_limit_minutes": ("Time limit (in minutes)", int),
     }
 
     for key, (desc, val_type) in params.items():
@@ -497,7 +497,7 @@ def _prompt_for_stop_conditions(defaults: Dict[str, Any]) -> Dict[str, Any]:
         if val is not None:
             if key == "fitness_goal" and val > 1.0:
                 console.print(
-                    f"[yellow]Wartość funkcji celu nie może być większa niż 1.0! Użytwo wartości {stop_defaults.get(key)}.[/yellow]"
+                    f"[yellow]Fitness goal cannot be greater than 1.0! Using value {stop_defaults.get(key)}.[/yellow]"
                 )
                 stop_updates[key] = stop_defaults.get(key)
                 continue
@@ -517,25 +517,25 @@ def _get_algorithm_settings(
 
     if config_key == CALIBRATION:
         enabled_choice = console.input(
-            "Czy włączyć kalibrację? (t/n): (Enter = tak)"
+            "Enable calibration? (y/n): (Enter = yes)"
         ).lower()
         if enabled_choice == "n":
             updates["enabled"] = False
             return {GA_CONFIG: {CALIBRATION: updates}}
-        elif enabled_choice == "t":
+        elif enabled_choice == "y":
             updates["enabled"] = True
         else:
             updates["enabled"] = True
 
     # Parameter prompts
     params = {
-        "population_size": ("Podaj liczbę chromosomów w populacji", int),
-        "generations": ("Podaj liczbę generacji", int),
-        "training_epochs": ("Podaj liczbę epok treningowych", int),
+        "population_size": ("Enter the number of chromosomes in the population", int),
+        "generations": ("Enter the number of generations", int),
+        "training_epochs": ("Enter the number of training epochs", int),
     }
     if config_key == CALIBRATION:
         params["data_subset_percentage"] = (
-            "Podaj procent podzbioru danych (np. 0.2)",
+            "Enter the data subset percentage (e.g., 0.2)",
             float,
         )
 
@@ -544,7 +544,7 @@ def _get_algorithm_settings(
         if val is not None:
             if key == "data_subset_percentage" and val > 1.0:
                 console.print(
-                    f"[yellow]Procent podzbioru danych nie może być większy niż 1.0! Użytwo wartości {algo_defaults.get(key)}.[/yellow]"
+                    f"[yellow]Data subset percentage cannot be greater than 1.0! Using value {algo_defaults.get(key)}.[/yellow]"
                 )
                 updates[key] = algo_defaults.get(key)
                 continue
@@ -552,7 +552,7 @@ def _get_algorithm_settings(
             updates[key] = val
 
     # Stop conditions
-    console.print(f"\n[bold]Warunki zatrzymania:[/bold]")
+    console.print(f"\n[bold]Stop Conditions:[/bold]")
     stop_updates = _prompt_for_stop_conditions(algo_defaults)
     if stop_updates:
         updates[STOP_CONDITIONS] = stop_updates
@@ -566,22 +566,22 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     ensure_dir_exists(CONFIG_DIR)
     default_config = ex.configurations[0]()
 
-    _print_header("GENETYCZNA OPTYMALIZACJA SIECI CNN")
+    _print_header("GENETIC OPTIMIZATION OF CNN")
     prompt = (
-        "[1] Utwórz nową konfigurację\n[2] Wczytaj konfigurację\n[3] Wyjdź\n> "
+        "[1] Create new configuration\n[2] Load configuration\n[3] Exit\n> "
     )
-    error_msg = "Nieprawidłowy wybór. Wprowadź 1, 2, lub 3."
+    error_msg = "Invalid choice. Please enter 1, 2, or 3."
     choice = _prompt_for_validated_input(
         prompt, lambda x: x in ["1", "2", "3"], error_msg
     )
 
     if choice == "3":
-        logger.warning("Zamykanie programu.")
+        logger.warning("Exiting program.")
         return None
     if choice == "2":
         return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
 
-    logger.log_file("Rozpoczęto nowa konfiguracje")
+    logger.log_file("New configuration started")
 
     # Interactive configuration
     config_updates: Dict[str, Any] = {}
@@ -591,7 +591,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     config_updates.update(_get_genetic_operators_config(default_config))
 
     calib_updates = _get_algorithm_settings(
-        "Ustawienia wstępnej kalibracji", CALIBRATION, default_config
+        "Initial Calibration Settings", CALIBRATION, default_config
     )
     if calib_updates.get(GA_CONFIG):
         config_updates.setdefault(GA_CONFIG, {}).update(
@@ -599,13 +599,13 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
         )
 
     main_updates = _get_algorithm_settings(
-        "Ustawienia głównego algorytmu", MAIN_ALGORITHM, default_config
+        "Main Algorithm Settings", MAIN_ALGORITHM, default_config
     )
     if main_updates.get(GA_CONFIG):
         config_updates.setdefault(GA_CONFIG, {}).update(main_updates[GA_CONFIG])
 
     console.print(
-        "\n[bold green]Interaktywna konfiguracja zakończona.[/bold green]"
+        "\n[bold green]Interactive configuration complete.[/bold green]"
     )
     final_config = _deep_merge_dicts(default_config, config_updates)
     prompt_and_save_json_config(final_config, console, CONFIG_DIR)
@@ -663,4 +663,4 @@ def print_final_config_panel(_config: Dict[str, Any]):
         expand=False,
     )
     console.print(panel)
-    logger.log_file(f"Konfiguracja\n: {json.dumps(_config, indent=4)}")
+    logger.log_file(f"Configuration\n: {json.dumps(_config, indent=4)}")

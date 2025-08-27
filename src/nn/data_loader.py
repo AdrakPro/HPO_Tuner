@@ -9,7 +9,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
 from src.logger.experiment_logger import logger
-from src.model.chromosome import BatchSize, AugmentationIntensity
+from src.model.chromosome import AugmentationIntensity
 from src.utils.seed import seed_worker
 
 # Rule of thumb: cpu cores // 2
@@ -23,7 +23,7 @@ IMG_SIZE = 32
 
 
 def get_dataset_loaders(
-    batch_size: BatchSize,
+    batch_size: int,
     aug_intensity: AugmentationIntensity,
     is_gpu: bool,
     padding: int,
@@ -48,7 +48,7 @@ def get_dataset_loaders(
 
     train_loader = DataLoader(
         train_set,
-        batch_size=batch_size.value,
+        batch_size=batch_size,
         shuffle=True,
         num_workers=NUM_WORKERS,
         worker_init_fn=seed_worker,
@@ -57,7 +57,7 @@ def get_dataset_loaders(
 
     test_loader = DataLoader(
         test_set,
-        batch_size=batch_size.value,
+        batch_size=batch_size,
         shuffle=False,
         num_workers=NUM_WORKERS,
     )

@@ -44,7 +44,8 @@ class CNN(nn.Module):
         stride: int = config["fixed_parameters"]["stride"]
         padding: int = config["fixed_parameters"]["padding"]
 
-        base = 32
+        BASE_FILTERS = 32
+        base = int(BASE_FILTERS * chromosome.width_scale)
         out_channels = [base * (2**i) for i in range(conv_blocks)]
 
         layers = []
@@ -69,12 +70,7 @@ class CNN(nn.Module):
 
         # Dynamically calculate the flatten size for fc1 using a dummy forward pass
         with torch.no_grad():
-            dummy = torch.zeros(
-                1,
-                config["input_shape"][0],
-                config["input_shape"][1],
-                config["input_shape"][2],
-            )
+            dummy = torch.zeros(1, *config["input_shape"])
             out = self.conv_seq(dummy)
             fc1_in_features = out.view(1, -1).shape[1]
 
@@ -122,11 +118,13 @@ def get_optimizer_and_scheduler(
     Returns:
         Tuple of optimizer and scheduler (scheduler can be None).
     """
+    SGD_MOMENTUM = 0.9
+
     if chromosome.optimizer_schedule == OptimizerSchedule.SGD_STEP:
         optimizer = optim.SGD(
             model.parameters(),
             lr=chromosome.base_lr,
-            momentum=0.9,
+            momentum=SGD_MOMENTUM,
             weight_decay=chromosome.weight_decay,
         )
         scheduler = optim.lr_scheduler.StepLR(
@@ -136,7 +134,7 @@ def get_optimizer_and_scheduler(
         optimizer = optim.SGD(
             model.parameters(),
             lr=chromosome.base_lr,
-            momentum=0.9,
+            momentum=SGD_MOMENTUM,
             weight_decay=chromosome.weight_decay,
         )
         scheduler = optim.lr_scheduler.CosineAnnealingLR(

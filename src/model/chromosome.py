@@ -16,13 +16,6 @@ class AugmentationIntensity(Enum):
     STRONG = auto()
 
 
-class BatchSize(Enum):
-    B32 = 32
-    B64 = 64
-    B128 = 128
-    B256 = 256
-
-
 @dataclass
 class Chromosome:
     width_scale: float
@@ -32,4 +25,21 @@ class Chromosome:
     base_lr: float
     aug_intensity: AugmentationIntensity
     weight_decay: float
-    batch_size: BatchSize
+    batch_size: int
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        """
+        Creates a Chromosome object from a dictionary provided by the GA.
+        This handles the conversion from primitive types (str, int) to Enums.
+        """
+        data_copy = data.copy()
+
+        data_copy["optimizer_schedule"] = OptimizerSchedule[
+            data_copy["optimizer_schedule"]
+        ]
+        data_copy["aug_intensity"] = AugmentationIntensity[
+            data_copy["aug_intensity"]
+        ]
+
+        return cls(**data_copy)

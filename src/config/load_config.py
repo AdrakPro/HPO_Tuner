@@ -13,14 +13,14 @@ from src.logger.experiment_logger import logger
 def _check_non_negative_int(value: Any, name: str):
     """Checks if a value is a non-negative integer."""
     if not isinstance(value, int) or value < 0:
-        raise ValueError(f"'{name}' musi być nieujemną liczbą całkowitą.")
+        raise ValueError(f"'{name}' must be a non-negative integer.")
 
 
 def _check_non_negative_float(value: Any, name: str):
     """Checks if a value is a non-negative float."""
     if not isinstance(value, (float, int)) or value < 0:
         raise ValueError(
-            f"'{name}' musi być nieujemną liczbą zmiennoprzecinkową."
+            f"'{name}' must be a non-negative float."
         )
 
 
@@ -28,7 +28,7 @@ def _check_bool(value: Any, name: str):
     """Checks if a value is a boolean."""
     if not isinstance(value, bool):
         raise ValueError(
-            f"'{name}' musi być wartością logiczną (True lub False)."
+            f"'{name}' must be a boolean value (True or False)."
         )
 
 
@@ -36,16 +36,16 @@ def _check_float_in_range(value: Any, name: str):
     """Checks if a float is in the range (0.0, 1.0)."""
     if not isinstance(value, (float, int)) or not (0.0 < value < 1.0):
         raise ValueError(
-            f"'{name}' musi być liczbą zmiennoprzecinkową w zakresie (0.0, 1.0)."
+            f"'{name}' must be a float in the range (0.0, 1.0)."
         )
 
 
 def _validate_project_config(config: Dict):
     """Validates the 'project' section."""
     if not isinstance(config.get("name"), str):
-        raise ValueError("'project.name' musi być ciągiem znaków.")
+        raise ValueError("'project.name' must be a string.")
     if not isinstance(config.get("seed"), int):
-        raise ValueError("'project.seed' musi być liczbą całkowitą.")
+        raise ValueError("'project.seed' must be an integer.")
 
 
 def _validate_hardware_config(config: Dict):
@@ -53,14 +53,14 @@ def _validate_hardware_config(config: Dict):
     allowed_modes = ["CPU", "GPU", "CPU+GPU"]
     if config.get("evaluation_mode") not in allowed_modes:
         raise ValueError(
-            f"'evaluation_mode' musi być jedną z opcji: {allowed_modes}."
+            f"'evaluation_mode' must be one of the options: {allowed_modes}."
         )
 
     for key in ["cpu_cores", "gpu_devices", "gpu_block_size"]:
         value = config.get(key)
         if not ((isinstance(value, int) and value >= 0) or value == "-"):
             raise ValueError(
-                f"'{key}' musi być nieujemną liczbą całkowitą lub '-'."
+                f"'{key}' must be a non-negative integer or '-'."
             )
 
 
@@ -68,7 +68,7 @@ def _validate_neural_network_config(config: Dict):
     """Validates the 'neural_network_config' section."""
     # --- Base parameter validation ---
     if len(config.get("input_shape", [])) != 3:
-        raise ValueError("input_shape musi mieć dokładnie 3 wartości.")
+        raise ValueError("input_shape must have exactly 3 values.")
     _check_non_negative_int(config.get("conv_blocks"), "conv_blocks")
     _check_non_negative_int(config.get("output_classes"), "output_classes")
 
@@ -77,7 +77,7 @@ def _validate_neural_network_config(config: Dict):
     activation_function = fixed_params.get("activation_function", "").lower()
     if activation_function != "relu":
         raise ValueError(
-            f"Dozwolona 'activation_function' to 'ReLu', otrzymano: '{fixed_params.get('activation_function')}'."
+            f"Allowed 'activation_function' is 'ReLu', but received: '{fixed_params.get('activation_function')}'."
         )
     _check_non_negative_int(fixed_params.get("padding"), "padding")
     _check_non_negative_int(fixed_params.get("stride"), "stride")
@@ -94,52 +94,52 @@ def _validate_neural_network_config(config: Dict):
                 or len(params["range"]) != 2
             ):
                 raise ValueError(
-                    f"Zakres dla '{name}' musi być listą zawierającą dokładnie 2 wartości."
+                    f"The range for '{name}' must be a list containing exactly 2 values."
                 )
 
             min_val, max_val = params["range"]
             if min_val >= max_val:
                 raise ValueError(
-                    f"Zakres dla '{name}': wartość minimalna musi być mniejsza od maksymalnej."
+                    f"Range for '{name}': the minimum value must be less than the maximum."
                 )
 
             if param_type == "int" and not all(
                 isinstance(v, int) for v in params["range"]
             ):
                 raise ValueError(
-                    f"'{name}' jest typu 'int', więc wartości w zakresie muszą być liczbami całkowitymi."
+                    f"'{name}' is of type 'int', so the values in the range must be integers."
                 )
             if param_type == "float" and not all(
                 isinstance(v, (int, float)) for v in params["range"]
             ):
                 raise ValueError(
-                    f"'{name}' jest typu 'float', więc wartości w zakresie muszą być liczbami."
+                    f"'{name}' is of type 'float', so the values in the range must be numbers."
                 )
 
             if name != "width_scale" and any(v < 0 for v in params["range"]):
                 raise ValueError(
-                    f"Wartości w zakresie dla '{name}' nie mogą być ujemne."
+                    f"Values in the range for '{name}' cannot be negative."
                 )
 
         # --- Values validation (for enums) ---
         if "values" in params:
             if not isinstance(params["values"], list):
-                raise ValueError(f"Pole 'values' dla '{name}' musi być listą.")
+                raise ValueError(f"The 'values' field for '{name}' must be a list.")
 
             if name == "batch_size":
                 if not all(isinstance(v, int) for v in params["values"]):
                     raise ValueError(
-                        f"Wartości dla 'batch_size' muszą być liczbami całkowitymi."
+                        f"Values for 'batch_size' must be integers."
                     )
                 allowed = [32, 64, 128, 256, 512]
                 if not set(params["values"]).issubset(set(allowed)):
                     raise ValueError(
-                        f"Niedozwolone wartości dla 'batch_size'. Dozwolone są podzbiory: {allowed}."
+                        f"Disallowed values for 'batch_size'. Subsets of the following are allowed: {allowed}."
                     )
             elif param_type == "enum":
                 if not all(isinstance(v, str) for v in params["values"]):
                     raise ValueError(
-                        f"'{name}' jest typu 'enum' z ciągami znaków, ale lista 'values' zawiera inne typy."
+                        f"'{name}' is of type 'enum' with strings, but the 'values' list contains other types."
                     )
                 if name == "optimizer_schedule":
                     allowed = [
@@ -150,23 +150,23 @@ def _validate_neural_network_config(config: Dict):
                     ]
                     if not set(params["values"]).issubset(set(allowed)):
                         raise ValueError(
-                            f"Niedozwolone wartości dla 'optimizer_schedule'. Dozwolone są podzbiory: {allowed}."
+                            f"Disallowed values for 'optimizer_schedule'. Subsets of the following are allowed: {allowed}."
                         )
                 if name == "aug_intensity":
                     allowed = ["NONE", "LIGHT", "MEDIUM", "STRONG"]
                     if not set(params["values"]).issubset(set(allowed)):
                         raise ValueError(
-                            f"Niedozwolone wartości dla 'aug_intensity'. Dozwolone są podzbiory: {allowed}."
+                            f"Disallowed values for 'aug_intensity'. Subsets of the following are allowed: {allowed}."
                         )
             elif param_type == "int":
                 if not all(isinstance(v, int) for v in params["values"]):
                     raise ValueError(
-                        f"'{name}' jest typu 'enum' z liczbami całkowitymi, ale lista 'values' zawiera inne typy."
+                        f"'{name}' is of type 'enum' with integers, but the 'values' list contains other types."
                     )
         if "step" in params:
             if not isinstance(params["step"], int) or params["step"] <= 0:
                 raise ValueError(
-                    f"Wartośc 'step' musi być liczbą naturalną oraz nie może być zerem."
+                    f"The 'step' value must be a natural number and cannot be zero."
                 )
 
 
@@ -210,17 +210,17 @@ def _validate_genetic_algorithm_config(config: Dict):
     allowed_ops = ["selection", "mutation", "crossover", "elitism"]
     if not all(op in allowed_ops for op in operators.get("active", [])):
         raise ValueError(
-            f"Operatory w 'active' muszą być podzbiorem {allowed_ops}."
+            f"Operators in 'active' must be a subset of {allowed_ops}."
         )
 
     if operators.get("selection", {}).get("type") != "tournament":
-        raise ValueError("'selection.type' musi być 'tournament'.")
+        raise ValueError("'selection.type' must be 'tournament'.")
     _check_non_negative_int(
         operators.get("selection", {}).get("tournament_size"), "tournament_size"
     )
 
     if operators.get("crossover", {}).get("type") != "uniform":
-        raise ValueError("'crossover.type' musi być 'uniform'.")
+        raise ValueError("'crossover.type' must be 'uniform'.")
 
     mutation_probs = operators.get("mutation", {})
     for key in mutation_probs:
@@ -258,10 +258,10 @@ def sanitize_config(config: Dict) -> Dict:
         )
 
     except (KeyError, ValueError) as e:
-        logger.error(f"Błąd walidacji konfiguracji: {e}")
+        logger.error(f"Configuration validation error: {e}")
         sys.exit(1)
 
-    logger.success("Konfiguracja została pomyślnie sprawdzona.")
+    logger.success("Configuration has been successfully checked.")
     return config
 
 
@@ -271,11 +271,11 @@ def prompt_and_load_json_config(
     """Asks user to load a config from JSON, looking inside CONFIG_DIR."""
     while True:
         filename = console.input(
-            f"Podaj nazwę pliku konfiguracji w folderze '{config_dir}': "
+            f"Enter the name of the configuration file in the '{config_dir}' folder: "
         )
 
         if not filename:
-            logger.error("Nazwa pliku nie może być pusta. Spróboj ponownie.")
+            logger.error("Filename cannot be empty. Please try again.")
             continue
 
         # Temporary for testing purposes (filename)
@@ -284,28 +284,28 @@ def prompt_and_load_json_config(
             try:
                 with open(path, "r") as f:
                     loaded_config = json.load(f)
-                    logger.success(f"Wczytano konfigurację z {path}")
+                    logger.success(f"Loaded configuration from {path}")
                     return sanitize_config(loaded_config)
             except (json.JSONDecodeError, IOError) as e:
-                logger.error(f"Błąd podczas wczytywania pliku: {e}")
+                logger.error(f"Error while loading the file: {e}")
         else:
-            logger.error(f"Plik '{path}' nie istnieje.")
+            logger.error(f"File '{path}' does not exist.")
 
-    logger.warning("Wczytano domyślną konfigurację.")
+    logger.warning("Default configuration loaded.")
     return default_config
 
 
 def prompt_and_save_json_config(config_data: Dict, console, config_dir: str):
     """Asks user to save the final configuration to a JSON file in CONFIG_DIR."""
     choice = console.input(
-        "\nCzy chcesz zapisać finalną konfigurację do pliku? (t/n): "
+        "\nDo you want to save the final configuration to a file? (y/n): "
     ).lower()
-    if choice == "t":
+    if choice == "y":
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         default_filename = f"config_{timestamp}.json"
 
         user_filename = console.input(
-            f"Podaj nazwę pliku (Enter = [bold cyan]{default_filename}[/bold cyan]): ",
+            f"Enter the filename (Enter = [bold cyan]{default_filename}[/bold cyan]): ",
         )
         filename = user_filename or default_filename
         if not filename.endswith(".json"):
@@ -315,6 +315,6 @@ def prompt_and_save_json_config(config_data: Dict, console, config_dir: str):
         try:
             with open(path, "w") as f:
                 json.dump(config_data, f, indent=4)
-            logger.success(f"Konfiguracja została zapisana w '{path}'")
+            logger.success(f"Configuration has been saved to '{path}'")
         except IOError as e:
-            logger.error(f"Błąd podczas zapisu pliku: {e}")
+            logger.error(f"Error while saving the file: {e}")

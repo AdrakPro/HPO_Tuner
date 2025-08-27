@@ -10,7 +10,7 @@ ex = Experiment("Optymalizacja")
 
 @ex.config
 def default_config():
-    project = {"name": "Eksperyment 1.0", "seed": 2137}
+    project = {"name": "HPO Paper-Based Experiment", "seed": 2137}
 
     # TODO: integrate
     environment = {
@@ -43,21 +43,20 @@ def default_config():
             "width_scale": {
                 "type": "float",
                 "range": [
-                    0.5,
+                    0.75,
                     2.0,
                 ],  # Can have negative range to lower base filters
-                "description": "Skaluje liczbę filtrów w warstawach conv",
+                "description": "Scales the number of filters in convolutional layers"
             },
             "fc1_units": {
-                "type": "int",
-                "range": [128, 1024],
-                "step": 64,
-                "description": "Liczba neuronów w pierwszej warstwie FC",
+                "type": "enum",
+                "values": [256, 512, 1024],
+                "description": "Number of neurons in the first fully connected layer (powers of two)",
             },
             "dropout_rate": {
                 "type": "float",
-                "range": [0.0, 0.6],
-                "description": "Intensywność dropout w FC1",
+                "range": [0.1, 0.5],
+                "description": "Dropout intensity in the first fully connected layer"
             },
             "optimizer_schedule": {
                 "type": "enum",
@@ -67,29 +66,29 @@ def default_config():
                     "ADAMW_COSINE",
                     "ADAMW_ONECYCLE",
                 ],
-                "description": "Typ optymalizatora + scheduler LR",
+                "description": "Optimizer type + Learning rate scheduler"
             },
             "base_lr": {
                 "type": "float",
                 "range": [0.0001, 0.3],
                 "scale": "log",
-                "description": "Bazowa wartość learning rate",
+                "description": "Base learning rate value, log scale"
             },
             "aug_intensity": {
                 "type": "enum",
                 "values": ["NONE", "LIGHT", "MEDIUM", "STRONG"],
-                "description": "Poziom augmentacji danych",
+                "description": "Level of data augmentation"
             },
             "weight_decay": {
                 "type": "float",
                 "range": [1e-05, 0.01],
                 "scale": "log",
-                "description": "Współczynnik regularyzacji L2",
+                "description": "L2 regularization coefficient, log scale"
             },
             "batch_size": {
                 "type": "enum",
-                "values": [32, 64, 128, 256],
-                "description": "Rozmiar batcha treningowego",
+                "values": [64, 128, 256],
+                "description": "Training batch size",
             },
         },
     }
@@ -99,31 +98,31 @@ def default_config():
     genetic_algorithm_config = {
         "genetic_operators": {
             "active": ["selection", "mutation", "crossover", "elitism"],
-            "selection": {"type": "tournament", "tournament_size": 5},
-            "crossover": {"type": "uniform"},
+            "selection": {"type": "tournament", "tournament_size": 3},
+            "crossover": {"type": "uniform", "crossover_prob": 0.8},
             "mutation": {
-                "mutation_prob_discrete": 0.05,
-                "mutation_prob_categorical": 0.05,
-                "mutation_sigma_continuous": 0.05,
-                "mutation_prob_continuous": 0.05,
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.1,
             },
-            "elitism_percent": 0.05,
+            "elitism_percent": 0.1,
         },
         "calibration": {
             "enabled": True,
-            "population_size": 20,
-            "generations": 10,
-            "training_epochs": 3,
-            "data_subset_percentage": 0.2,
+            "population_size": 30,
+            "generations": 15,
+            "training_epochs": 5,
+            "data_subset_percentage": 0.25,
             "stop_conditions": {
-                "max_generations": 10,
-                "early_stop_generations": 3,
+                "max_generations": 15,
+                "early_stop_generations": 5,
                 "fitness_goal": 0.99,
                 "time_limit_minutes": 5,
             },
         },
         "main_algorithm": {
-            "population_size": 50,
+            "population_size": 40,
             "generations": 50,
             "training_epochs": 100,
             "stop_conditions": {

@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 
-from src.config.settings import ex
+from src.config.default_config import ex
 
 SEED: int = ex.configurations[0]()["project"]["seed"]
 

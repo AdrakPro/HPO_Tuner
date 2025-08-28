@@ -43,9 +43,9 @@ class CNN(nn.Module):
         ]
         stride: int = config["fixed_parameters"]["stride"]
         padding: int = config["fixed_parameters"]["padding"]
+        base_filters: int = config["fixed_parameters"]["base_filters"]
 
-        BASE_FILTERS = 32
-        base = int(BASE_FILTERS * chromosome.width_scale)
+        base = int(base_filters * chromosome.width_scale)
         out_channels = [base * (2**i) for i in range(conv_blocks)]
 
         layers = []

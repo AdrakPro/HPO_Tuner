@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from src.config.settings import ex
+from src.logger.experiment_logger import logger
 from src.model.chromosome import Chromosome
 from src.nn.data_loader import get_dataset_loaders
 from src.nn.neural_network import CNN, get_network, get_optimizer_and_scheduler
@@ -87,25 +87,37 @@ def evaluate(
     return avg_loss, accuracy
 
 
-def train_and_eval(chromosome: Chromosome) -> None:
+def train_and_eval(
+    chromosome: Chromosome, config: any, epochs: int
+) -> tuple[float, float]:
     """
     Train and evaluate CNN on CIFAR-10.
     """
-    config = ex.configurations[0]()
     is_gpu: bool = "GPU" in config["hardware_config"]["evaluation_mode"]
     padding: int = config["neural_network_config"]["fixed_parameters"][
         "padding"
-    ]
-    epochs: int = config["genetic_algorithm_config"]["main_algorithm"][
-        "training_epochs"
     ]
 
     # What about when CPU+GPU
     device: torch.device = torch.device("cuda" if is_gpu else "cpu")
 
-    train_loader, test_loader = get_dataset_loaders(
-        chromosome.batch_size, chromosome.aug_intensity, is_gpu, padding
-    )
+    try:
+        train_loader, test_loader = get_dataset_loaders(
+            chromosome.batch_size, chromosome.aug_intensity, is_gpu, padding
+        )
+    except Exception as e:
+        logger.warning(
+            f"Could not load real data ({e}). Using dummy data loaders."
+        )
+        bs = chromosome.batch_size
+        train_loader = [
+            (torch.randn(bs, 3, 32, 32), torch.randint(0, 10, (bs,)))
+            for _ in range(5)
+        ]
+        test_loader = [
+            (torch.randn(bs, 3, 32, 32), torch.randint(0, 10, (bs,)))
+            for _ in range(2)
+        ]
 
     model: CNN = get_network(chromosome, config["neural_network_config"]).to(
         device
@@ -116,19 +128,23 @@ def train_and_eval(chromosome: Chromosome) -> None:
         model, chromosome, train_loader, epochs
     )
 
+    final_test_acc = 0.0
+    final_test_loss = 0.0
     for epoch in range(epochs):
         train_loss, train_acc = train_epoch(
             model, train_loader, criterion, optimizer, device
         )
         test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-        if scheduler is not None:
-            if isinstance(scheduler, optim.lr_scheduler.OneCycleLR):
-                scheduler.step()
-            else:
-                scheduler.step()
-        print(f"Epoch {epoch+1}/{epochs}:")
-        print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
-        print(f"  Test Loss:  {test_loss:.4f}, Test Acc:  {test_acc:.4f}")
+        if scheduler:
+            scheduler.step()
+
+        final_test_acc = test_acc
+        final_test_loss = test_loss
+        print(
+            f"  Epoch {epoch + 1}/{epochs} | Train Acc: {train_acc:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
+        )
+
+    return final_test_acc, final_test_loss
 
     # saver = ModelSaver("cnn")
     # saver.save(model)

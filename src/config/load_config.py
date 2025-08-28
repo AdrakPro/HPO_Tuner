@@ -174,9 +174,9 @@ def _validate_stop_conditions(config: Dict, prefix: str):
     for key in [
         "max_generations",
         "early_stop_generations",
-        "time_limit_minutes",
     ]:
         _check_non_negative_int(config[key], f"{prefix}.{key}")
+    _check_non_negative_float(config["time_limit_minutes"], f"{prefix}.time_limit_minuts")
     _check_float_in_range(config["fitness_goal"], f"{prefix}.fitness_goal")
 
 

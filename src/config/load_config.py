@@ -19,73 +19,66 @@ def _check_non_negative_int(value: Any, name: str):
 def _check_non_negative_float(value: Any, name: str):
     """Checks if a value is a non-negative float."""
     if not isinstance(value, (float, int)) or value < 0:
-        raise ValueError(
-            f"'{name}' must be a non-negative float."
-        )
+        raise ValueError(f"'{name}' must be a non-negative float.")
 
 
 def _check_bool(value: Any, name: str):
     """Checks if a value is a boolean."""
     if not isinstance(value, bool):
-        raise ValueError(
-            f"'{name}' must be a boolean value (True or False)."
-        )
+        raise ValueError(f"'{name}' must be a boolean value (True or False).")
 
 
 def _check_float_in_range(value: Any, name: str):
     """Checks if a float is in the range (0.0, 1.0)."""
     if not isinstance(value, (float, int)) or not (0.0 < value < 1.0):
-        raise ValueError(
-            f"'{name}' must be a float in the range (0.0, 1.0)."
-        )
+        raise ValueError(f"'{name}' must be a float in the range (0.0, 1.0).")
 
 
 def _validate_project_config(config: Dict):
     """Validates the 'project' section."""
-    if not isinstance(config.get("name"), str):
+    if not isinstance(config["name"], str):
         raise ValueError("'project.name' must be a string.")
-    if not isinstance(config.get("seed"), int):
+    if not isinstance(config["seed"], int):
         raise ValueError("'project.seed' must be an integer.")
 
 
 def _validate_hardware_config(config: Dict):
     """Validates the 'hardware_config' section."""
     allowed_modes = ["CPU", "GPU", "CPU+GPU"]
-    if config.get("evaluation_mode") not in allowed_modes:
+    if config["evaluation_mode"] not in allowed_modes:
         raise ValueError(
             f"'evaluation_mode' must be one of the options: {allowed_modes}."
         )
 
     for key in ["cpu_cores", "gpu_devices", "gpu_block_size"]:
-        value = config.get(key)
+        value = config[key]
         if not ((isinstance(value, int) and value >= 0) or value == "-"):
-            raise ValueError(
-                f"'{key}' must be a non-negative integer or '-'."
-            )
+            raise ValueError(f"'{key}' must be a non-negative integer or '-'.")
 
 
 def _validate_neural_network_config(config: Dict):
     """Validates the 'neural_network_config' section."""
     # --- Base parameter validation ---
-    if len(config.get("input_shape", [])) != 3:
+    if len(config["input_shape"]) != 3:
         raise ValueError("input_shape must have exactly 3 values.")
-    _check_non_negative_int(config.get("conv_blocks"), "conv_blocks")
-    _check_non_negative_int(config.get("output_classes"), "output_classes")
+    _check_non_negative_int(config["conv_blocks"], "conv_blocks")
+    _check_non_negative_int(config["output_classes"], "output_classes")
 
     # --- Fixed parameter validation ---
-    fixed_params = config.get("fixed_parameters", {})
-    activation_function = fixed_params.get("activation_function", "").lower()
+    fixed_params = config["fixed_parameters"]
+    activation_function = fixed_params["activation_function"].lower()
     if activation_function != "relu":
         raise ValueError(
-            f"Allowed 'activation_function' is 'ReLu', but received: '{fixed_params.get('activation_function')}'."
+            f"Allowed 'activation_function' is 'ReLu', but received: '{fixed_params['activation_function']}'."
         )
-    _check_non_negative_int(fixed_params.get("padding"), "padding")
-    _check_non_negative_int(fixed_params.get("stride"), "stride")
+    _check_non_negative_int(fixed_params["padding"], "padding")
+    _check_non_negative_int(fixed_params["stride"], "stride")
+    _check_non_negative_int(fixed_params["base_filters"], "base_filters")
 
     # --- Hyperparameter space validation ---
-    hyperparameters = config.get("hyperparameter_space", {})
+    hyperparameters = config["hyperparameter_space"]
     for name, params in hyperparameters.items():
-        param_type = params.get("type")
+        param_type = params["type"]
 
         # --- Range validation ---
         if "range" in params:
@@ -124,17 +117,17 @@ def _validate_neural_network_config(config: Dict):
         # --- Values validation (for enums) ---
         if "values" in params:
             if not isinstance(params["values"], list):
-                raise ValueError(f"The 'values' field for '{name}' must be a list.")
+                raise ValueError(
+                    f"The 'values' field for '{name}' must be a list."
+                )
 
-            if name == "batch_size":
-                if not all(isinstance(v, int) for v in params["values"]):
+            if name in ("batch_size", "fc1_units"):
+                # TODO Enhancement: here I can force values to be power of two
+                if not all(
+                    isinstance(v, int) and v > 0 for v in params["values"]
+                ):
                     raise ValueError(
-                        f"Values for 'batch_size' must be integers."
-                    )
-                allowed = [32, 64, 128, 256, 512]
-                if not set(params["values"]).issubset(set(allowed)):
-                    raise ValueError(
-                        f"Disallowed values for 'batch_size'. Subsets of the following are allowed: {allowed}."
+                        f"All values for '{name}' must be positive non-zero integers."
                     )
             elif param_type == "enum":
                 if not all(isinstance(v, str) for v in params["values"]):
@@ -172,8 +165,8 @@ def _validate_neural_network_config(config: Dict):
 
 def _validate_nested_validation_config(config: Dict):
     """Validates the 'nested_validation_config' section."""
-    _check_bool(config.get("enabled"), "nested_validation_config.enabled")
-    _check_non_negative_int(config.get("outer_k_folds"), "outer_k_folds")
+    _check_bool(config["enabled"], "nested_validation_config.enabled")
+    _check_non_negative_int(config["outer_k_folds"], "outer_k_folds")
 
 
 def _validate_stop_conditions(config: Dict, prefix: str):
@@ -183,8 +176,8 @@ def _validate_stop_conditions(config: Dict, prefix: str):
         "early_stop_generations",
         "time_limit_minutes",
     ]:
-        _check_non_negative_int(config.get(key), f"{prefix}.{key}")
-    _check_float_in_range(config.get("fitness_goal"), f"{prefix}.fitness_goal")
+        _check_non_negative_int(config[key], f"{prefix}.{key}")
+    _check_float_in_range(config["fitness_goal"], f"{prefix}.fitness_goal")
 
 
 def _validate_algorithm_run_config(
@@ -192,49 +185,51 @@ def _validate_algorithm_run_config(
 ):
     """Validates 'calibration' or 'main_algorithm' sections."""
     if is_calibration:
-        _check_bool(config.get("enabled"), f"{prefix}.enabled")
+        _check_bool(config["enabled"], f"{prefix}.enabled")
         _check_float_in_range(
-            config.get("data_subset_percentage"),
+            config["data_subset_percentage"],
             f"{prefix}.data_subset_percentage",
         )
 
     for key in ["population_size", "generations", "training_epochs"]:
-        _check_non_negative_int(config.get(key), f"{prefix}.{key}")
+        _check_non_negative_int(config[key], f"{prefix}.{key}")
 
-    _validate_stop_conditions(config.get("stop_conditions", {}), prefix)
+    _validate_stop_conditions(config["stop_conditions"], prefix)
 
 
 def _validate_genetic_algorithm_config(config: Dict):
     """Validates the 'genetic_algorithm_config' section."""
-    operators = config.get("genetic_operators", {})
+    operators = config["genetic_operators"]
     allowed_ops = ["selection", "mutation", "crossover", "elitism"]
-    if not all(op in allowed_ops for op in operators.get("active", [])):
+    if not all(op in allowed_ops for op in operators["active"]):
         raise ValueError(
             f"Operators in 'active' must be a subset of {allowed_ops}."
         )
 
-    if operators.get("selection", {}).get("type") != "tournament":
+    if operators["selection"]["type"] != "tournament":
         raise ValueError("'selection.type' must be 'tournament'.")
     _check_non_negative_int(
-        operators.get("selection", {}).get("tournament_size"), "tournament_size"
+        operators["selection"]["tournament_size"], "tournament_size"
     )
 
-    if operators.get("crossover", {}).get("type") != "uniform":
+    if operators["crossover"]["type"] != "uniform":
         raise ValueError("'crossover.type' must be 'uniform'.")
 
-    mutation_probs = operators.get("mutation", {})
+    _check_non_negative_float(
+        operators["crossover"]["crossover_prob"], "crossover_prob"
+    )
+
+    mutation_probs = operators["mutation"]
     for key in mutation_probs:
         _check_non_negative_float(mutation_probs[key], key)
 
-    _check_non_negative_float(
-        operators.get("elitism_percent"), "elitism_percent"
-    )
+    _check_non_negative_float(operators["elitism_percent"], "elitism_percent")
 
     _validate_algorithm_run_config(
-        config.get("calibration", {}), "calibration", is_calibration=True
+        config["calibration"], "calibration", is_calibration=True
     )
     _validate_algorithm_run_config(
-        config.get("main_algorithm", {}), "main_algorithm", is_calibration=False
+        config["main_algorithm"], "main_algorithm", is_calibration=False
     )
 
 
@@ -247,15 +242,11 @@ def sanitize_config(config: Dict) -> Dict:
     Exits the program if any validation fails.
     """
     try:
-        _validate_project_config(config.get("project", {}))
-        _validate_hardware_config(config.get("hardware_config", {}))
-        _validate_neural_network_config(config.get("neural_network_config", {}))
-        _validate_nested_validation_config(
-            config.get("nested_validation_config", {})
-        )
-        _validate_genetic_algorithm_config(
-            config.get("genetic_algorithm_config", {})
-        )
+        _validate_project_config(config["project"])
+        _validate_hardware_config(config["hardware_config"])
+        _validate_neural_network_config(config["neural_network_config"])
+        _validate_nested_validation_config(config["nested_validation_config"])
+        _validate_genetic_algorithm_config(config["genetic_algorithm_config"])
 
     except (KeyError, ValueError) as e:
         logger.error(f"Configuration validation error: {e}")
@@ -279,7 +270,7 @@ def prompt_and_load_json_config(
             continue
 
         # Temporary for testing purposes (filename)
-        path = os.path.join(config_dir, "config_2025-08-26_22-15-45.json")
+        path = os.path.join(config_dir, "config_2025-08-28_20-12-33.json")
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:

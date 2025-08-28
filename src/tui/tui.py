@@ -58,6 +58,7 @@ def _prompt_for_numeric(
     prompt: str,
     default_value: Optional[Union[int, float]],
     value_type: Union[type[int], type[float]] = int,
+    positive_only: bool = False,
 ) -> Optional[Union[int, float]]:
     val_str = console.input(f"{prompt} (Enter = {default_value}): ")
     if not val_str:
@@ -65,6 +66,11 @@ def _prompt_for_numeric(
 
     try:
         value = value_type(val_str)
+        if positive_only and value <= 0:
+            console.print(
+                f"[yellow]Value must be a positive non-zero number. Using default: {default_value}.[/yellow]"
+            )
+            return None
         if value < 0:
             console.print(
                 f"[yellow]Negative value is not allowed. Using default: {default_value}.[/yellow]"
@@ -72,9 +78,7 @@ def _prompt_for_numeric(
             return None
         return value
     except (ValueError, TypeError):
-        logger.error(
-            f"Invalid value. Using default: {default_value}."
-        )
+        logger.error(f"Invalid value. Using default: {default_value}.")
         return None
 
 
@@ -110,9 +114,7 @@ def _detect_hardware_resources() -> Dict[str, Any]:
             # In a real scenario, this might involve a device query.
             max_block_size = 512
         except Exception as e:
-            logger.error(
-                f"Failed to determine max GPU block size: {e}"
-            )
+            logger.error(f"Failed to determine max GPU block size: {e}")
 
     return {
         "max_cpu_cores": os.cpu_count(),
@@ -135,9 +137,7 @@ def _prompt_for_evaluation_mode() -> str:
 
 def _prompt_for_cpu_cores(max_cores: int) -> Optional[int]:
     """Prompts for the number of CPU cores to use."""
-    prompt = (
-        f"Enter the number of CPU cores (Available: {max_cores}, Enter = {max_cores}):"
-    )
+    prompt = f"Enter the number of CPU cores (Available: {max_cores}, Enter = {max_cores}):"
     cpu_input = console.input(prompt)
     if not cpu_input:
         return max_cores
@@ -145,9 +145,7 @@ def _prompt_for_cpu_cores(max_cores: int) -> Optional[int]:
         requested_cores = int(cpu_input)
         if 0 < requested_cores <= max_cores:
             return requested_cores
-    console.print(
-        f"[yellow]Invalid value. Using value {max_cores}.[/yellow]"
-    )
+    console.print(f"[yellow]Invalid value. Using value {max_cores}.[/yellow]")
     return max_cores
 
 
@@ -161,9 +159,7 @@ def _prompt_for_gpu_settings(
         return {"gpu_devices": "-", "gpu_block_size": "-"}
 
     # Prompt for GPU devices
-    gpu_prompt = (
-        f"Enter the number of CUDA devices (Available: {max_devices}, Enter = 1): "
-    )
+    gpu_prompt = f"Enter the number of CUDA devices (Available: {max_devices}, Enter = 1): "
     gpu_input = console.input(gpu_prompt)
     if gpu_input.isdigit():
         requested_gpus = int(gpu_input)
@@ -175,9 +171,7 @@ def _prompt_for_gpu_settings(
             )
             gpu_updates["gpu_devices"] = 1
     elif gpu_input != "":
-        console.print(
-            "[yellow]Invalid value. Using '1'.[/yellow]"
-        )
+        console.print("[yellow]Invalid value. Using '1'.[/yellow]")
         gpu_updates["gpu_devices"] = 1
     else:
         gpu_updates["gpu_devices"] = 1
@@ -246,7 +240,9 @@ def _prompt_for_hyperparameter_range(
     name: str, param_type: str, current_range: List
 ) -> Optional[Dict[str, List]]:
     """Prompts for a new min-max range for a hyperparameter."""
-    prompt = f"  Enter new range in 'min-max' format (default: {current_range}): "
+    prompt = (
+        f"  Enter new range in 'min-max' format (default: {current_range}): "
+    )
     new_range_str = console.input(prompt)
     if "-" in new_range_str:
         try:
@@ -275,7 +271,7 @@ def _prompt_for_hyperparameter_enum(
     """
     Prompts for new categorical values, validating against a predefined set for specific parameters.
     """
-    allowed_values = {
+    string_enum_values = {
         "optimizer_schedule": [
             "SGD_STEP",
             "SGD_COSINE",
@@ -283,13 +279,11 @@ def _prompt_for_hyperparameter_enum(
             "ADAMW_ONECYCLE",
         ],
         "aug_intensity": ["NONE", "LIGHT", "MEDIUM", "STRONG"],
-        "batch_size": [32, 64, 128, 256, 512],
     }
+    integer_enum_values = ["batch_size", "fc1_units"]
 
-    new_values = None
-
-    if name in allowed_values:
-        allowed = allowed_values[name]
+    if name in string_enum_values:
+        allowed = string_enum_values[name]
         prompt = f"Enter new comma-separated values (available: {allowed}): "
 
         new_values_str = console.input(prompt)
@@ -297,39 +291,98 @@ def _prompt_for_hyperparameter_enum(
         if not new_values_str:
             # User pressed Enter, no changes
             return None
+
         raw_new_values = [v.strip() for v in new_values_str.split(",")]
+        invalid_values = [v for v in raw_new_values if v not in allowed]
+
+        if invalid_values:
+            logger.error(
+                f"Invalid values for `{name}: {invalid_values}. Allowed are: {allowed}"
+            )
+            logger.warning(f"Resrtoed default values: {current_values}")
+            return None
+        new_values = raw_new_values
+
+    elif name in integer_enum_values:
+        prompt = f"Enter new comma-separated integer values for '{name}': "
+        new_values_str = console.input(prompt)
 
         try:
-            if name == "batch_size":
-                processed_values = [int(v) for v in raw_new_values]
-            else:
-                processed_values = [v.upper() for v in raw_new_values]
+            processed_values = [
+                int(v.strip()) for v in new_values_str.split(",")
+            ]
 
-            invalid_values = [v for v in processed_values if v not in allowed]
-
-            if invalid_values:
-                logger.error(
-                    f"Invalid values provided: {invalid_values}. Allowed values for '{name}' are: {allowed}."
-                )
-                logger.warning(
-                    f"Restored default values: {current_values}."
-                )
+            if any(v <= 0 for v in processed_values):
+                logger.error(f"Values for '{name}' must be positive integers.")
+                logger.warning(f"Restored default values: {current_values}.")
                 return None
 
             new_values = processed_values
 
         except ValueError:
-            console.print(
-                f"  [red]Error: Invalid data format entered for '{name}'.[/red]"
+            logger.error(
+                f"Invalid integer format for '{name}'. Please enter comma-separated integers."
             )
-            console.print(
-                f"  [yellow]Restored default values: {current_values}.[/yellow]"
-            )
+            logger.warning(f"Restored default values: {current_values}.")
             return None
-    console.print(
-        f"  [green]Updated values for {name} to {new_values}.[/green]"
-    )
-    return {"values": new_values}
+    else:
+        logger.info(
+            f"Configuration for '{name}' is not defined as a standard enum in this function."
+        )
+        return None
+
+    if new_values is not None:
+        console.print(
+            f"  [green]Updated values for {name} to {new_values}.[/green]"
+        )
+        return {"values": new_values}
+
+    return None
+
+
+# --- Neural Network Configuration ---
+def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
+    """Prompts user for neural network architecture settings."""
+    _print_header("Neural Network Architecture")
+    nn_updates: Dict[str, Any] = {}
+    fixed_param_updates: Dict[str, Any] = {}
+    nn_defaults = defaults.get(NN_CONFIG, {})
+    fixed_defaults = nn_defaults.get("fixed_parameters", {})
+
+    params_to_prompt = {
+        "conv_blocks": {
+            "prompt": "Number of convolutional blocks",
+            "default": nn_defaults.get("conv_blocks", 2),
+            "target": nn_updates,
+        },
+        "base_filters": {
+            "prompt": "Number of base filters",
+            "default": fixed_defaults.get("base_filters", 32),
+            "target": fixed_param_updates,
+        },
+        "padding": {
+            "prompt": "Padding for convolutional layers",
+            "default": fixed_defaults.get("padding", 1),
+            "target": fixed_param_updates,
+        },
+        "stride": {
+            "prompt": "Stride for convolutional layers",
+            "default": fixed_defaults.get("stride", 2),
+            "target": fixed_param_updates,
+        },
+    }
+
+    for key, config in params_to_prompt.items():
+        val = _prompt_for_numeric(
+            config["prompt"], config["default"], int, positive_only=True
+        )
+        if val is not None:
+            config["target"][key] = val
+
+    if fixed_param_updates:
+        nn_updates["fixed_parameters"] = fixed_param_updates
+
+    return {NN_CONFIG: nn_updates} if nn_updates else {}
 
 
 def _get_hyperparameter_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
@@ -380,9 +433,7 @@ def _select_active_operators(
         console.print(f"[{i}] {op_name}")
 
     # TODO: Czy pisać, że w każdej epoce są losowe, czy nie?
-    console.print(
-        "[R] Select random operators (values from config file)"
-    )
+    console.print("[R] Select random operators (values from config file)")
 
     while True:
         choice_str = console.input("> ").lower().strip()
@@ -446,7 +497,9 @@ def _get_genetic_operators_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     if "random" in active_ops:
         return {GA_CONFIG: {GENETIC_OPERATORS: updates}}
 
-    console.print("\n[bold]Adjust parameters for the selected operators:[/bold]")
+    console.print(
+        "\n[bold]Adjust parameters for the selected operators:[/bold]"
+    )
 
     if "selection" in active_ops:
         tourn_default = _get_nested_config(
@@ -517,7 +570,7 @@ def _get_algorithm_settings(
 
     if config_key == CALIBRATION:
         enabled_choice = console.input(
-            "Enable calibration? (y/n): (Enter = yes)"
+            "Enable calibration? (y/n) (Enter = yes): "
         ).lower()
         if enabled_choice == "n":
             updates["enabled"] = False
@@ -529,13 +582,16 @@ def _get_algorithm_settings(
 
     # Parameter prompts
     params = {
-        "population_size": ("Enter the number of chromosomes in the population", int),
+        "population_size": (
+            "Enter the number of chromosomes in the population",
+            int,
+        ),
         "generations": ("Enter the number of generations", int),
         "training_epochs": ("Enter the number of training epochs", int),
     }
     if config_key == CALIBRATION:
         params["data_subset_percentage"] = (
-            "Enter the data subset percentage (e.g., 0.2)",
+            "Enter the data subset percentage",
             float,
         )
 
@@ -587,7 +643,16 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     config_updates: Dict[str, Any] = {}
 
     config_updates.update(_get_hardware_config(default_config))
-    config_updates.update(_get_hyperparameter_config(default_config))
+    nn_updates = _get_neural_network_config(default_config)
+    hyperparam_updates = _get_hyperparameter_config(default_config)
+
+    if nn_updates.get(NN_CONFIG):
+        config_updates.setdefault(NN_CONFIG, {}).update(nn_updates[NN_CONFIG])
+    if hyperparam_updates.get(NN_CONFIG):
+        config_updates.setdefault(NN_CONFIG, {}).update(
+            hyperparam_updates[NN_CONFIG]
+        )
+
     config_updates.update(_get_genetic_operators_config(default_config))
 
     calib_updates = _get_algorithm_settings(

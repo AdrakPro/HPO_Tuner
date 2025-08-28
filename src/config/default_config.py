@@ -35,9 +35,12 @@ def default_config():
         "conv_blocks": 2,
         # Parameters not subject to optimization
         "fixed_parameters": {
-            "activation_function": "ReLu",
-            "padding": "a",
+            # TODO: if in future there were more activation_functions add prompt+validation
+            "activation_function": "ReLu",  # Options: ReLu
+            "padding": 1,
             "stride": 2,
+            # TODO: Maybe this should also be available for search with width_scale
+            "base_filters": 32,
         },
         "hyperparameter_space": {
             "width_scale": {
@@ -46,7 +49,7 @@ def default_config():
                     0.75,
                     2.0,
                 ],  # Can have negative range to lower base filters
-                "description": "Scales the number of filters in convolutional layers"
+                "description": "Scales the number of filters in convolutional layers",
             },
             "fc1_units": {
                 "type": "enum",
@@ -56,7 +59,7 @@ def default_config():
             "dropout_rate": {
                 "type": "float",
                 "range": [0.1, 0.5],
-                "description": "Dropout intensity in the first fully connected layer"
+                "description": "Dropout intensity in the first fully connected layer",
             },
             "optimizer_schedule": {
                 "type": "enum",
@@ -65,25 +68,30 @@ def default_config():
                     "SGD_COSINE",
                     "ADAMW_COSINE",
                     "ADAMW_ONECYCLE",
-                ],
-                "description": "Optimizer type + Learning rate scheduler"
+                ],  # Options: [SGD_STEP, SGD_COSINE, ADAMW_COSINE, ADAMW_ONECYLE]
+                "description": "Optimizer type + Learning rate scheduler",
             },
             "base_lr": {
                 "type": "float",
-                "range": [0.0001, 0.3],
+                "range": [1e-4, 1e-2],
                 "scale": "log",
-                "description": "Base learning rate value, log scale"
+                "description": "Base learning rate value, log scale",
             },
             "aug_intensity": {
                 "type": "enum",
-                "values": ["NONE", "LIGHT", "MEDIUM", "STRONG"],
-                "description": "Level of data augmentation"
+                "values": [
+                    "NONE",
+                    "LIGHT",
+                    "MEDIUM",
+                    "STRONG",
+                ],  # Options: [NONE, LIGHT, MEDIUM, STRONG]
+                "description": "Level of data augmentation",
             },
             "weight_decay": {
                 "type": "float",
-                "range": [1e-05, 0.01],
+                "range": [1e-5, 1e-2],
                 "scale": "log",
-                "description": "L2 regularization coefficient, log scale"
+                "description": "L2 regularization coefficient, log scale",
             },
             "batch_size": {
                 "type": "enum",
@@ -97,7 +105,12 @@ def default_config():
 
     genetic_algorithm_config = {
         "genetic_operators": {
-            "active": ["selection", "mutation", "crossover", "elitism"],
+            "active": [
+                "selection",
+                "mutation",
+                "crossover",
+                "elitism",
+            ],  # Options: selection, mutation, crossover, elitism or random
             "selection": {"type": "tournament", "tournament_size": 3},
             "crossover": {"type": "uniform", "crossover_prob": 0.8},
             "mutation": {
@@ -117,7 +130,7 @@ def default_config():
             "stop_conditions": {
                 "max_generations": 15,
                 "early_stop_generations": 5,
-                "fitness_goal": 0.99,
+                "fitness_goal": 0.70,
                 "time_limit_minutes": 5,
             },
         },

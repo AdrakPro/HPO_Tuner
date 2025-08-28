@@ -1,47 +1,21 @@
 import sys
 from pathlib import Path
+from typing import List, Dict
+
 import numpy as np
-from typing import List, Dict, Any, Tuple
 
 from src.config.default_config import ex
 from src.genetic.genetic_algorithm import (
     GeneticAlgorithm,
     get_chromosome_search_space,
 )
-from src.model.chromosome import Chromosome
-from src.nn.train_and_eval import train_and_eval
-from src.tui import run_tui_configurator, print_final_config_panel
+from src.genetic.individual_evaluator import IndividualEvaluator
+from src.genetic.stop_conditions import StopConditions
 from src.logger.experiment_logger import logger
+from src.tui import run_tui_configurator, print_final_config_panel
 from src.utils.seed import seed_everything
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
-
-
-def evaluate_population(
-    population: List[Dict], config: Dict[str, Any], training_epochs: int
-) -> Tuple[List[float], List[float]]:
-    """
-    Fitness function for the GA. Evaluates each individual.
-    """
-    fitness_scores, loss_scores = [], []
-    for i, individual_dict in enumerate(population):
-        logger.info(
-            f"Evaluating Individual {i+1}/{len(population)} ({training_epochs} epochs)"
-        )
-        logger.info(f"Hyperparameters: {individual_dict}")
-        try:
-            chromosome = Chromosome.from_dict(individual_dict)
-            accuracy, loss = train_and_eval(chromosome, config, training_epochs)
-            logger.info(
-                f"Individual {i+1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"
-            )
-            fitness_scores.append(accuracy)
-            loss_scores.append(loss)
-        except Exception as e:
-            logger.error(f"Error evaluating individual {i+1}: {e}")
-            fitness_scores.append(0.0)
-            loss_scores.append(float("inf"))
-    return fitness_scores, loss_scores
 
 
 def run_ga_phase(
@@ -51,31 +25,43 @@ def run_ga_phase(
     starting_population: List[Dict],
 ) -> List[Dict]:
     """
-    Runs a complete phase (calibration or main) of the genetic algorithm.
+    Runs a complete phase (calibration or main) of the genetic algorithm,
+    respecting the defined stop conditions.
     """
     phase_config = config["genetic_algorithm_config"][phase_name]
-    num_generations = phase_config["generations"]
-    training_epochs = phase_config["training_epochs"]
+    stop_conditions = StopConditions(phase_config["stop_conditions"])
+    evaluator = IndividualEvaluator(
+        config=config, training_epochs=phase_config["training_epochs"]
+    )
 
     logger.info(f"--- Starting {phase_name.upper()} Phase ---")
     logger.info(
-        f"Generations: {num_generations}, Population: {len(starting_population)}, Training Epochs: {training_epochs}"
+        f"Generations: up to {stop_conditions.max_generations}, Population: {len(starting_population)}, Training Epochs: {evaluator.training_epochs}"
     )
 
     population = starting_population
-    for gen in range(num_generations):
+    for gen in range(1, stop_conditions.max_generations + 1):
         logger.info(
-            f"\n{phase_name.upper()} - Generation {gen + 1}/{num_generations}"
+            f"\n{phase_name.upper()} - Generation {gen}/{stop_conditions.max_generations}"
         )
-        fitness_scores, loss_scores = evaluate_population(
-            population, config, training_epochs
+        fitness_scores, loss_scores = evaluator.evaluate_population(
+            population, stop_conditions
         )
 
         best_idx = np.argmax(fitness_scores)
-        logger.info(
-            f"  Best Fitness (Accuracy): {fitness_scores[best_idx]:.4f}"
-        )
+        best_fitness = fitness_scores[best_idx]
+        logger.info(f"  Best Fitness (Accuracy): {best_fitness:.4f}")
         logger.info(f"  Best Individual's Loss: {loss_scores[best_idx]:.4f}")
+
+        # Check algorithm-wide stop conditions
+        should_stop, reason = stop_conditions.should_stop_algorithm(
+            gen, best_fitness
+        )
+        if should_stop:
+            logger.warning(f"Stopping GA for phase '{phase_name}': {reason}")
+            sorted_indices = np.argsort(fitness_scores)[::-1]
+            population = [population[i] for i in sorted_indices]
+            break
 
         population = ga.run_generation(population, fitness_scores)
 
@@ -105,33 +91,22 @@ def run_optimization(_config, _run):
 
     # --- STAGE 2: MAIN ALGORITHM ---
     main_pop_size = ga_config["main_algorithm"]["population_size"]
+    main_starting_population = []
 
-    # Create the starting population for the main phase
     if calibrated_population:
         logger.info(
             "Seeding main algorithm with population from calibration phase."
         )
-        # Sort the calibrated population by fitness to select the best individuals
-        calib_fitness, _ = evaluate_population(
-            calibrated_population,
-            _config,
-            ga_config["calibration"]["training_epochs"],
-        )
-        sorted_indices = np.argsort(calib_fitness)[::-1]  # Descending order
-
-        main_starting_population = [
-            calibrated_population[i] for i in sorted_indices
-        ]
-
+        main_starting_population.extend(calibrated_population)
         if main_pop_size > len(main_starting_population):
-            # If main pop is larger, fill the rest with new random individuals
             num_to_add = main_pop_size - len(main_starting_population)
+            logger.info(
+                f"Adding {num_to_add} new random individuals to the population."
+            )
             main_starting_population.extend(ga.initial_population(num_to_add))
         else:
-            # If main pop is smaller or equal, take the top N best individuals
             main_starting_population = main_starting_population[:main_pop_size]
     else:
-        # If no calibration, start the main algorithm with a fresh random population
         logger.info(
             "Calibration disabled. Starting main algorithm with random population."
         )
@@ -143,18 +118,19 @@ def run_optimization(_config, _run):
 
     logger.success("Full optimization process finished.")
 
-    # Final evaluation to find and display the best result
-    final_fitness, final_loss = evaluate_population(
-        final_population,
-        _config,
-        ga_config["main_algorithm"]["training_epochs"],
+    # Find and display the best result from the final population
+    best_individual = final_population[0]
+    final_evaluator = IndividualEvaluator(
+        _config, ga_config["main_algorithm"]["training_epochs"]
     )
-    best_idx = np.argmax(final_fitness)
+    final_fitness, final_loss = final_evaluator.evaluate_population(
+        [best_individual], None
+    )
 
     logger.success("\n--- Best Overall Result ---")
-    logger.success(f"Best Fitness (Accuracy): {final_fitness[best_idx]:.4f}")
-    logger.success(f"Corresponding Loss: {final_loss[best_idx]:.4f}")
-    logger.success(f"Optimal Hyperparameters: {final_population[best_idx]}")
+    logger.success(f"Best Fitness (Accuracy): {final_fitness[0]:.4f}")
+    logger.success(f"Corresponding Loss: {final_loss[0]:.4f}")
+    logger.success(f"Optimal Hyperparameters: {best_individual}")
 
 
 def main():

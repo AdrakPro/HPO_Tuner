@@ -1,3 +1,4 @@
+import sys
 import threading
 from enum import Enum, auto
 
@@ -15,7 +16,6 @@ class LogLevel(Enum):
     NORMAL = auto()
 
 
-# TODO: Enhancement observe the folder, keep only 'x' logs files
 class ExperimentLogger:
     """
     A singleton logger class for experiments with Rich formatting.
@@ -40,6 +40,7 @@ class ExperimentLogger:
         """
         Initializes console, styles, and log file with datetime in its name.
         """
+        self.console_enabled = sys.stdout.isatty()
         self.console: Console = Console(highlight=False)
         self.styles: dict[LogLevel, Style] = {
             LogLevel.SUCCESS: Style(color="green", bold=True),
@@ -54,6 +55,8 @@ class ExperimentLogger:
         self.log_path = os.path.abspath(f"{logs_dir}/log_{dt_str}.log")
 
         os.makedirs(logs_dir, exist_ok=True)
+        self._file_handle = open(self.log_path, "a", buffering=1)
+        self._file_lock = threading.Lock()
         self.success(
             f"Logger has been initialized. Log file path: {self.log_path}"
         )
@@ -66,8 +69,9 @@ class ExperimentLogger:
             level (LogLevel): One of "success", "info", "warning", "error", "normal".
             msg (str): Message to print.
         """
-        style: Style | None = self.styles.get(level, None)
-        self.console.print(f"[{level.name}] {msg}", style=style)
+        if self.console_enabled:
+            style: Style | None = self.styles.get(level, None)
+            self.console.print(f"[{level.name}] {msg}", style=style)
 
     def log_file(self, msg: str, level: LogLevel = LogLevel.INFO) -> None:
         """
@@ -80,8 +84,9 @@ class ExperimentLogger:
         now: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         style_tag: str = f"[{level.name}]"
         log_line: str = f"{now} {style_tag} {msg}\n"
-        with open(self.log_path, "a") as f:
-            f.write(log_line)
+        with self._file_lock:
+            self._file_handle.write(log_line)
+            self._file_handle.flush()
 
     def success(self, msg: str) -> None:
         """
@@ -122,6 +127,13 @@ class ExperimentLogger:
         """
         self.log_console(msg, LogLevel.ERROR)
         self.log_file(msg, LogLevel.ERROR)
+
+    def close(self):
+        with self._file_lock:
+            try:
+                self._file_handle.close()
+            except Exception:
+                pass
 
 
 # Initialization of single instance of logger

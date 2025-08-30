@@ -143,12 +143,16 @@ def main():
             )
     except KeyboardInterrupt:
         logger.error("\nUser terminated the program.")
+        logger.close()
         sys.exit(0)
     except Exception as e:
         logger.error(
             f"An unexpected critical error occurred: {e}", exc_info=True
         )
+        logger.close()
         sys.exit(1)
+    else:
+        logger.close()
 
 
 if __name__ == "__main__":

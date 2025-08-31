@@ -2,7 +2,9 @@ from enum import Enum, auto
 import numpy as np
 import random
 from copy import deepcopy
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
+
+from src.logger.experiment_logger import logger
 
 
 class GeneticAlgorithm:
@@ -25,17 +27,31 @@ class GeneticAlgorithm:
             "mutation",
             "elitism",
         }
-        self._is_random_mode = self.config.get("active") == ["random"]
+
+        self.mutation_prob_discrete: float = self.config["mutation"][
+            "mutation_prob_discrete"
+        ]
+        self.mutation_prob_categorical: float = self.config["mutation"][
+            "mutation_prob_categorical"
+        ]
+        self.mutation_prob_continuous: float = self.config["mutation"][
+            "mutation_prob_continuous"
+        ]
+        self.mutation_sigma_continuous: float = self.config["mutation"][
+            "mutation_sigma_continuous"
+        ]
+
+        self._is_random_mode = self.config["active"] == ["random"]
 
         if not self._is_random_mode:
-            self.active_operators = set(self.config.get("active", []))
+            self.active_operators = set(self.config["active"])
         else:
             self.active_operators = set()  # Will be chosen per generation
 
     def tournament_selection(
         self, population: List[Any], fitness: List[float]
     ) -> Any:
-        tournament_size = self.config["selection"]["tournament_size"]
+        tournament_size: int = self.config["selection"]["tournament_size"]
         selected_indices = np.random.choice(
             len(population), tournament_size, replace=False
         )
@@ -54,11 +70,11 @@ class GeneticAlgorithm:
         return child
 
     def mutate(self, chromosome: Dict) -> Dict:
-        mutation_conf = self.config["mutation"]
         for gene, info in self.chromosome_space.items():
             if info["type"] == DataType.CONTINUOUS:
-                if np.random.rand() < mutation_conf["mutation_prob_continuous"]:
-                    sigma = mutation_conf["mutation_sigma_continuous"]
+                if np.random.rand() < self.mutation_prob_continuous:
+                    sigma = self.mutation_sigma_continuous
+
                     if info.get("scale") == "log":
                         log_val = np.log10(chromosome[gene])
                         mutated_log = log_val + np.random.normal(0, sigma)
@@ -69,9 +85,9 @@ class GeneticAlgorithm:
                         np.clip(mutated, info["min"], info["max"])
                     )
             else:
-                prob = mutation_conf.get("mutation_prob_discrete")
+                prob = self.mutation_prob_discrete
                 if info["type"] == DataType.CATEGORICAL:
-                    prob = mutation_conf.get("mutation_prob_categorical")
+                    prob = self.mutation_prob_categorical
 
                 if np.random.rand() < prob:
                     possible = [
@@ -86,6 +102,15 @@ class GeneticAlgorithm:
         elite_num = max(1, int(len(population) * percent))
         elite_indices = np.argsort(fitness)[-elite_num:]
         return [deepcopy(population[i]) for i in elite_indices]
+
+    def set_adaptive_mutation(
+        self,
+        decay_rate: float,
+        gen: int,
+    ) -> None:
+        self.mutation_prob_discrete *= decay_rate**gen
+        self.mutation_prob_categorical *= decay_rate**gen
+        self.mutation_prob_continuous *= decay_rate**gen
 
     def run_generation(
         self, population: List[Dict], fitness: List[float]
@@ -147,30 +172,136 @@ class GeneticAlgorithm:
 
         return new_pop[:pop_size]
 
-    # TODO: now it generators random pop_size based on config. In future this function would go calibration,
-    # and result will be top N main algorithm population of M calibration population, where N <= M
-    def initial_population(self, pop_size: int) -> List[Dict]:
-        population = []
-        for _ in range(pop_size):
-            indiv = {}
-            for gene, info in self.chromosome_space.items():
-                if info["type"] == DataType.DISCRETE:
-                    indiv[gene] = random.choice(info["values"])
-                elif info["type"] == DataType.CATEGORICAL:
-                    indiv[gene] = random.choice(info["values"])
-                elif info["type"] == DataType.CONTINUOUS:
-                    if info.get("scale") == "log":
-                        log_min = np.log10(info["min"])
-                        log_max = np.log10(info["max"])
-                        indiv[gene] = float(
-                            10 ** np.random.uniform(log_min, log_max)
-                        )
-                    else:
-                        indiv[gene] = float(
-                            np.random.uniform(info["min"], info["max"])
-                        )
-            population.append(indiv)
-        return population
+    def initial_population(
+        self, pop_size: int, strat_bins: int = 5
+    ) -> List[Dict]:
+        """
+        Generate a diverse initial population with stratification for continuous values.
+        Ensures each categorical/discrete value appears at least once if possible.
+        Throws a warning if pop_size is too small to guarantee categorical/discrete diversity.
+        For continuous genes, divides the range into strat_bins and samples at least one value per bin.
+        """
+        population: List[Dict[str, Any]] = []
+
+        # Step 1: Guarantee categorical/discrete coverage
+        guaranteed_individuals: List[Dict[str, Any]] = []
+
+        for gene, info in self.chromosome_space.items():
+            if info["type"] in [DataType.DISCRETE, DataType.CATEGORICAL]:
+                for v in info["values"]:
+                    individual = self._generate_individual(
+                        forced_gene=gene, forced_value=v
+                    )
+                    guaranteed_individuals.append(individual)
+
+        # Diversity implies a minimal pop_size
+        min_required: int = len(guaranteed_individuals)
+        if pop_size < min_required:
+            logger.warning(
+                f"Requested pop_size ({pop_size}) is smaller than the minimum required to guarantee diversity ({min_required})."
+                " Some values may not be represented."
+            )
+
+        population.extend(guaranteed_individuals)
+
+        # Step 2: Stratification for continuous genes
+        stratified_individuals: List[Dict[str, Any]] = []
+        for gene, info in self.chromosome_space.items():
+            if info["type"] == DataType.CONTINUOUS:
+                if info.get("scale") == "log":
+                    log_min = np.log10(info["min"])
+                    log_max = np.log10(info["max"])
+                    bin_edges = np.linspace(log_min, log_max, strat_bins + 1)
+                else:
+                    bin_edges = np.linspace(
+                        info["min"], info["max"], strat_bins + 1
+                    )
+
+                for i in range(strat_bins):
+                    bin_range = (float(bin_edges[i]), float(bin_edges[i + 1]))
+                    individual = self._generate_individual(
+                        strat_gene=gene, bin_range=bin_range
+                    )
+                    stratified_individuals.append(individual)
+
+        # Add stratified individuals, avoiding duplicates
+        existing_population = {str(ind): ind for ind in population}
+        for ind in stratified_individuals:
+            if str(ind) not in existing_population:
+                population.append(ind)
+                existing_population[str(ind)] = ind
+
+        # Step 3: Fill up to pop_size with random individuals, avoiding duplicates
+        while len(population) < pop_size:
+            individual = self._generate_individual()
+            if str(individual) not in existing_population:
+                population.append(individual)
+                existing_population[str(individual)] = individual
+
+        return population[:pop_size]
+
+    def _generate_individual(
+        self,
+        forced_gene: Optional[str] = None,
+        forced_value: Optional[Any] = None,
+        strat_gene: Optional[str] = None,
+        bin_range: Optional[Tuple[float, float]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate an individual, optionally forcing a value for a specific gene,
+        or stratifying a specific gene within a bin_range.
+        """
+        individual: Dict[str, Any] = {}
+        for gene, info in self.chromosome_space.items():
+            if forced_gene is not None and gene == forced_gene:
+                individual[gene] = self._sample_gene_value(
+                    info, forced_value=forced_value
+                )
+            elif (
+                strat_gene is not None
+                and gene == strat_gene
+                and bin_range is not None
+            ):
+                individual[gene] = self._sample_gene_value(
+                    info, bin_range=bin_range
+                )
+            else:
+                individual[gene] = self._sample_gene_value(info)
+        return individual
+
+    @staticmethod
+    def _sample_gene_value(
+        info: Dict[str, Any],
+        forced_value: Optional[Any] = None,
+        bin_range: Optional[Tuple[float, float]] = None,
+    ):
+        """
+        Helper for sampling a value for a gene.
+        If forced_value is provided, use it.
+        If bin_range is provided (for continuous stratification), sample within bin_range.
+        Otherwise, sample according to type.
+        """
+        if forced_value is not None:
+            return forced_value
+        if info["type"] in [DataType.DISCRETE, DataType.CATEGORICAL]:
+            return random.choice(info["values"])
+        elif info["type"] == DataType.CONTINUOUS:
+            if info.get("scale") == "log":
+                log_min = np.log10(info["min"])
+                log_max = np.log10(info["max"])
+
+                if bin_range is not None:
+                    return float(
+                        10 ** np.random.uniform(bin_range[0], bin_range[1])
+                    )
+                else:
+                    return float(10 ** np.random.uniform(log_min, log_max))
+            else:
+                if bin_range is not None:
+                    return float(np.random.uniform(bin_range[0], bin_range[1]))
+                else:
+                    return float(np.random.uniform(info["min"], info["max"]))
+        raise ValueError(f"Unknown gene type: {info['type']}")
 
 
 class DataType(Enum):

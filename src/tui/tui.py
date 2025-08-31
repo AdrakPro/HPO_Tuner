@@ -637,7 +637,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     if choice == "2":
         return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
 
-    logger.log_file("New configuration started")
+    logger.file_only("New configuration started")
 
     # Interactive configuration
     config_updates: Dict[str, Any] = {}
@@ -728,4 +728,4 @@ def print_final_config_panel(_config: Dict[str, Any]):
         expand=False,
     )
     console.print(panel)
-    logger.log_file(f"Configuration\n: {json.dumps(_config, indent=4)}")
+    logger.file_only(f"Configuration\n: {json.dumps(_config, indent=4)}", False)

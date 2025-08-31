@@ -81,7 +81,7 @@ class IndividualEvaluator:
                         )
                         fitness_scores.extend([0.0] * remaining_count)
                         loss_scores.extend([float("inf")] * remaining_count)
-                    break  # Exit the evaluation loop for this generation
+                    return fitness_scores, loss_scores
 
             except Exception as e:
                 logger.error(f"Error evaluating individual {i+1}: {e}")

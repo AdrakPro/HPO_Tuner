@@ -17,6 +17,14 @@ from src.utils.seed import seed_everything
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
+# --- Main Parameters ---
+MUTATION_DECAY_RATE = 0.98
+ENABLE_PROGRESSIVE_EPOCHS = True
+# Start bins depends on the population size, number of continuous parameters,
+# and your desired coverage/granularity of the search space
+CAL_STRAT_BINS = 3
+MAIN_START_BINS = 5
+
 
 def run_ga_phase(
     phase_name: str,
@@ -30,20 +38,55 @@ def run_ga_phase(
     """
     phase_config = config["genetic_algorithm_config"][phase_name]
     stop_conditions = StopConditions(phase_config["stop_conditions"])
-    evaluator = IndividualEvaluator(
-        config=config, training_epochs=phase_config["training_epochs"]
-    )
+    population = starting_population
+    max_generations = stop_conditions.max_generations
 
     logger.info(f"--- Starting {phase_name.upper()} Phase ---")
     logger.info(
-        f"Generations: up to {stop_conditions.max_generations}, Population: {len(starting_population)}, Training Epochs: {evaluator.training_epochs}"
+        f"Generations: up to {stop_conditions.max_generations}, Population: {len(starting_population)}"
     )
 
-    population = starting_population
     for gen in range(1, stop_conditions.max_generations + 1):
         logger.info(
             f"\n{phase_name.upper()} - Generation {gen}/{stop_conditions.max_generations}"
         )
+
+        initial_epochs = phase_config["training_epochs"]
+        minimum_viable_epochs = 20
+
+        # Progressive epochs and subset percentage
+        if (
+            ENABLE_PROGRESSIVE_EPOCHS
+            and initial_epochs >= minimum_viable_epochs
+        ):
+            progress = gen / max_generations
+
+            if progress <= 0.3:
+                training_epochs = int(round(initial_epochs * 0.1))
+                subset_percentage = 0.3
+            elif progress <= 0.7:
+                training_epochs = int(round(initial_epochs * 0.4))
+                subset_percentage = 0.7
+            else:
+                training_epochs = int(round(initial_epochs))
+                subset_percentage = 1.0
+        else:
+            logger.warning(
+                "Progressive epochs and subset percentage are disabled!"
+            )
+            training_epochs = initial_epochs
+            subset_percentage = (
+                phase_config["data_subset_percentage"]
+                if phase_name.upper() == "CALIBRATION"
+                else 1.0
+            )
+
+        evaluator = IndividualEvaluator(
+            config=config,
+            training_epochs=training_epochs,
+            subset_percentage=subset_percentage,
+        )
+
         fitness_scores, loss_scores = evaluator.evaluate_population(
             population, stop_conditions
         )
@@ -63,6 +106,8 @@ def run_ga_phase(
             population = [population[i] for i in sorted_indices]
             break
 
+        ga.set_adaptive_mutation(MUTATION_DECAY_RATE, gen)
+        # TODO: impl maintain diversity function
         population = ga.run_generation(population, fitness_scores)
 
     logger.success(f"--- {phase_name.upper()} Phase Finished ---")
@@ -84,7 +129,9 @@ def run_optimization(_config, _run):
     calibrated_population = []
     if ga_config["calibration"]["enabled"]:
         initial_pop_size = ga_config["calibration"]["population_size"]
-        initial_population = ga.initial_population(initial_pop_size)
+        initial_population = ga.initial_population(
+            initial_pop_size, CAL_STRAT_BINS
+        )
         calibrated_population = run_ga_phase(
             "calibration", _config, ga, initial_population
         )
@@ -103,14 +150,18 @@ def run_optimization(_config, _run):
             logger.info(
                 f"Adding {num_to_add} new random individuals to the population."
             )
-            main_starting_population.extend(ga.initial_population(num_to_add))
+            main_starting_population.extend(
+                ga.initial_population(num_to_add, MAIN_START_BINS)
+            )
         else:
             main_starting_population = main_starting_population[:main_pop_size]
     else:
         logger.info(
             "Calibration disabled. Starting main algorithm with random population."
         )
-        main_starting_population = ga.initial_population(main_pop_size)
+        main_starting_population = ga.initial_population(
+            main_pop_size, MAIN_START_BINS
+        )
 
     final_population = run_ga_phase(
         "main_algorithm", _config, ga, main_starting_population
@@ -124,7 +175,7 @@ def run_optimization(_config, _run):
         _config, ga_config["main_algorithm"]["training_epochs"]
     )
     final_fitness, final_loss = final_evaluator.evaluate_population(
-        [best_individual], None
+        [best_individual], None, is_final=True
     )
 
     logger.success("\n--- Best Overall Result ---")

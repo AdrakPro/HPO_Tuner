@@ -15,7 +15,12 @@ class IndividualEvaluator:
     Evaluates a population, respecting the stop conditions.
     """
 
-    def __init__(self, config: Dict[str, Any], training_epochs: int):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        training_epochs: int,
+        subset_percentage: float = 1.0,
+    ):
         """
         Initializes the IndividualEvaluator.
 
@@ -25,11 +30,13 @@ class IndividualEvaluator:
         """
         self.config = config
         self.training_epochs = training_epochs
+        self.subset_percentage = subset_percentage
 
     def evaluate_population(
         self,
         population: List[Dict],
         stop_conditions: StopConditions | None,
+        is_final: bool = False,
     ) -> Tuple[List[float], List[float]]:
         """
         Fitness function for the GA. Evaluates each individual and respects stop conditions.
@@ -37,6 +44,7 @@ class IndividualEvaluator:
         Args:
             population: A list of dictionaries, where each dictionary represents an individual's hyperparameters.
             stop_conditions: An object that determines when to stop evaluation.
+            is_final: Flag for last evaluation
 
         Returns:
             A tuple containing two lists: fitness_scores (e.g., accuracy) and loss_scores.
@@ -50,7 +58,11 @@ class IndividualEvaluator:
             try:
                 chromosome = Chromosome.from_dict(individual_dict)
                 accuracy, loss = train_and_eval(
-                    chromosome, self.config, self.training_epochs
+                    chromosome,
+                    self.config,
+                    self.training_epochs,
+                    self.subset_percentage,
+                    is_final,
                 )
                 logger.info(
                     f"Individual {i+1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"
@@ -72,9 +84,7 @@ class IndividualEvaluator:
                     break  # Exit the evaluation loop for this generation
 
             except Exception as e:
-                logger.error(
-                    f"Error evaluating individual {i+1}: {e}", exc_info=True
-                )
+                logger.error(f"Error evaluating individual {i+1}: {e}")
                 fitness_scores.append(0.0)
                 loss_scores.append(float("inf"))
 

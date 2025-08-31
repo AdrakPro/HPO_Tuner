@@ -1,11 +1,15 @@
+import sys
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
 from src.logger.experiment_logger import logger
 from src.model.chromosome import Chromosome
 from src.nn.data_loader import get_dataset_loaders
+from src.nn.model_saver import ModelSaver
 from src.nn.neural_network import CNN, get_network, get_optimizer_and_scheduler
 
 
@@ -15,6 +19,7 @@ def train_epoch(
     criterion: nn.Module,
     optimizer: optim.Optimizer,
     device: torch.device,
+    scaler: GradScaler = None,
 ) -> tuple[float, float]:
     """
     Train the model for one epoch.
@@ -25,6 +30,7 @@ def train_epoch(
         criterion: Loss function.
         optimizer: Optimizer.
         device: Device to run computations on.
+        scaler: Scaler supporting Mixed Precision
 
     Returns:
         Tuple of average loss and accuracy for the epoch.
@@ -33,13 +39,24 @@ def train_epoch(
     running_loss = 0.0
     correct = 0
     total = 0
+
     for inputs, targets in loader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
+
+        # Mixed Precision Support
+        if scaler is not None:
+            with autocast(device.type):
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
 
         running_loss += loss.item() * inputs.size(0)
         _, predicted = outputs.max(1)
@@ -88,7 +105,11 @@ def evaluate(
 
 
 def train_and_eval(
-    chromosome: Chromosome, config: any, epochs: int
+    chromosome: Chromosome,
+    config: any,
+    epochs: int,
+    subset_percentage: float = 1.0,
+    is_final: bool = False,
 ) -> tuple[float, float]:
     """
     Train and evaluate CNN on CIFAR-10.
@@ -103,21 +124,15 @@ def train_and_eval(
 
     try:
         train_loader, test_loader = get_dataset_loaders(
-            chromosome.batch_size, chromosome.aug_intensity, is_gpu, padding
+            chromosome.batch_size,
+            chromosome.aug_intensity,
+            is_gpu,
+            padding,
+            subset_percentage,
         )
     except Exception as e:
-        logger.warning(
-            f"Could not load real data ({e}). Using dummy data loaders."
-        )
-        bs = chromosome.batch_size
-        train_loader = [
-            (torch.randn(bs, 3, 32, 32), torch.randint(0, 10, (bs,)))
-            for _ in range(5)
-        ]
-        test_loader = [
-            (torch.randn(bs, 3, 32, 32), torch.randint(0, 10, (bs,)))
-            for _ in range(2)
-        ]
+        logger.error(f"Could not load the data ({e}). Exiting...")
+        sys.exit(1)
 
     model: CNN = get_network(chromosome, config["neural_network_config"]).to(
         device
@@ -128,11 +143,15 @@ def train_and_eval(
         model, chromosome, train_loader, epochs
     )
 
+    # Mixed Precision Support
+    scaler = GradScaler() if is_gpu else None
+
     final_test_acc = 0.0
     final_test_loss = 0.0
+
     for epoch in range(epochs):
         train_loss, train_acc = train_epoch(
-            model, train_loader, criterion, optimizer, device
+            model, train_loader, criterion, optimizer, device, scaler
         )
         test_loss, test_acc = evaluate(model, test_loader, criterion, device)
         if scheduler:
@@ -144,7 +163,8 @@ def train_and_eval(
             f"  Epoch {epoch + 1}/{epochs} | Train Acc: {train_acc:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
         )
 
-    return final_test_acc, final_test_loss
+    if is_final:
+        saver = ModelSaver("model")
+        saver.save(model)
 
-    # saver = ModelSaver("cnn")
-    # saver.save(model)
+    return final_test_acc, final_test_loss

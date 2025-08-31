@@ -80,7 +80,7 @@ class StopConditions:
         if current_generation > self.early_stop_generations:
             # Look at the last `early_stop_generations` fitness values
             recent_history = self.best_fitness_history[
-                -self.early_stop_generations:
+                -self.early_stop_generations :
             ]
             if len(set(recent_history)) == 1:
                 return True, (

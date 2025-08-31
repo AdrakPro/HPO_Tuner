@@ -5,8 +5,9 @@ Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 
 import os
 
+import numpy.random as random
 from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from src.logger.experiment_logger import logger
 from src.model.chromosome import AugmentationIntensity
@@ -27,6 +28,7 @@ def get_dataset_loaders(
     aug_intensity: AugmentationIntensity,
     is_gpu: bool,
     padding: int,
+    subset_percentage: float = 1.0,
 ) -> tuple[DataLoader, DataLoader]:
     """
     Get CIFAR-10 train/test DataLoaders.
@@ -46,6 +48,11 @@ def get_dataset_loaders(
         root=data_dir, train=False, download=True, transform=transform_test
     )
 
+    if subset_percentage < 1.0:
+        subset_size = int(len(train_set) * subset_percentage)
+        indices = random.choice(len(train_set), subset_size, replace=False)
+        train_set = Subset(train_set, indices)
+
     train_loader = DataLoader(
         train_set,
         batch_size=batch_size,
@@ -60,6 +67,8 @@ def get_dataset_loaders(
         batch_size=batch_size,
         shuffle=False,
         num_workers=NUM_WORKERS,
+        worker_init_fn=seed_worker,
+        pin_memory=is_gpu,
     )
 
     return train_loader, test_loader
@@ -114,7 +123,6 @@ def get_transforms(
             ]
         )
     else:
-        logger.error("Invalid AugmentationIntensity")
         raise ValueError("Invalid AugmentationIntensity")
 
     test_transform = transforms.Compose(

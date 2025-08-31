@@ -42,6 +42,7 @@ def default_config():
             # TODO: Maybe this should also be available for search with width_scale
             "base_filters": 32,
         },
+        # TODO: should aug_intensity be fixed for all data?
         "hyperparameter_space": {
             "width_scale": {
                 "type": "float",
@@ -131,6 +132,7 @@ def default_config():
                 "max_generations": 15,
                 "early_stop_generations": 5,
                 "fitness_goal": 0.70,
+                # TODO: change to HOURS
                 "time_limit_minutes": 5,
             },
         },

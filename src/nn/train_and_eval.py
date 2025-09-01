@@ -127,9 +127,9 @@ def train_and_eval(
             is_gpu,
             subset_percentage,
         ) as (train_loader, test_loader):
-            model: CNN = get_network(chromosome, config["neural_network_config"]).to(
-                device
-            )
+            model: CNN = get_network(
+                chromosome, config["neural_network_config"]
+            ).to(device)
             criterion: nn.Module = nn.CrossEntropyLoss()
 
             optimizer, scheduler = get_optimizer_and_scheduler(
@@ -148,7 +148,9 @@ def train_and_eval(
                 train_loss, train_acc = train_epoch(
                     model, train_loader, criterion, optimizer, device, scaler
                 )
-                test_loss, test_acc = evaluate(model, test_loader, criterion, device)
+                test_loss, test_acc = evaluate(
+                    model, test_loader, criterion, device
+                )
 
                 if scheduler:
                     scheduler.step()
@@ -180,6 +182,7 @@ def train_and_eval(
             return final_test_acc, final_test_loss
 
     except Exception as e:
-        logger.error(f"Could not load the data or train the model ({e}). Exiting individual evaluation...")
+        logger.error(
+            f"Could not load the data or train the model ({e}). Exiting individual evaluation..."
+        )
         return 0.0, float("inf")
-

@@ -18,6 +18,11 @@ NUM_WORKERS = os.cpu_count() // 2
 MEANS = (0.4914, 0.4822, 0.4465)
 STDS = (0.2023, 0.1994, 0.2010)
 
+# Padded Image Size: (32 + 2*4) x (32 + 2*4) = 40 x 40
+# Then it randomly selects a 32x32 window from within the 40x40 area.
+# Range [0, 6]
+CROP_PADDING = 4
+
 IMG_SIZE = 32
 
 # TODO: What if dataset is imbalanced. We should balance it but we stick to CIFAR-10
@@ -33,11 +38,9 @@ class DataLoaderManager:
         return self.loaders
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # By deleting the loader objects, we trigger their __del__ method,
-        # which is responsible for shutting down the worker processes.
         for loader in self.loaders:
             del loader
-        # No need to handle exceptions, just ensure cleanup.
+
         return False
 
 
@@ -45,7 +48,6 @@ def get_dataset_loaders(
     batch_size: int,
     aug_intensity: AugmentationIntensity,
     is_gpu: bool,
-    padding: int,
     subset_percentage: float = 1.0,
 ) -> DataLoaderManager:
     """
@@ -57,7 +59,7 @@ def get_dataset_loaders(
 
     data_dir: str = "./model_data"
 
-    transform_train, transform_test = get_transforms(aug_intensity, padding)
+    transform_train, transform_test = get_transforms(aug_intensity)
 
     train_set = datasets.CIFAR10(
         root=data_dir, train=True, download=True, transform=transform_train
@@ -93,7 +95,7 @@ def get_dataset_loaders(
 
 
 def get_transforms(
-    aug_intensity: AugmentationIntensity, padding: int
+    aug_intensity: AugmentationIntensity
 ) -> tuple[transforms.Compose, transforms.Compose]:
     """
     Get train and test transforms based on augmentation intensity.
@@ -122,7 +124,7 @@ def get_transforms(
     elif aug_intensity == AugmentationIntensity.MEDIUM:
         train_transform = transforms.Compose(
             [
-                transforms.RandomCrop(IMG_SIZE, padding=padding),
+                transforms.RandomCrop(IMG_SIZE, padding=CROP_PADDING),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize(MEANS, STDS),
@@ -131,7 +133,7 @@ def get_transforms(
     elif aug_intensity == AugmentationIntensity.STRONG:
         train_transform = transforms.Compose(
             [
-                transforms.RandomCrop(IMG_SIZE, padding=padding),
+                transforms.RandomCrop(IMG_SIZE, padding=CROP_PADDING),
                 transforms.RandomHorizontalFlip(),
                 transforms.ColorJitter(
                     brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1

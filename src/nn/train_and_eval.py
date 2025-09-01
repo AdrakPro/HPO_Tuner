@@ -116,9 +116,6 @@ def train_and_eval(
     Train and evaluate CNN on CIFAR-10.
     """
     is_gpu: bool = "GPU" in config["hardware_config"]["evaluation_mode"]
-    padding: int = config["neural_network_config"]["fixed_parameters"][
-        "padding"
-    ]
 
     # What about when CPU+GPU
     device: torch.device = torch.device("cuda" if is_gpu else "cpu")
@@ -128,7 +125,6 @@ def train_and_eval(
             chromosome.batch_size,
             chromosome.aug_intensity,
             is_gpu,
-            padding,
             subset_percentage,
         ) as (train_loader, test_loader):
             model: CNN = get_network(chromosome, config["neural_network_config"]).to(

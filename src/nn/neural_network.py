@@ -122,6 +122,7 @@ def get_optimizer_and_scheduler(
     base_lr = chromosome.base_lr
     weight_decay = chromosome.weight_decay
     warmup_epochs = 3
+    start_warmup_lr = 0.003
 
     def make_optimizer(use_adamw: bool) -> optim.Optimizer:
         """Create either SGD or AdamW optimizer."""
@@ -139,7 +140,7 @@ def get_optimizer_and_scheduler(
     # TODO: Waiting for fix: https://github.com/pytorch/pytorch/issues/76113
     def apply_warmup(opt: optim.Optimizer, main_scheduler: LRScheduler):
         """Optionally prepend warmup scheduler."""
-        if base_lr <= 0.003 and chromosome.optimizer_schedule.name not in [
+        if base_lr <= start_warmup_lr and chromosome.optimizer_schedule.name not in [
             "ADAMW_COSINE",
             "SGD_COSINE",
         ]:

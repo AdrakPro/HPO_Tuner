@@ -124,66 +124,66 @@ def train_and_eval(
     device: torch.device = torch.device("cuda" if is_gpu else "cpu")
 
     try:
-        train_loader, test_loader = get_dataset_loaders(
+        with get_dataset_loaders(
             chromosome.batch_size,
             chromosome.aug_intensity,
             is_gpu,
             padding,
             subset_percentage,
-        )
-    except Exception as e:
-        logger.error(f"Could not load the data ({e}). Exiting...")
-        sys.exit(1)
-
-    model: CNN = get_network(chromosome, config["neural_network_config"]).to(
-        device
-    )
-    criterion: nn.Module = nn.CrossEntropyLoss()
-
-    optimizer, scheduler = get_optimizer_and_scheduler(
-        model, chromosome, train_loader, epochs
-    )
-
-    # Mixed Precision Support
-    scaler = GradScaler() if is_gpu else None
-
-    final_test_acc = 0.0
-    final_test_loss = 0.0
-
-    # Early stopping
-    best_acc_so_far = 0.0
-    epochs_without_improvement = 0
-
-    for epoch in range(epochs):
-        train_loss, train_acc = train_epoch(
-            model, train_loader, criterion, optimizer, device, scaler
-        )
-        test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-        if scheduler:
-            scheduler.step()
-
-        final_test_acc = test_acc
-        final_test_loss = test_loss
-        print(
-            f"  Epoch {epoch + 1}/{epochs} | Train Acc: {train_acc:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
-        )
-
-        # Early stopping logic
-        # TODO: impl median stopping (sync halving or async with shared state) for calibration only
-        if test_acc > best_acc_so_far:
-            best_acc_so_far = test_acc
-            epochs_without_improvement = 0
-        else:
-            epochs_without_improvement += 1
-
-        if epochs_without_improvement >= early_stop_epochs:
-            logger.warning(
-                f"  Stopping individual early after epoch {epoch + 1} due to no improvement for {early_stop_epochs} epochs."
+        ) as (train_loader, test_loader):
+            model: CNN = get_network(chromosome, config["neural_network_config"]).to(
+                device
             )
-            break
+            criterion: nn.Module = nn.CrossEntropyLoss()
 
-    if is_final:
-        saver = ModelSaver("model")
-        saver.save(model)
+            optimizer, scheduler = get_optimizer_and_scheduler(
+                model, chromosome, train_loader, epochs
+            )
 
-    return final_test_acc, final_test_loss
+            # Mixed Precision Support
+            scaler = GradScaler() if is_gpu else None
+
+            final_test_acc = 0.0
+            final_test_loss = 0.0
+            best_acc_so_far = 0.0
+            epochs_without_improvement = 0
+
+            for epoch in range(epochs):
+                train_loss, train_acc = train_epoch(
+                    model, train_loader, criterion, optimizer, device, scaler
+                )
+                test_loss, test_acc = evaluate(model, test_loader, criterion, device)
+
+                if scheduler:
+                    scheduler.step()
+
+                final_test_acc = test_acc
+                final_test_loss = test_loss
+                print(
+                    f"  Epoch {epoch + 1}/{epochs} | Train Acc: {train_acc:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
+                )
+
+                # Early stopping logic
+                # TODO: impl median stopping (sync halving or async with shared state)
+                if test_acc > best_acc_so_far:
+                    best_acc_so_far = test_acc
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+
+                if epochs_without_improvement >= early_stop_epochs:
+                    logger.warning(
+                        f"  Stopping individual early after epoch {epoch + 1} due to no improvement for {early_stop_epochs} epochs."
+                    )
+                    break
+
+            if is_final:
+                saver = ModelSaver("model")
+                saver.save(model)
+
+            return final_test_acc, final_test_loss
+
+    except Exception as e:
+        logger.error(f"Could not load the data or train the model ({e}). Exiting individual evaluation...")
+        return 0.0, float("inf")
+

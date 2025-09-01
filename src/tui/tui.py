@@ -369,16 +369,6 @@ def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
             "default": fixed_defaults.get("activation_function", "relu"),
             "target": fixed_param_updates,
         },
-        "padding": {
-            "prompt": "Padding for convolutional layers",
-            "default": fixed_defaults.get("padding", 1),
-            "target": fixed_param_updates,
-        },
-        "stride": {
-            "prompt": "Stride for convolutional layers",
-            "default": fixed_defaults.get("stride", 2),
-            "target": fixed_param_updates,
-        },
     }
 
     for key, config in params_to_prompt.items():
@@ -713,8 +703,6 @@ def print_final_config_panel(_config: Dict[str, Any]):
         f"[bold]CNN Params:[/bold]\n"
         f"  [cyan]Conv Blocks:[/cyan] {_get_nested_config(_config, [NN_CONFIG, 'conv_blocks'])}\n"
         f"  [cyan]Activation:[/cyan] {_get_nested_config(_config, [NN_CONFIG, 'fixed_parameters', 'activation_function'])}\n"
-        f"  [cyan]Padding:[/cyan] {_get_nested_config(_config, [NN_CONFIG, 'fixed_parameters', 'padding'])}\n"
-        f"  [cyan]Stride:[/cyan] {_get_nested_config(_config, [NN_CONFIG, 'fixed_parameters', 'stride'])}\n"
         f"-------------------\n"
         f"[bold]Hyperparameter Space:[/bold]\n{hyper_str}\n"
         f"-------------------\n"

@@ -36,8 +36,6 @@ def default_config():
         # Parameters not subject to optimization
         "fixed_parameters": {
             "activation_function": "relu",  # Options: relu, gelu, leaky_relu
-            "padding": 1,
-            "stride": 2,
             # TODO: Maybe this should also be available for search with width_scale
             "base_filters": 32,
         },

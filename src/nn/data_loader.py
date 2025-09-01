@@ -23,13 +23,31 @@ IMG_SIZE = 32
 # TODO: What if dataset is imbalanced. We should balance it but we stick to CIFAR-10
 
 
+class DataLoaderManager:
+    """A context manager to ensure DataLoader workers are properly shut down."""
+
+    def __init__(self, *loaders):
+        self.loaders = loaders
+
+    def __enter__(self):
+        return self.loaders
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # By deleting the loader objects, we trigger their __del__ method,
+        # which is responsible for shutting down the worker processes.
+        for loader in self.loaders:
+            del loader
+        # No need to handle exceptions, just ensure cleanup.
+        return False
+
+
 def get_dataset_loaders(
     batch_size: int,
     aug_intensity: AugmentationIntensity,
     is_gpu: bool,
     padding: int,
     subset_percentage: float = 1.0,
-) -> tuple[DataLoader, DataLoader]:
+) -> DataLoaderManager:
     """
     Get CIFAR-10 train/test DataLoaders.
 
@@ -71,7 +89,7 @@ def get_dataset_loaders(
         pin_memory=is_gpu,
     )
 
-    return train_loader, test_loader
+    return DataLoaderManager(train_loader, test_loader)
 
 
 def get_transforms(

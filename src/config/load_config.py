@@ -75,8 +75,6 @@ def _validate_neural_network_config(config: Dict):
         raise ValueError(
             f"Allowed 'activation_function' are {allowed}', but received: '{fixed_params['activation_function']}'."
         )
-    _check_non_negative_int(fixed_params["padding"], "padding")
-    _check_non_negative_int(fixed_params["stride"], "stride")
     _check_non_negative_int(fixed_params["base_filters"], "base_filters")
 
     # --- Hyperparameter space validation ---

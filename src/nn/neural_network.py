@@ -56,8 +56,11 @@ class CNN(nn.Module):
         activation_function: str = config["fixed_parameters"][
             "activation_function"
         ]
-        stride: int = config["fixed_parameters"]["stride"]
-        padding: int = config["fixed_parameters"]["padding"]
+        # Conv layers preserve dimensions
+        conv_stride = 1
+        # Pooling to downsample
+        pool_stride = 2
+        padding = 1
         base_filters: int = config["fixed_parameters"]["base_filters"]
 
         base = int(base_filters * chromosome.width_scale)
@@ -73,12 +76,12 @@ class CNN(nn.Module):
                     out_channels[i],
                     kernel_size=3,
                     padding=padding,
-                    stride=stride,
+                    stride=conv_stride,
                 )
             )
             layers.append(nn.BatchNorm2d(out_channels[i]))
             layers.append(ActivationLayer(self.activation))
-            layers.append(nn.MaxPool2d(kernel_size=2, stride=stride))
+            layers.append(nn.MaxPool2d(kernel_size=2, stride=pool_stride))
             in_channels = out_channels[i]
 
         self.conv_seq = nn.Sequential(*layers)

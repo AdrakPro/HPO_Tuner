@@ -541,12 +541,16 @@ def _get_genetic_operators_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
 def _prompt_for_stop_conditions(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts for algorithm stop conditions."""
     stop_updates: Dict[str, Any] = {}
-    stop_defaults = defaults.get(STOP_CONDITIONS, {})
+    stop_defaults = defaults[STOP_CONDITIONS]
 
     params = {
         "max_generations": ("Maximum number of generations", int),
         "early_stop_generations": (
             "Number of generations for early stopping",
+            int,
+        ),
+        "early_stop_epochs": (
+            "Number of epochs for early stopping",
             int,
         ),
         "fitness_goal": ("Target fitness value", float),

@@ -175,6 +175,7 @@ def _validate_stop_conditions(config: Dict, prefix: str):
     for key in [
         "max_generations",
         "early_stop_generations",
+        "early_stop_epochs",
     ]:
         _check_non_negative_int(config[key], f"{prefix}.{key}")
     _check_non_negative_float(

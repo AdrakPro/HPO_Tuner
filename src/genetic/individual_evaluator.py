@@ -21,7 +21,8 @@ class IndividualEvaluator:
         self,
         config: Dict[str, Any],
         training_epochs: int,
-        subset_percentage: float = 1.0,
+        early_stop_epochs: int,
+        subset_percentage: float,
     ):
         """
         Initializes the IndividualEvaluator.
@@ -33,6 +34,7 @@ class IndividualEvaluator:
         self.config = config
         self.training_epochs = training_epochs
         self.subset_percentage = subset_percentage
+        self.early_stop_epochs = early_stop_epochs
 
     def evaluate_population(
         self,
@@ -63,6 +65,7 @@ class IndividualEvaluator:
                     chromosome,
                     self.config,
                     self.training_epochs,
+                    self.early_stop_epochs,
                     self.subset_percentage,
                     is_final,
                 )

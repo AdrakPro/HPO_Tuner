@@ -108,6 +108,7 @@ def train_and_eval(
     chromosome: Chromosome,
     config: any,
     epochs: int,
+    early_stop_epochs: int,
     subset_percentage: float = 1.0,
     is_final: bool = False,
 ) -> tuple[float, float]:
@@ -149,6 +150,10 @@ def train_and_eval(
     final_test_acc = 0.0
     final_test_loss = 0.0
 
+    # Early stopping
+    best_acc_so_far = 0.0
+    epochs_without_improvement = 0
+
     for epoch in range(epochs):
         train_loss, train_acc = train_epoch(
             model, train_loader, criterion, optimizer, device, scaler
@@ -162,6 +167,20 @@ def train_and_eval(
         print(
             f"  Epoch {epoch + 1}/{epochs} | Train Acc: {train_acc:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
         )
+
+        # Early stopping logic
+        # TODO: impl median stopping (sync halving or async with shared state)
+        if test_acc > best_acc_so_far:
+            best_acc_so_far = test_acc
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if epochs_without_improvement >= early_stop_epochs:
+            logger.warning(
+                f"  Stopping individual early after epoch {epoch + 1} due to no improvement for {early_stop_epochs} epochs."
+            )
+            break
 
     if is_final:
         saver = ModelSaver("model")

@@ -121,27 +121,28 @@ def default_config():
         },
         "calibration": {
             "enabled": True,
-            "population_size": 30,
+            "population_size": 40,
+            "generations": 8,
+            "training_epochs": 25,
+            "data_subset_percentage": 0.2,
+            "stop_conditions": {
+                "max_generations": 8,
+                "early_stop_generations": 3,
+                "early_stop_epochs": 5,
+                "fitness_goal": 0.75,
+                "time_limit_minutes": 0
+            }
+        },
+        "main_algorithm": {
+            "population_size": 20,
             "generations": 15,
-            "training_epochs": 5,
-            "data_subset_percentage": 0.25,
+            "training_epochs": 80,
             "stop_conditions": {
                 "max_generations": 15,
                 "early_stop_generations": 5,
-                "fitness_goal": 0.70,
-                # TODO: change to HOURS
-                "time_limit_minutes": 5,
-            },
-        },
-        "main_algorithm": {
-            "population_size": 40,
-            "generations": 50,
-            "training_epochs": 100,
-            "stop_conditions": {
-                "max_generations": 50,
-                "early_stop_generations": 10,
-                "fitness_goal": 0.995,
-                "time_limit_minutes": 5,
-            },
-        },
+                "early_stop_epochs": 10,
+                "fitness_goal": 0.945,
+                "time_limit_minutes": 0
+            }
+        }
     }

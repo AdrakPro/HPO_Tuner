@@ -3,14 +3,22 @@ Core CNN model for CIFAR-10 classification.
 Allows user-defined number of convolutional blocks with global config for padding, stride, activation.
 """
 
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import optim
-from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.lr_scheduler import (
+    LRScheduler,
+    LinearLR,
+    SequentialLR,
+    CosineAnnealingLR,
+    ExponentialLR,
+    OneCycleLR,
+)
 from torch.utils.data import DataLoader
 
-from src.logger.experiment_logger import logger
 from src.model.chromosome import Chromosome, OptimizerSchedule
 
 
@@ -105,67 +113,64 @@ def get_optimizer_and_scheduler(
     chromosome: Chromosome,
     train_loader: DataLoader,
     epochs: int,
-) -> tuple[optim.Optimizer, LRScheduler | None]:
+) -> Tuple[optim.Optimizer, LRScheduler | None]:
     """
-    Get optimizer and scheduler based on chromosome.
-
-    Args:
-        model: Model to optimize.
-        chromosome: Chromosome hyperparameters.
-        train_loader: DataLoader for OneCycle scheduler.
-        epochs: Number of epochs.
-
-    Returns:
-        Tuple of optimizer and scheduler (scheduler can be None).
+    Get optimizer and scheduler based on chromosome configuration.
     """
-    SGD_MOMENTUM = 0.9
+    sgd_momentum = 0.9
+    exp_decay = 0.95
+    base_lr = chromosome.base_lr
+    weight_decay = chromosome.weight_decay
+    warmup_epochs = 3
 
-    if chromosome.optimizer_schedule == OptimizerSchedule.SGD_STEP:
-        optimizer = optim.SGD(
+    def make_optimizer(use_adamw: bool) -> optim.Optimizer:
+        """Create either SGD or AdamW optimizer."""
+        if use_adamw:
+            return optim.AdamW(
+                model.parameters(), lr=base_lr, weight_decay=weight_decay
+            )
+        return optim.SGD(
             model.parameters(),
-            lr=chromosome.base_lr,
-            momentum=SGD_MOMENTUM,
-            weight_decay=chromosome.weight_decay,
+            lr=base_lr,
+            momentum=sgd_momentum,
+            weight_decay=weight_decay,
         )
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer, step_size=epochs // 2, gamma=0.1
+
+    # TODO: Waiting for fix: https://github.com/pytorch/pytorch/issues/76113
+    def apply_warmup(opt: optim.Optimizer, main_scheduler: LRScheduler):
+        """Optionally prepend warmup scheduler."""
+        if base_lr <= 0.003 and chromosome.optimizer_schedule.name not in [
+            "ADAMW_COSINE",
+            "SGD_COSINE",
+        ]:
+            return main_scheduler
+        warmup = LinearLR(opt, start_factor=0.1, total_iters=warmup_epochs)
+        return SequentialLR(
+            opt, [warmup, main_scheduler], milestones=[warmup_epochs]
         )
-    elif chromosome.optimizer_schedule == OptimizerSchedule.SGD_COSINE:
-        optimizer = optim.SGD(
-            model.parameters(),
-            lr=chromosome.base_lr,
-            momentum=SGD_MOMENTUM,
-            weight_decay=chromosome.weight_decay,
-        )
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=epochs
-        )
-    elif chromosome.optimizer_schedule == OptimizerSchedule.ADAMW_COSINE:
-        optimizer = optim.AdamW(
-            model.parameters(),
-            lr=chromosome.base_lr,
-            weight_decay=chromosome.weight_decay,
-        )
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=epochs
-        )
-    elif chromosome.optimizer_schedule == OptimizerSchedule.ADAMW_ONECYCLE:
-        optimizer = optim.AdamW(
-            model.parameters(),
-            lr=chromosome.base_lr,
-            weight_decay=chromosome.weight_decay,
-        )
-        scheduler = optim.lr_scheduler.OneCycleLR(
+
+    schedule_type = chromosome.optimizer_schedule.name
+
+    if schedule_type in ("SGD_COSINE", "ADAMW_COSINE"):
+        optimizer = make_optimizer("ADAMW" in schedule_type)
+        cosine = CosineAnnealingLR(optimizer, T_max=epochs - warmup_epochs)
+        scheduler = apply_warmup(optimizer, cosine)
+
+    elif schedule_type in ("SGD_EXPONENTIAL", "ADAMW_EXPONENTIAL"):
+        optimizer = make_optimizer("ADAMW" in schedule_type)
+        exp = ExponentialLR(optimizer, gamma=exp_decay)
+        scheduler = apply_warmup(optimizer, exp)
+
+    elif schedule_type in ("SGD_ONECYCLE", "ADAMW_ONECYCLE"):
+        optimizer = make_optimizer("ADAMW" in schedule_type)
+        scheduler = OneCycleLR(
             optimizer,
-            max_lr=chromosome.base_lr,
+            max_lr=base_lr,
             steps_per_epoch=len(train_loader),
             epochs=epochs,
         )
+
     else:
-        logger.error(
-            f"Unknown optimizer schedule: {chromosome.optimizer_schedule}"
-        )
-        raise ValueError(
-            f"Unknown optimizer schedule: {chromosome.optimizer_schedule}"
-        )
+        raise ValueError(f"Unknown optimizer schedule: {schedule_type}")
+
     return optimizer, scheduler

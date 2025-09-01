@@ -7,7 +7,6 @@ from torch.nn import Module
 from src.utils.ensure_dir import ensure_dir_exists
 
 
-# TODO: problem, should we save every training or just that with the best params given by GA (or just keep it, rest delete)?
 class ModelSaver:
     """
     Utility class for saving and loading PyTorch models.

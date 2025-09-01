@@ -9,7 +9,6 @@ import numpy.random as random
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 
-from src.logger.experiment_logger import logger
 from src.model.chromosome import AugmentationIntensity
 from src.utils.seed import seed_worker
 

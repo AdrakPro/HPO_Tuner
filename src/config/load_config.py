@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Dict, Any
 
 from src.logger.experiment_logger import logger
+from src.model.chromosome import OptimizerSchedule, AugmentationIntensity
 
 
 # --- Validation Helper Functions ---
@@ -135,18 +136,15 @@ def _validate_neural_network_config(config: Dict):
                         f"'{name}' is of type 'enum' with strings, but the 'values' list contains other types."
                     )
                 if name == "optimizer_schedule":
-                    allowed = [
-                        "SGD_STEP",
-                        "SGD_COSINE",
-                        "ADAMW_COSINE",
-                        "ADAMW_ONECYCLE",
-                    ]
+                    allowed = [e.name for e in OptimizerSchedule]
+
                     if not set(params["values"]).issubset(set(allowed)):
                         raise ValueError(
                             f"Disallowed values for 'optimizer_schedule'. Subsets of the following are allowed: {allowed}."
                         )
                 if name == "aug_intensity":
-                    allowed = ["NONE", "LIGHT", "MEDIUM", "STRONG"]
+                    allowed = [e.name for e in AugmentationIntensity]
+
                     if not set(params["values"]).issubset(set(allowed)):
                         raise ValueError(
                             f"Disallowed values for 'aug_intensity'. Subsets of the following are allowed: {allowed}."

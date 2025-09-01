@@ -62,9 +62,7 @@ class ExperimentAsyncLogger:
         self._shutdown_event = threading.Event()
         self._worker_thread = threading.Thread(target=self._worker, daemon=True)
         self._worker_thread.start()
-        self.success(
-            f"Logger initialized. Log file path: {self.log_path}"
-        )
+        self.success(f"Logger initialized. Log file path: {self.log_path}")
 
     def _worker(self):
         while not self._shutdown_event.is_set() or not self._msg_queue.empty():

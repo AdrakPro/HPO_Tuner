@@ -4,6 +4,8 @@ Handles the evaluation of a population of individuals (chromosomes).
 
 from typing import List, Dict, Any, Tuple
 
+import numpy as np
+
 from src.genetic.stop_conditions import StopConditions
 from src.logger.experiment_logger import logger
 from src.model.chromosome import Chromosome
@@ -57,6 +59,7 @@ class IndividualEvaluator:
             logger.info(f"Hyperparameters: {individual_dict}")
             try:
                 chromosome = Chromosome.from_dict(individual_dict)
+                print(chromosome.optimizer_schedule)
                 accuracy, loss = train_and_eval(
                     chromosome,
                     self.config,
@@ -64,11 +67,20 @@ class IndividualEvaluator:
                     self.subset_percentage,
                     is_final,
                 )
+
+                if not np.isfinite(loss) or np.isnan(loss) or accuracy < 0.1:
+                    fitness_scores.append(0.0)
+                    loss_scores.append(float("inf"))
+                    logger.warning(
+                        f"Assigning fitness of 0.0 to the {i+1} individual, because of numerical instability."
+                    )
+                else:
+                    fitness_scores.append(accuracy)
+                    loss_scores.append(loss)
+
                 logger.info(
                     f"Individual {i+1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"
                 )
-                fitness_scores.append(accuracy)
-                loss_scores.append(loss)
 
                 # Check if this individual's fitness is high enough to stop the generation early
                 if stop_conditions and stop_conditions.should_stop_evaluation(

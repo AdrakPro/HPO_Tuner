@@ -55,28 +55,27 @@ def default_config():
             "fc1_units": {
                 "type": "enum",
                 "values": [256, 512, 1024],
-                "description": "Number of neurons in the first fully connected layer (powers of two)",
+                "description": "Number of neurons in the first fully connected layer",
             },
             "dropout_rate": {
                 "type": "float",
-                "range": [0.1, 0.5],
+                "range": [0.2, 0.5],
                 "description": "Dropout intensity in the first fully connected layer",
             },
             "optimizer_schedule": {
                 "type": "enum",
                 "values": [
-                    "SGD_STEP",
+                    "SGD_ONECYCLE",
                     "SGD_COSINE",
-                    "ADAMW_COSINE",
-                    "ADAMW_ONECYCLE",
-                ],  # Options: [SGD_STEP, SGD_COSINE, ADAMW_COSINE, ADAMW_ONECYLE]
+                    "SGD_EXPONENTIAL",
+                ],  # Options: [SGD_COSINE, SGD_ONECYCLE, SGD_EXPONENTIAL, ADAMW_COSINE, ADAMW_ONECYLE, ADAMW_EXPONENTIAL]
                 "description": "Optimizer type + Learning rate scheduler",
             },
             "base_lr": {
                 "type": "float",
-                "range": [1e-4, 1e-2],
+                "range": [0.01, 0.1],
                 "scale": "log",
-                "description": "Base learning rate value, log scale",
+                "description": "Base learning rate value, log scale.",
             },
             "aug_intensity": {
                 "type": "enum",
@@ -90,7 +89,7 @@ def default_config():
             },
             "weight_decay": {
                 "type": "float",
-                "range": [1e-5, 1e-2],
+                "range": [1e-4, 5e-4],
                 "scale": "log",
                 "description": "L2 regularization coefficient, log scale",
             },

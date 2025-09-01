@@ -21,6 +21,7 @@ from src.config.load_config import (
 )
 from src.config.default_config import ex
 from src.logger.experiment_logger import logger
+from src.model.chromosome import OptimizerSchedule, AugmentationIntensity
 from src.utils.ensure_dir import ensure_dir_exists
 
 console = Console(highlight=False)
@@ -243,6 +244,12 @@ def _prompt_for_hyperparameter_range(
     prompt = (
         f"  Enter new range in 'min-max' format (default: {current_range}): "
     )
+
+    if name == "base_lr":
+        console.print(
+            f"  [cyan]SGD prefers higher LR ranges like '0.01-0.1', ADAMW prefers lower ranges '0.0001-0.005'. If LR would be too high there will be warmup start.[/cyan]"
+        )
+
     new_range_str = console.input(prompt)
     if "-" in new_range_str:
         try:
@@ -272,13 +279,8 @@ def _prompt_for_hyperparameter_enum(
     Prompts for new categorical values, validating against a predefined set for specific parameters.
     """
     string_enum_values = {
-        "optimizer_schedule": [
-            "SGD_STEP",
-            "SGD_COSINE",
-            "ADAMW_COSINE",
-            "ADAMW_ONECYCLE",
-        ],
-        "aug_intensity": ["NONE", "LIGHT", "MEDIUM", "STRONG"],
+        "optimizer_schedule": [e.name for e in OptimizerSchedule],
+        "aug_intensity": [e.name for e in AugmentationIntensity],
     }
     integer_enum_values = ["batch_size", "fc1_units"]
 
@@ -728,4 +730,4 @@ def print_final_config_panel(_config: Dict[str, Any]):
         expand=False,
     )
     console.print(panel)
-    logger.file_only(f"Configuration\n: {json.dumps(_config, indent=4)}", False)
+    logger.file_only(f"Configuration\n: {json.dumps(_config, indent=4)}")

@@ -3,10 +3,12 @@ from enum import Enum, auto
 
 
 class OptimizerSchedule(Enum):
-    SGD_STEP = auto()
+    SGD_ONECYCLE = auto()
     SGD_COSINE = auto()
     ADAMW_COSINE = auto()
     ADAMW_ONECYCLE = auto()
+    SGD_EXPONENTIAL = auto()
+    ADAMW_EXPONENTIAL = auto()
 
 
 class AugmentationIntensity(Enum):

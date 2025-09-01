@@ -22,7 +22,9 @@ from src.config.load_config import (
 from src.config.default_config import ex
 from src.logger.experiment_logger import logger
 from src.model.chromosome import OptimizerSchedule, AugmentationIntensity
+from src.nn.neural_network import ActivationFunction
 from src.utils.ensure_dir import ensure_dir_exists
+from src.utils.enum_helper import get_enum_names, get_enum_values
 
 console = Console(highlight=False)
 
@@ -279,8 +281,8 @@ def _prompt_for_hyperparameter_enum(
     Prompts for new categorical values, validating against a predefined set for specific parameters.
     """
     string_enum_values = {
-        "optimizer_schedule": [e.name for e in OptimizerSchedule],
-        "aug_intensity": [e.name for e in AugmentationIntensity],
+        "optimizer_schedule": get_enum_names(OptimizerSchedule),
+        "aug_intensity": get_enum_names(AugmentationIntensity),
     }
     integer_enum_values = ["batch_size", "fc1_units"]
 
@@ -348,8 +350,8 @@ def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     _print_header("Neural Network Architecture")
     nn_updates: Dict[str, Any] = {}
     fixed_param_updates: Dict[str, Any] = {}
-    nn_defaults = defaults.get(NN_CONFIG, {})
-    fixed_defaults = nn_defaults.get("fixed_parameters", {})
+    nn_defaults = defaults[NN_CONFIG]
+    fixed_defaults = nn_defaults["fixed_parameters"]
 
     params_to_prompt = {
         "conv_blocks": {
@@ -360,6 +362,11 @@ def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         "base_filters": {
             "prompt": "Number of base filters",
             "default": fixed_defaults.get("base_filters", 32),
+            "target": fixed_param_updates,
+        },
+        "activation_function": {
+            "prompt": f"Activation function. Allowed: {get_enum_values(ActivationFunction)}",
+            "default": fixed_defaults.get("activation_function", "relu"),
             "target": fixed_param_updates,
         },
         "padding": {

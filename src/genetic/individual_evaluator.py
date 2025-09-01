@@ -59,7 +59,6 @@ class IndividualEvaluator:
             logger.info(f"Hyperparameters: {individual_dict}")
             try:
                 chromosome = Chromosome.from_dict(individual_dict)
-                print(chromosome.optimizer_schedule)
                 accuracy, loss = train_and_eval(
                     chromosome,
                     self.config,

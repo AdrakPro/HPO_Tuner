@@ -3,11 +3,12 @@ Core CNN model for CIFAR-10 classification.
 Allows user-defined number of convolutional blocks with global config for padding, stride, activation.
 """
 
+from enum import Enum
 from typing import Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as Functional
 from torch import optim
 from torch.optim.lr_scheduler import (
     LRScheduler,
@@ -19,7 +20,13 @@ from torch.optim.lr_scheduler import (
 )
 from torch.utils.data import DataLoader
 
-from src.model.chromosome import Chromosome, OptimizerSchedule
+from src.model.chromosome import Chromosome
+
+
+class ActivationFunction(Enum):
+    RELU = "relu"
+    LEAKY_RELU = "leaky_relu"
+    GELU = "gelu"
 
 
 class ActivationLayer(nn.Module):
@@ -57,7 +64,7 @@ class CNN(nn.Module):
         out_channels = [base * (2**i) for i in range(conv_blocks)]
 
         layers = []
-        self.activation = getattr(F, activation_function.lower())
+        self.activation = getattr(Functional, activation_function.lower())
 
         for i in range(conv_blocks):
             layers.append(
@@ -140,10 +147,14 @@ def get_optimizer_and_scheduler(
     # TODO: Waiting for fix: https://github.com/pytorch/pytorch/issues/76113
     def apply_warmup(opt: optim.Optimizer, main_scheduler: LRScheduler):
         """Optionally prepend warmup scheduler."""
-        if base_lr <= start_warmup_lr and chromosome.optimizer_schedule.name not in [
-            "ADAMW_COSINE",
-            "SGD_COSINE",
-        ]:
+        if (
+            base_lr <= start_warmup_lr
+            and chromosome.optimizer_schedule.name
+            not in [
+                "ADAMW_COSINE",
+                "SGD_COSINE",
+            ]
+        ):
             return main_scheduler
         warmup = LinearLR(opt, start_factor=0.1, total_iters=warmup_epochs)
         return SequentialLR(

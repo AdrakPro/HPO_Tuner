@@ -35,21 +35,19 @@ def default_config():
         "conv_blocks": 2,
         # Parameters not subject to optimization
         "fixed_parameters": {
-            # TODO: if in future there were more activation_functions add prompt+validation
-            "activation_function": "ReLu",  # Options: ReLu
+            "activation_function": "relu",  # Options: relu, gelu, leaky_relu
             "padding": 1,
             "stride": 2,
             # TODO: Maybe this should also be available for search with width_scale
             "base_filters": 32,
         },
-        # TODO: should aug_intensity be fixed for all data?
         "hyperparameter_space": {
             "width_scale": {
                 "type": "float",
                 "range": [
                     0.75,
                     2.0,
-                ],  # Can have negative range to lower base filters
+                ],
                 "description": "Scales the number of filters in convolutional layers",
             },
             "fc1_units": {

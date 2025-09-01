@@ -6,6 +6,8 @@ from typing import Dict, Any
 
 from src.logger.experiment_logger import logger
 from src.model.chromosome import OptimizerSchedule, AugmentationIntensity
+from src.nn.neural_network import ActivationFunction
+from src.utils.enum_helper import get_enum_names, get_enum_values
 
 
 # --- Validation Helper Functions ---
@@ -68,9 +70,10 @@ def _validate_neural_network_config(config: Dict):
     # --- Fixed parameter validation ---
     fixed_params = config["fixed_parameters"]
     activation_function = fixed_params["activation_function"].lower()
-    if activation_function != "relu":
+    allowed = get_enum_values(ActivationFunction)
+    if activation_function not in allowed:
         raise ValueError(
-            f"Allowed 'activation_function' is 'ReLu', but received: '{fixed_params['activation_function']}'."
+            f"Allowed 'activation_function' are {allowed}', but received: '{fixed_params['activation_function']}'."
         )
     _check_non_negative_int(fixed_params["padding"], "padding")
     _check_non_negative_int(fixed_params["stride"], "stride")
@@ -110,7 +113,7 @@ def _validate_neural_network_config(config: Dict):
                     f"'{name}' is of type 'float', so the values in the range must be numbers."
                 )
 
-            if name != "width_scale" and any(v < 0 for v in params["range"]):
+            if any(v < 0 for v in params["range"]):
                 raise ValueError(
                     f"Values in the range for '{name}' cannot be negative."
                 )
@@ -136,14 +139,14 @@ def _validate_neural_network_config(config: Dict):
                         f"'{name}' is of type 'enum' with strings, but the 'values' list contains other types."
                     )
                 if name == "optimizer_schedule":
-                    allowed = [e.name for e in OptimizerSchedule]
+                    allowed = get_enum_names(OptimizerSchedule)
 
                     if not set(params["values"]).issubset(set(allowed)):
                         raise ValueError(
                             f"Disallowed values for 'optimizer_schedule'. Subsets of the following are allowed: {allowed}."
                         )
                 if name == "aug_intensity":
-                    allowed = [e.name for e in AugmentationIntensity]
+                    allowed = get_enum_names(AugmentationIntensity)
 
                     if not set(params["values"]).issubset(set(allowed)):
                         raise ValueError(

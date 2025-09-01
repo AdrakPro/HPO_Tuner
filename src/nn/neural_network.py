@@ -8,7 +8,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as Functional
+import torch.nn.functional as functional
 from torch import optim
 from torch.optim.lr_scheduler import (
     LRScheduler,
@@ -64,7 +64,7 @@ class CNN(nn.Module):
         out_channels = [base * (2**i) for i in range(conv_blocks)]
 
         layers = []
-        self.activation = getattr(Functional, activation_function.lower())
+        self.activation = getattr(functional, activation_function.lower())
 
         for i in range(conv_blocks):
             layers.append(

@@ -169,7 +169,7 @@ def train_and_eval(
         )
 
         # Early stopping logic
-        # TODO: impl median stopping (sync halving or async with shared state)
+        # TODO: impl median stopping (sync halving or async with shared state) for calibration only
         if test_acc > best_acc_so_far:
             best_acc_so_far = test_acc
             epochs_without_improvement = 0

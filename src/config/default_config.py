@@ -130,8 +130,8 @@ def default_config():
                 "early_stop_generations": 3,
                 "early_stop_epochs": 5,
                 "fitness_goal": 0.75,
-                "time_limit_minutes": 0
-            }
+                "time_limit_minutes": 0,
+            },
         },
         "main_algorithm": {
             "population_size": 20,
@@ -142,7 +142,7 @@ def default_config():
                 "early_stop_generations": 5,
                 "early_stop_epochs": 10,
                 "fitness_goal": 0.945,
-                "time_limit_minutes": 0
-            }
-        }
+                "time_limit_minutes": 0,
+            },
+        },
     }

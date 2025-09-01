@@ -63,9 +63,7 @@ def run_ga_phase(
 
         # Progressive epochs
         # TODO ENHANCEMENT: let user define progress milestones by config,
-        if (
-            ENABLE_PROGRESSIVE_EPOCHS and gen >= minimum_viable_epochs
-        ):
+        if ENABLE_PROGRESSIVE_EPOCHS and gen >= minimum_viable_epochs:
             progress = gen / max_generations
 
             if progress <= 0.3:
@@ -78,9 +76,7 @@ def run_ga_phase(
             training_epochs = int(round(initial_epochs * epoch_multiplier))
         else:
             training_epochs = initial_epochs
-            logger.warning(
-                "Progressive epochs are disabled!"
-            )
+            logger.warning("Progressive epochs are disabled!")
 
         evaluator = IndividualEvaluator(
             config, training_epochs, early_stop_epochs, subset_percentage

@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, Subset
 from src.model.chromosome import AugmentationIntensity
 from src.utils.seed import seed_worker
 
-# Rule of thumb: cpu cores // 2
 NUM_WORKERS = os.cpu_count() // 2
 
 # Precomputed statistics, ensuring images are normalized consistently for CIFAR-10
@@ -20,6 +19,8 @@ MEANS = (0.4914, 0.4822, 0.4465)
 STDS = (0.2023, 0.1994, 0.2010)
 
 IMG_SIZE = 32
+
+# TODO: What if dataset is imbalanced. We should balance it but we stick to CIFAR-10
 
 
 def get_dataset_loaders(

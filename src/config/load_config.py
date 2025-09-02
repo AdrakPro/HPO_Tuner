@@ -41,8 +41,8 @@ def _validate_project_config(config: Dict):
     """Validates the 'project' section."""
     if not isinstance(config["name"], str):
         raise ValueError("'project.name' must be a string.")
-    if not isinstance(config["seed"], int):
-        raise ValueError("'project.seed' must be an integer.")
+    if config["seed"] is not None and not isinstance(config["seed"], int):
+        raise ValueError("'project.seed' must be an integer or null.")
 
 
 def _validate_hardware_config(config: Dict):

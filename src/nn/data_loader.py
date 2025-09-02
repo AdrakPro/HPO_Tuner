@@ -10,7 +10,6 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 
 from src.model.chromosome import AugmentationIntensity
-from src.utils.seed import seed_worker
 
 NUM_WORKERS = os.cpu_count() // 2
 
@@ -78,7 +77,6 @@ def get_dataset_loaders(
         batch_size=batch_size,
         shuffle=True,
         num_workers=NUM_WORKERS,
-        worker_init_fn=seed_worker,
         pin_memory=is_gpu,
     )
 
@@ -87,7 +85,6 @@ def get_dataset_loaders(
         batch_size=batch_size,
         shuffle=False,
         num_workers=NUM_WORKERS,
-        worker_init_fn=seed_worker,
         pin_memory=is_gpu,
     )
 

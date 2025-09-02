@@ -121,6 +121,7 @@ def run_optimization(_config, _run):
     """
     Main experiment entry point, now with a two-stage (calibration -> main) GA process.
     """
+    seed_everything(_config["project"]["seed"])
     print_final_config_panel(_config)
 
     ga_config = _config["genetic_algorithm_config"]
@@ -198,7 +199,6 @@ def run_optimization(_config, _run):
 
 def main():
     try:
-        seed_everything()
         config_overrides = run_tui_configurator()
         if config_overrides is not None:
             ex.run(

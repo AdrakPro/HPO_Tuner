@@ -10,7 +10,7 @@ ex = Experiment("Optymalizacja")
 
 @ex.config
 def default_config():
-    project = {"name": "HPO Paper-Based Experiment", "seed": 2137}
+    project = {"name": "HPO Paper-Based Experiment", "seed": None}
 
     # TODO: integrate
     environment = {
@@ -64,7 +64,8 @@ def default_config():
                     "SGD_ONECYCLE",
                     "SGD_COSINE",
                     "SGD_EXPONENTIAL",
-                ],  # Options: [SGD_COSINE, SGD_ONECYCLE, SGD_EXPONENTIAL, ADAMW_COSINE, ADAMW_ONECYLE, ADAMW_EXPONENTIAL]
+                ],
+                # Options: [SGD_COSINE, SGD_ONECYCLE, SGD_EXPONENTIAL, ADAMW_COSINE, ADAMW_ONECYLE, ADAMW_EXPONENTIAL]
                 "description": "Optimizer type + Learning rate scheduler",
             },
             "base_lr": {
@@ -144,3 +145,4 @@ def default_config():
             },
         },
     }
+

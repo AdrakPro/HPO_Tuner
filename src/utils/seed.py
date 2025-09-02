@@ -3,26 +3,19 @@ import random
 import numpy as np
 import torch
 
-from src.config.default_config import ex
 
-SEED: int = ex.configurations[0]()["project"]["seed"]
-
-
-def seed_everything():
+def seed_everything(seed: int) -> None:
     """Set SEED for Python, NumPy, and PyTorch (CPU & GPU)."""
-    random.seed(SEED)
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-    torch.cuda.manual_seed_all(SEED)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
+    if seed is None:
+        return
 
-def seed_worker(worker_id: int):
-    """
-    Each worker gets a deterministic SEED based on the global SEED + worker ID.
-    """
+    random.seed(seed)
+    np.random.default_rng(seed)
+    torch.manual_seed(seed)
 
-    worker_seed = worker_id + SEED
-    np.random.seed(worker_seed)
-    random.seed(worker_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+

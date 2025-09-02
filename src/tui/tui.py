@@ -729,4 +729,10 @@ def print_final_config_panel(_config: Dict[str, Any]):
         expand=False,
     )
     console.print(panel)
-    logger.file_only(f"Configuration\n: {json.dumps(_config, indent=4)}")
+
+    # Remove Sacred seed
+    formatted_config = _config.copy()
+    if formatted_config["seed"]:
+        del formatted_config["seed"]
+
+    logger.file_only(f"Configuration\n: {json.dumps(formatted_config, indent=4)}")

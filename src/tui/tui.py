@@ -185,9 +185,15 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     max_cpu = hw_resources["max_cpu_workers"]
     max_gpus = hw_resources["max_gpu_workers"]
 
-    execution_defaults = _get_nested_config(defaults, [PARALLEL_CONFIG, "execution"], {})
-    scheduling_defaults = _get_nested_config(defaults, [PARALLEL_CONFIG, "scheduling"], {})
-    monitoring_defaults = _get_nested_config(defaults, [PARALLEL_CONFIG, "monitoring"], {})
+    execution_defaults = _get_nested_config(
+        defaults, [PARALLEL_CONFIG, "execution"], {}
+    )
+    scheduling_defaults = _get_nested_config(
+        defaults, [PARALLEL_CONFIG, "scheduling"], {}
+    )
+    monitoring_defaults = _get_nested_config(
+        defaults, [PARALLEL_CONFIG, "monitoring"], {}
+    )
 
     # --- Execution ---
     eval_mode = _prompt_for_evaluation_mode()
@@ -196,11 +202,17 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
 
     if eval_mode in ["CPU", "HYBRID"]:
         cpu_workers_input = _prompt_for_cpu_workers(max_cpu)
-        cpu_workers = cpu_workers_input if cpu_workers_input is not None else execution_defaults.get("cpu_workers", max_cpu)
+        cpu_workers = (
+            cpu_workers_input
+            if cpu_workers_input is not None
+            else execution_defaults.get("cpu_workers", max_cpu)
+        )
 
     if eval_mode in ["GPU", "HYBRID"]:
         gpu_settings = _prompt_for_gpu_settings(max_gpus, execution_defaults)
-        gpu_workers = gpu_settings.get("gpu_workers", execution_defaults.get("gpu_workers", 1))
+        gpu_workers = gpu_settings.get(
+            "gpu_workers", execution_defaults.get("gpu_workers", 1)
+        )
 
     # Dataloader workers
     per_gpu = _prompt_for_numeric(
@@ -222,8 +234,20 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         "cpu_workers": cpu_workers,
         "gpu_workers": gpu_workers,
         "dataloader_workers": {
-            "per_gpu": per_gpu if per_gpu is not None else execution_defaults.get("dataloader_workers", {}).get("per_gpu", 4),
-            "per_cpu": per_cpu if per_cpu is not None else execution_defaults.get("dataloader_workers", {}).get("per_cpu", 2),
+            "per_gpu": (
+                per_gpu
+                if per_gpu is not None
+                else execution_defaults.get("dataloader_workers", {}).get(
+                    "per_gpu", 4
+                )
+            ),
+            "per_cpu": (
+                per_cpu
+                if per_cpu is not None
+                else execution_defaults.get("dataloader_workers", {}).get(
+                    "per_cpu", 2
+                )
+            ),
         },
     }
 
@@ -247,9 +271,12 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         positive_only=True,
     )
     parallel_updates["scheduling"] = {
-        "min_job_duration_seconds": min_job or scheduling_defaults.get("min_job_duration_seconds", 300),
-        "metrics_interval_seconds": metrics_interval or scheduling_defaults.get("metrics_interval_seconds", 5),
-        "checkpoint_interval": checkpoint_interval or scheduling_defaults.get("checkpoint_interval", 2),
+        "min_job_duration_seconds": min_job
+        or scheduling_defaults.get("min_job_duration_seconds", 300),
+        "metrics_interval_seconds": metrics_interval
+        or scheduling_defaults.get("metrics_interval_seconds", 5),
+        "checkpoint_interval": checkpoint_interval
+        or scheduling_defaults.get("checkpoint_interval", 2),
     }
 
     # --- Monitoring ---
@@ -479,7 +506,9 @@ def _select_active_operators(
         try:
             chosen_indices = [int(i.strip()) - 1 for i in choice_str.split(",")]
             if len(chosen_indices) < 2:
-                console.print("[yellow]You must select at least 2 operators.[/yellow]")
+                console.print(
+                    "[yellow]You must select at least 2 operators.[/yellow]"
+                )
                 continue
             if all(0 <= i < len(op_keys) for i in chosen_indices):
                 return [op_keys[i] for i in chosen_indices]

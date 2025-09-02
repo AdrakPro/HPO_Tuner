@@ -134,7 +134,9 @@ def train_and_eval(
     Train and evaluate CNN on CIFAR-10.
     """
     # TODO: Add GPU+CPU
-    is_gpu: bool = "GPU" in config["parallel_config"]["execution"]["evaluation_mode"]
+    is_gpu: bool = (
+        "GPU" in config["parallel_config"]["execution"]["evaluation_mode"]
+    )
 
     # What about when CPU+GPU
     device: torch.device = torch.device("cuda" if is_gpu else "cpu")

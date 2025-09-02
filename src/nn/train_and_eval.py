@@ -157,7 +157,8 @@ def train_and_eval(
 
                 final_test_acc = test_acc
                 final_test_loss = test_loss
-                print(
+                # TODO: change if parallelism is on
+                logger.info(
                     f"  Epoch {epoch + 1}/{epochs} | Train Acc: {train_acc:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
                 )
 

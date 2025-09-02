@@ -1,4 +1,4 @@
-import sys
+from typing import Dict
 
 import torch
 import torch.nn as nn
@@ -124,7 +124,7 @@ def evaluate(
 
 def train_and_eval(
     chromosome: Chromosome,
-    config: any,
+    config: Dict,
     epochs: int,
     early_stop_epochs: int,
     subset_percentage: float = 1.0,
@@ -133,7 +133,8 @@ def train_and_eval(
     """
     Train and evaluate CNN on CIFAR-10.
     """
-    is_gpu: bool = "GPU" in config["hardware_config"]["evaluation_mode"]
+    # TODO: Add GPU+CPU
+    is_gpu: bool = "GPU" in config["parallel_config"]["execution"]["evaluation_mode"]
 
     # What about when CPU+GPU
     device: torch.device = torch.device("cuda" if is_gpu else "cpu")

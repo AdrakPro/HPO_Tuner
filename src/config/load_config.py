@@ -45,18 +45,68 @@ def _validate_project_config(config: Dict):
         raise ValueError("'project.seed' must be an integer or null.")
 
 
-def _validate_hardware_config(config: Dict):
-    """Validates the 'hardware_config' section."""
-    allowed_modes = ["CPU", "GPU", "CPU+GPU"]
-    if config["evaluation_mode"] not in allowed_modes:
+def _validate_parallel_config(config: Dict):
+    """Validates the 'parallel' section."""
+    """Validates the 'parallel' section of the configuration."""
+
+    # --- Execution ---
+    execution = config["execution"]
+    allowed_modes = ["CPU", "GPU", "HYBRID"]
+    mode = execution["evaluation_mode"]
+    if mode not in allowed_modes:
         raise ValueError(
-            f"'evaluation_mode' must be one of the options: {allowed_modes}."
+            f"'evaluation_mode' must be one of the options: {allowed_modes}, but got '{mode}'."
         )
 
-    for key in ["cpu_cores", "gpu_devices", "gpu_block_size"]:
-        value = config[key]
+    # Check parallel enable flag
+    enable_parallel = execution["enable_parallel"]
+    if not isinstance(enable_parallel, bool):
+        raise ValueError("'enable_parallel' must be a boolean.")
+
+    # Check worker counts
+    for key in ["gpu_workers", "cpu_workers"]:
+        value = execution[key]
         if not ((isinstance(value, int) and value >= 0) or value == "-"):
             raise ValueError(f"'{key}' must be a non-negative integer or '-'.")
+
+    # Check dataloader workers
+    dataloader_workers = execution["dataloader_workers"]
+    for key in ["per_gpu", "per_cpu"]:
+        value = dataloader_workers[key]
+        if not isinstance(value, int) or value < 0:
+            raise ValueError(
+                f"'dataloader_workers.{key}' must be a non-negative integer."
+            )
+
+    # --- Scheduling ---
+    scheduling = config["scheduling"]
+    min_job_duration = scheduling["min_job_duration_seconds"]
+    if not isinstance(min_job_duration, int) or min_job_duration < 0:
+        raise ValueError(
+            "'scheduling.min_job_duration_seconds' must be a non-negative integer."
+        )
+
+    metrics_interval = scheduling["metrics_interval_seconds"]
+    if not isinstance(metrics_interval, int) or metrics_interval <= 0:
+        raise ValueError(
+            "'scheduling.metrics_interval_seconds' must be a positive integer."
+        )
+
+    checkpoint_interval = scheduling["checkpoint_interval"]
+    if not isinstance(checkpoint_interval, int) or checkpoint_interval <= 0:
+        raise ValueError(
+            "'scheduling.checkpoint_interval' must be a positive integer."
+        )
+
+    # --- Monitoring ---
+    monitoring = config["monitoring"]
+    enable_metrics = monitoring["enable_metrics"]
+    if not isinstance(enable_metrics, bool):
+        raise ValueError("'monitoring.enable_metrics' must be a boolean.")
+
+    track_resources = monitoring["track_resources"]
+    if not isinstance(track_resources, bool):
+        raise ValueError("'monitoring.track_resources' must be a boolean.")
 
 
 def _validate_neural_network_config(config: Dict):
@@ -245,7 +295,7 @@ def sanitize_config(config: Dict) -> Dict:
     """
     try:
         _validate_project_config(config["project"])
-        _validate_hardware_config(config["hardware_config"])
+        _validate_parallel_config(config["parallel_config"])
         _validate_neural_network_config(config["neural_network_config"])
         _validate_nested_validation_config(config["nested_validation_config"])
         _validate_genetic_algorithm_config(config["genetic_algorithm_config"])

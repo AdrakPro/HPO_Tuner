@@ -22,11 +22,27 @@ def default_config():
         },
     }
 
-    hardware_config = {
-        "evaluation_mode": "CPU+GPU",  # Options: "CPU", "GPU", "CPU+GPU"
-        "cpu_cores": "-",
-        "gpu_devices": "-",
-        "gpu_block_size": "-",
+    parallel_config = {
+        "execution": {
+            "evaluation_mode": "HYBRID",  # Options: "CPU", "GPU", "HYBRID"
+            "enable_parallel": True,
+            "gpu_workers": 1,
+            "cpu_workers": 128,
+            # TODO: Dynamic allocation
+            "dataloader_workers": {
+                "per_gpu": 6,
+                "per_cpu": 2,
+            },
+        },
+        "scheduling": {
+            "min_job_duration_seconds": 300,
+            "metrics_interval_seconds": 5,
+            "checkpoint_interval": 2,
+        },
+        "monitoring": {
+            "enable_metrics": True,
+            "track_resources": True,
+        },
     }
 
     neural_network_config = {
@@ -72,7 +88,7 @@ def default_config():
                 "type": "float",
                 "range": [0.01, 0.1],
                 "scale": "log",
-                "description": "Base learning rate value, log scale.",
+                "description": "Base learning rate value, log scale",
             },
             "aug_intensity": {
                 "type": "enum",

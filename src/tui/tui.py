@@ -30,7 +30,7 @@ console = Console(highlight=False)
 
 # --- Constants ---
 CONFIG_DIR = os.path.abspath("configs")
-HARDWARE_CONFIG = "hardware_config"
+PARALLEL_CONFIG = "parallel_config"
 NN_CONFIG = "neural_network_config"
 GA_CONFIG = "genetic_algorithm_config"
 HYPERPARAM_SPACE = "hyperparameter_space"
@@ -81,7 +81,9 @@ def _prompt_for_numeric(
             return None
         return value
     except (ValueError, TypeError):
-        logger.error(f"Invalid value. Using default: {default_value}.")
+        console.print(
+            f"[yellow]\nInvalid value. Using default: {default_value}.[/yellow]"
+        )
         return None
 
 
@@ -110,27 +112,18 @@ def _deep_merge_dicts(base: Dict, updates: Dict) -> Dict:
 def _detect_hardware_resources() -> Dict[str, Any]:
     """Detects available CPU and GPU resources."""
     gpus_available = torch.cuda.is_available()
-    max_block_size = 0
-    if gpus_available:
-        try:
-            # This is a placeholder as per the TODO.
-            # In a real scenario, this might involve a device query.
-            max_block_size = 512
-        except Exception as e:
-            logger.error(f"Failed to determine max GPU block size: {e}")
 
     return {
-        "max_cpu_cores": os.cpu_count(),
+        "max_cpu_workers": os.cpu_count(),
         "gpus_available": gpus_available,
-        "max_gpu_devices": torch.cuda.device_count() if gpus_available else 0,
-        "max_block_size": max_block_size,
+        "max_gpu_workers": torch.cuda.device_count() if gpus_available else 0,
     }
 
 
 def _prompt_for_evaluation_mode() -> str:
     """Prompts the user to select the evaluation mode (CPU, GPU, or both)."""
-    mode_map = {"1": "CPU", "2": "GPU", "3": "CPU+GPU"}
-    prompt = "Select execution mode:\n[1] CPU\n[2] GPU\n[3] CPU+GPU\n> "
+    mode_map = {"1": "CPU", "2": "GPU", "3": "HYBRID"}
+    prompt = "Select execution mode:\n[1] CPU\n[2] GPU\n[3] HYBRID\n> "
     error_msg = "Invalid choice. Please enter 1, 2, or 3."
     choice = _prompt_for_validated_input(
         prompt, lambda x: x in mode_map, error_msg
@@ -138,7 +131,7 @@ def _prompt_for_evaluation_mode() -> str:
     return mode_map[choice]
 
 
-def _prompt_for_cpu_cores(max_cores: int) -> Optional[int]:
+def _prompt_for_cpu_workers(max_cores: int) -> Optional[int]:
     """Prompts for the number of CPU cores to use."""
     prompt = f"Enter the number of CPU cores (Available: {max_cores}, Enter = {max_cores}):"
     cpu_input = console.input(prompt)
@@ -153,13 +146,13 @@ def _prompt_for_cpu_cores(max_cores: int) -> Optional[int]:
 
 
 def _prompt_for_gpu_settings(
-    max_devices: int, max_block_size: int, defaults: Dict[str, Any]
+    max_devices: int, defaults: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Prompts for GPU device count and block size."""
     gpu_updates: Dict[str, Any] = {}
     if max_devices == 0:
         console.print("[yellow]No available CUDA devices detected.[/yellow]")
-        return {"gpu_devices": "-", "gpu_block_size": "-"}
+        return {"gpu_workers": "-"}
 
     # Prompt for GPU devices
     gpu_prompt = f"Enter the number of CUDA devices (Available: {max_devices}, Enter = 1): "
@@ -167,75 +160,112 @@ def _prompt_for_gpu_settings(
     if gpu_input.isdigit():
         requested_gpus = int(gpu_input)
         if 0 <= requested_gpus <= max_devices:
-            gpu_updates["gpu_devices"] = requested_gpus
+            gpu_updates["gpu_workers"] = requested_gpus
         else:
             console.print(
                 "[yellow]The requested number of GPUs is invalid. Using '1'.[/yellow]"
             )
-            gpu_updates["gpu_devices"] = 1
+            gpu_updates["gpu_workers"] = 1
     elif gpu_input != "":
         console.print("[yellow]Invalid value. Using '1'.[/yellow]")
-        gpu_updates["gpu_devices"] = 1
+        gpu_updates["gpu_workers"] = 1
     else:
-        gpu_updates["gpu_devices"] = 1
-
-    # Prompt for block size if GPUs are being used
-    use_gpus = gpu_updates.get("gpu_devices", defaults.get("gpu_devices"))
-    if use_gpus == "-" or (isinstance(use_gpus, int) and use_gpus > 0):
-        block_prompt = f"Enter GPU block size (Max: {max_block_size}, Enter = {max_block_size}): "
-        block_input = console.input(block_prompt)
-        if block_input.isdigit():
-            requested_size = int(block_input)
-            if 0 < requested_size <= max_block_size:
-                gpu_updates["gpu_block_size"] = requested_size
-            else:
-                console.print(
-                    "[yellow]Requested GPU block size is invalid. Using maximum value.[/yellow]"
-                )
-                gpu_updates["gpu_block_size"] = max_block_size
-        elif block_input != "":
-            console.print(
-                "[yellow]Invalid value. Using maximum value.[/yellow]"
-            )
-            gpu_updates["gpu_block_size"] = max_block_size
-        else:
-            gpu_updates["gpu_block_size"] = max_block_size
+        gpu_updates["gpu_workers"] = 1
 
     return gpu_updates
 
 
-def _get_hardware_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
-    """Prompts user for hardware settings after detecting available resources."""
-    _print_header("Computational Resources Selection")
-    updates: Dict[str, Any] = {}
-    hw_defaults = defaults.get(HARDWARE_CONFIG, {})
-    resources = _detect_hardware_resources()
+def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
+    """Prompts the user for parallel execution, scheduling, and monitoring settings."""
+    _print_header("Parallel Execution Configuration")
+    parallel_updates: Dict[str, Any] = {}
 
-    # Get evaluation mode first to determine next steps
+    # Detect hardware
+    hw_resources = _detect_hardware_resources()
+    max_cpu = hw_resources["max_cpu_workers"]
+    max_gpus = hw_resources["max_gpu_workers"]
+
+    execution_defaults = _get_nested_config(defaults, [PARALLEL_CONFIG, "execution"], {})
+    scheduling_defaults = _get_nested_config(defaults, [PARALLEL_CONFIG, "scheduling"], {})
+    monitoring_defaults = _get_nested_config(defaults, [PARALLEL_CONFIG, "monitoring"], {})
+
+    # --- Execution ---
     eval_mode = _prompt_for_evaluation_mode()
-    updates["evaluation_mode"] = eval_mode
+    cpu_workers = "-"
+    gpu_workers = "-"
 
-    # CPU settings
-    if "CPU" in eval_mode:
-        cpu_cores = _prompt_for_cpu_cores(
-            resources["max_cpu_cores"],
-        )
-        if cpu_cores is not None:
-            updates["cpu_cores"] = cpu_cores
+    if eval_mode in ["CPU", "HYBRID"]:
+        cpu_workers_input = _prompt_for_cpu_workers(max_cpu)
+        cpu_workers = cpu_workers_input if cpu_workers_input is not None else execution_defaults.get("cpu_workers", max_cpu)
 
-    # GPU settings
-    if "GPU" in eval_mode:
-        gpu_settings = _prompt_for_gpu_settings(
-            resources["max_gpu_devices"],
-            resources["max_block_size"],
-            hw_defaults,
-        )
-        updates.update(gpu_settings)
-    else:
-        updates["gpu_devices"] = "-"
-        updates["gpu_block_size"] = "-"
+    if eval_mode in ["GPU", "HYBRID"]:
+        gpu_settings = _prompt_for_gpu_settings(max_gpus, execution_defaults)
+        gpu_workers = gpu_settings.get("gpu_workers", execution_defaults.get("gpu_workers", 1))
 
-    return {HARDWARE_CONFIG: updates} if updates else {}
+    # Dataloader workers
+    per_gpu = _prompt_for_numeric(
+        "Number of dataloader workers per GPU",
+        execution_defaults.get("dataloader_workers", {}).get("per_gpu", 4),
+        int,
+        positive_only=True,
+    )
+    per_cpu = _prompt_for_numeric(
+        "Number of dataloader workers per CPU",
+        execution_defaults.get("dataloader_workers", {}).get("per_cpu", 2),
+        int,
+        positive_only=True,
+    )
+
+    parallel_updates["execution"] = {
+        "evaluation_mode": eval_mode,
+        "enable_parallel": True,
+        "cpu_workers": cpu_workers,
+        "gpu_workers": gpu_workers,
+        "dataloader_workers": {
+            "per_gpu": per_gpu if per_gpu is not None else execution_defaults.get("dataloader_workers", {}).get("per_gpu", 4),
+            "per_cpu": per_cpu if per_cpu is not None else execution_defaults.get("dataloader_workers", {}).get("per_cpu", 2),
+        },
+    }
+
+    # --- Scheduling ---
+    min_job = _prompt_for_numeric(
+        "Minimum job duration in seconds",
+        scheduling_defaults.get("min_job_duration_seconds", 300),
+        int,
+        positive_only=True,
+    )
+    metrics_interval = _prompt_for_numeric(
+        "Worker metrics logging interval (seconds)",
+        scheduling_defaults.get("metrics_interval_seconds", 5),
+        int,
+        positive_only=True,
+    )
+    checkpoint_interval = _prompt_for_numeric(
+        "Checkpoint interval (generations)",
+        scheduling_defaults.get("checkpoint_interval", 2),
+        int,
+        positive_only=True,
+    )
+    parallel_updates["scheduling"] = {
+        "min_job_duration_seconds": min_job or scheduling_defaults.get("min_job_duration_seconds", 300),
+        "metrics_interval_seconds": metrics_interval or scheduling_defaults.get("metrics_interval_seconds", 5),
+        "checkpoint_interval": checkpoint_interval or scheduling_defaults.get("checkpoint_interval", 2),
+    }
+
+    # --- Monitoring ---
+    enable_metrics = console.input(
+        f"Enable metrics tracking? (y/n, Enter={monitoring_defaults.get('enable_metrics', 'y')}): "
+    ).lower()
+    track_resources = console.input(
+        f"Track CPU/GPU resources? (y/n, Enter={monitoring_defaults.get('track_resources', 'y')}): "
+    ).lower()
+
+    parallel_updates["monitoring"] = {
+        "enable_metrics": enable_metrics != "n",
+        "track_resources": track_resources != "n",
+    }
+
+    return {PARALLEL_CONFIG: parallel_updates}
 
 
 # --- Hyperparameter Configuration ---
@@ -258,8 +288,8 @@ def _prompt_for_hyperparameter_range(
             value_caster = float if param_type == "float" else int
             low, high = map(value_caster, new_range_str.split("-"))
             if low > high:
-                logger.error(
-                    "Change not applied. 'max' value must be greater than 'min' value."
+                console.print(
+                    "[yellow]Change not applied. 'max' value must be greater than 'min' value.[/yellow]"
                 )
                 return None
 
@@ -268,8 +298,8 @@ def _prompt_for_hyperparameter_range(
             )
             return {"range": [low, high]}
         except ValueError:
-            logger.error(
-                "Incorrect format. Use 'min-max' format with appropriate numbers."
+            console.print(
+                "[yellow]Incorrect format. Use 'min-max' format with appropriate numbers.[/yellow]"
             )
     return None
 
@@ -300,10 +330,12 @@ def _prompt_for_hyperparameter_enum(
         invalid_values = [v for v in raw_new_values if v not in allowed]
 
         if invalid_values:
-            logger.error(
-                f"Invalid values for `{name}: {invalid_values}. Allowed are: {allowed}"
+            console.print(
+                f"[yellow]Invalid values for `{name}: {invalid_values}. Allowed are: {allowed}[/yellow]"
             )
-            logger.warning(f"Resrtoed default values: {current_values}")
+            console.print(
+                f"[yellow]Restored default values: {current_values}[/yellow]"
+            )
             return None
         new_values = raw_new_values
 
@@ -317,21 +349,27 @@ def _prompt_for_hyperparameter_enum(
             ]
 
             if any(v <= 0 for v in processed_values):
-                logger.error(f"Values for '{name}' must be positive integers.")
-                logger.warning(f"Restored default values: {current_values}.")
+                console.print(
+                    f"[yellow]Values for '{name}' must be positive integers.[/yellow]"
+                )
+                console.print(
+                    f"[yellow]Restored default values: {current_values}.[/yellow]"
+                )
                 return None
 
             new_values = processed_values
 
         except ValueError:
-            logger.error(
-                f"Invalid integer format for '{name}'. Please enter comma-separated integers."
+            console.print(
+                f"[yellow]Invalid integer format for '{name}'. Please enter comma-separated integers.[/yellow]"
             )
-            logger.warning(f"Restored default values: {current_values}.")
+            console.print(
+                f"[yellow]Restored default values: {current_values}.[/yellow]"
+            )
             return None
     else:
-        logger.info(
-            f"Configuration for '{name}' is not defined as a standard enum in this function."
+        console.print(
+            f"[yellow]Configuration for '{name}' is not defined as a standard enum in this function.[/yellow]"
         )
         return None
 
@@ -396,7 +434,7 @@ def _get_hyperparameter_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
             f"\n--- [bold]{name}[/bold] ({params.get('description', 'No description')}) ---"
         )
         change = console.input(
-            "Do you want to change the space for this parameter? (y/n): "
+            "Do you want to change the space for this parameter? (y/n, Enter = no): "
         ).lower()
         if change != "y":
             continue
@@ -441,14 +479,14 @@ def _select_active_operators(
         try:
             chosen_indices = [int(i.strip()) - 1 for i in choice_str.split(",")]
             if len(chosen_indices) < 2:
-                logger.error("You must select at least 2 operators.")
+                console.print("[yellow]You must select at least 2 operators.[/yellow]")
                 continue
             if all(0 <= i < len(op_keys) for i in chosen_indices):
                 return [op_keys[i] for i in chosen_indices]
-            logger.error("Invalid operator number provided.")
+            console.print("[yellow]Invalid operator number provided.[/yellow]")
         except ValueError:
-            logger.error(
-                "Invalid format. Enter numbers separated by commas or 'R'."
+            console.print(
+                "[yellow]Invalid format. Enter numbers separated by commas or 'R'.[/yellow]"
             )
 
 
@@ -469,7 +507,9 @@ def _tune_mutation_parameters(defaults: Dict[str, Any]) -> Dict[str, float]:
         val = _prompt_for_numeric(prompt, default_val, float)
         if val is not None:
             if is_prob and not (0.0 <= val <= 1.0):
-                logger.error("Probability must be in the range [0, 1].")
+                console.print(
+                    "[yellow]Probability must be in the range [0, 1].[/yellow]"
+                )
             else:
                 mutation_updates[param] = val
     return mutation_updates
@@ -573,7 +613,7 @@ def _get_algorithm_settings(
 
     if config_key == CALIBRATION:
         enabled_choice = console.input(
-            "Enable calibration? (y/n) (Enter = yes): "
+            "Enable calibration? (y/n, Enter = yes): "
         ).lower()
         if enabled_choice == "n":
             updates["enabled"] = False
@@ -635,7 +675,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     )
 
     if choice == "3":
-        logger.warning("Exiting program.")
+        console.print("Exiting program...")
         return None
     if choice == "2":
         return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
@@ -645,7 +685,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     # Interactive configuration
     config_updates: Dict[str, Any] = {}
 
-    config_updates.update(_get_hardware_config(default_config))
+    config_updates.update(_get_parallel_config(default_config))
     nn_updates = _get_neural_network_config(default_config)
     hyperparam_updates = _get_hyperparameter_config(default_config)
 
@@ -695,10 +735,9 @@ def print_final_config_panel(_config: Dict[str, Any]):
     config_details = (
         f"[cyan]Experiment Name:[/cyan] {_get_nested_config(_config, ['project', 'name'])}\n"
         f"[cyan]Seed:[/cyan] {_get_nested_config(_config, ['project', 'seed'])}\n"
-        f"[cyan]Evaluation Mode:[/cyan] {_get_nested_config(_config, [HARDWARE_CONFIG, 'evaluation_mode'])}\n"
-        f"[cyan]CPU Cores:[/cyan] {_get_nested_config(_config, [HARDWARE_CONFIG, 'cpu_cores'])}\n"
-        f"[cyan]GPU Devices:[/cyan] {_get_nested_config(_config, [HARDWARE_CONFIG, 'gpu_devices'])}\n"
-        f"[cyan]GPU Block Size:[/cyan] {_get_nested_config(_config, [HARDWARE_CONFIG, 'gpu_block_size'])}\n"
+        f"[cyan]Evaluation Mode:[/cyan] {_get_nested_config(_config, [PARALLEL_CONFIG, 'evaluation_mode'])}\n"
+        f"[cyan]CPU Cores:[/cyan] {_get_nested_config(_config, [PARALLEL_CONFIG, 'cpu_workers'])}\n"
+        f"[cyan]GPU Devices:[/cyan] {_get_nested_config(_config, [PARALLEL_CONFIG, 'gpu_workers'])}\n"
         f"-------------------\n"
         f"[bold]CNN Params:[/bold]\n"
         f"  [cyan]Conv Blocks:[/cyan] {_get_nested_config(_config, [NN_CONFIG, 'conv_blocks'])}\n"

@@ -70,15 +70,8 @@ class IndividualEvaluator:
                     is_final,
                 )
 
-                if not np.isfinite(loss) or np.isnan(loss) or accuracy < 0.1:
-                    fitness_scores.append(0.0)
-                    loss_scores.append(float("inf"))
-                    logger.warning(
-                        f"Assigning fitness of 0.0 to the {i+1} individual, because of numerical instability."
-                    )
-                else:
-                    fitness_scores.append(accuracy)
-                    loss_scores.append(loss)
+                fitness_scores.append(accuracy)
+                loss_scores.append(loss)
 
                 logger.info(
                     f"Individual {i+1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"

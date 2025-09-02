@@ -49,12 +49,19 @@ def train_epoch(
             with autocast(device.type):
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
+
+                if not torch.isfinite(loss):
+                    raise ValueError(f"Numerical instability detected: loss is {loss.item()}")
+
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
         else:
             outputs = model(inputs)
             loss = criterion(outputs, targets)
+            if not torch.isfinite(loss):
+                raise ValueError(f"Numerical instability detected: loss is {loss.item()}")
+
             loss.backward()
             optimizer.step()
 
@@ -95,7 +102,12 @@ def evaluate(
             outputs = model(inputs)
             loss = criterion(outputs, targets)
 
-            running_loss += loss.item() * inputs.size(0)
+            if not torch.isfinite(loss):
+                logger.warning(f"Infinite or NaN loss detected during evaluation: {loss.item()}")
+                running_loss += float('inf')
+            else:
+                running_loss += loss.item() * inputs.size(0)
+
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
@@ -181,9 +193,8 @@ def train_and_eval(
                 saver.save(model)
 
             return final_test_acc, final_test_loss
-
     except Exception as e:
         logger.error(
-            f"Could not load the data or train the model ({e}). Exiting individual evaluation..."
+            f"Unexpected error during evaluation: ({e}). Assigned fitness 0.0"
         )
         return 0.0, float("inf")

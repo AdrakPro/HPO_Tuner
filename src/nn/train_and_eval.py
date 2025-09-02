@@ -51,7 +51,9 @@ def train_epoch(
                 loss = criterion(outputs, targets)
 
                 if not torch.isfinite(loss):
-                    raise ValueError(f"Numerical instability detected: loss is {loss.item()}")
+                    raise ValueError(
+                        f"Numerical instability detected: loss is {loss.item()}. Assigned fitness '0.0'."
+                    )
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -60,7 +62,9 @@ def train_epoch(
             outputs = model(inputs)
             loss = criterion(outputs, targets)
             if not torch.isfinite(loss):
-                raise ValueError(f"Numerical instability detected: loss is {loss.item()}")
+                raise ValueError(
+                    f"Numerical instability detected: loss is {loss.item()}. Assigned fitness '0.0'."
+                )
 
             loss.backward()
             optimizer.step()
@@ -103,8 +107,10 @@ def evaluate(
             loss = criterion(outputs, targets)
 
             if not torch.isfinite(loss):
-                logger.warning(f"Infinite or NaN loss detected during evaluation: {loss.item()}")
-                running_loss += float('inf')
+                logger.warning(
+                    f"Infinite or NaN loss detected during evaluation: {loss.item()}. Assigned fitness 0.0"
+                )
+                running_loss += float("inf")
             else:
                 running_loss += loss.item() * inputs.size(0)
 
@@ -194,7 +200,5 @@ def train_and_eval(
 
             return final_test_acc, final_test_loss
     except Exception as e:
-        logger.error(
-            f"Unexpected error during evaluation: ({e}). Assigned fitness 0.0"
-        )
+        logger.error(f"Unexpected error: ({e}).")
         return 0.0, float("inf")

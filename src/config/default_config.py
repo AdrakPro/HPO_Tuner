@@ -145,4 +145,3 @@ def default_config():
             },
         },
     }
-

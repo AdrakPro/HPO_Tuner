@@ -92,7 +92,7 @@ def get_dataset_loaders(
 
 
 def get_transforms(
-    aug_intensity: AugmentationIntensity
+    aug_intensity: AugmentationIntensity,
 ) -> tuple[transforms.Compose, transforms.Compose]:
     """
     Get train and test transforms based on augmentation intensity.

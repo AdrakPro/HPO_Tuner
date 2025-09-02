@@ -735,4 +735,6 @@ def print_final_config_panel(_config: Dict[str, Any]):
     if formatted_config["seed"]:
         del formatted_config["seed"]
 
-    logger.file_only(f"Configuration\n: {json.dumps(formatted_config, indent=4)}")
+    logger.file_only(
+        f"Configuration\n: {json.dumps(formatted_config, indent=4)}"
+    )

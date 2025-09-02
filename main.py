@@ -63,7 +63,10 @@ def run_ga_phase(
 
         # Progressive epochs
         # TODO ENHANCEMENT: let user define progress milestones by config,
-        if ENABLE_PROGRESSIVE_EPOCHS and initial_epochs >= minimum_viable_epochs:
+        if (
+            ENABLE_PROGRESSIVE_EPOCHS
+            and initial_epochs >= minimum_viable_epochs
+        ):
             progress = gen / max_generations
 
             if progress <= 0.3:

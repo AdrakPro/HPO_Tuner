@@ -1,10 +1,11 @@
-from enum import Enum, auto
-import numpy as np
 import random
 from copy import deepcopy
-from typing import List, Dict, Any, Optional, Tuple
+from enum import Enum, auto
+from typing import Any, Dict, List, Optional, Tuple
 
-from src.logger.experiment_logger import logger
+import numpy as np
+
+from src.logger.logger import logger
 
 
 class GeneticAlgorithm:
@@ -196,6 +197,7 @@ class GeneticAlgorithm:
 
         # Diversity implies a minimal pop_size
         min_required: int = len(guaranteed_individuals)
+        # TODO: CHECK IF ITS PRINTING
         if pop_size < min_required:
             logger.warning(
                 f"Requested pop_size ({pop_size}) is smaller than the minimum required to guarantee diversity ({min_required})."

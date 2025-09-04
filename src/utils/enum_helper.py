@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Type, Any
+from typing import Any, List, Type
 
 
 def get_enum_names(enum_cls: Type[Enum]) -> List[str]:

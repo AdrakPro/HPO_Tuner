@@ -2,17 +2,15 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
-from src.logger.experiment_logger import logger
-from src.model.chromosome import OptimizerSchedule, AugmentationIntensity
+from src.logger.logger import logger
+from src.model.chromosome import AugmentationIntensity, OptimizerSchedule
 from src.nn.neural_network import ActivationFunction
 from src.utils.enum_helper import get_enum_names, get_enum_values
 
 
 # --- Validation Helper Functions ---
-
-
 def _check_non_negative_int(value: Any, name: str):
     """Checks if a value is a non-negative integer."""
     if not isinstance(value, int) or value < 0:
@@ -304,7 +302,7 @@ def sanitize_config(config: Dict) -> Dict:
         logger.error(f"Configuration validation error: {e}")
         sys.exit(1)
 
-    logger.success("Configuration has been successfully checked.")
+    logger.info("Configuration has been successfully checked.")
     return config
 
 
@@ -327,7 +325,7 @@ def prompt_and_load_json_config(
             try:
                 with open(path, "r") as f:
                     loaded_config = json.load(f)
-                    logger.success(f"Loaded configuration from {path}")
+                    logger.info(f"Loaded configuration from {path}")
                     return sanitize_config(loaded_config)
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error while loading the file: {e}")
@@ -358,6 +356,6 @@ def prompt_and_save_json_config(config_data: Dict, console, config_dir: str):
         try:
             with open(path, "w") as f:
                 json.dump(config_data, f, indent=4)
-            logger.success(f"Configuration has been saved to '{path}'")
+            logger.info(f"Configuration has been saved to '{path}'")
         except IOError as e:
             logger.error(f"Error while saving the file: {e}")

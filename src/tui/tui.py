@@ -15,13 +15,13 @@ import torch
 from rich.console import Console
 from rich.panel import Panel
 
+from src.config.default_config import get_default_config
 from src.config.load_config import (
     prompt_and_load_json_config,
     prompt_and_save_json_config,
 )
-from src.config.default_config import ex
-from src.logger.experiment_logger import logger
-from src.model.chromosome import OptimizerSchedule, AugmentationIntensity
+from src.logger.logger import logger
+from src.model.chromosome import AugmentationIntensity, OptimizerSchedule
 from src.nn.neural_network import ActivationFunction
 from src.utils.ensure_dir import ensure_dir_exists
 from src.utils.enum_helper import get_enum_names, get_enum_values
@@ -691,8 +691,12 @@ def _get_algorithm_settings(
 # --- Main TUI Runner ---
 def run_tui_configurator() -> Optional[Dict[str, Any]]:
     """Main function to run the TUI and collect all configuration overrides."""
-    ensure_dir_exists(CONFIG_DIR)
-    default_config = ex.configurations[0]()
+    callback_msg = ensure_dir_exists(CONFIG_DIR)
+
+    if callback_msg:
+        logger.info(callback_msg)
+
+    default_config = get_default_config()
 
     _print_header("GENETIC OPTIMIZATION OF CNN")
     prompt = (
@@ -709,7 +713,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     if choice == "2":
         return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
 
-    logger.file_only("New configuration started")
+    logger.info("New configuration started", file_only=True)
 
     # Interactive configuration
     config_updates: Dict[str, Any] = {}
@@ -750,9 +754,9 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
 
 
 # --- Final Configuration Display ---
-def print_final_config_panel(_config: Dict[str, Any]):
+def print_final_config_panel(config: Dict[str, Any]):
     """Displays the final configuration in a formatted panel."""
-    hyperparams = _get_nested_config(_config, [NN_CONFIG, HYPERPARAM_SPACE], {})
+    hyperparams = _get_nested_config(config, [NN_CONFIG, HYPERPARAM_SPACE], {})
     hyper_str = "\n".join(
         f"  [cyan]{name}:[/cyan] {details.get('range') or details.get('values')}"
         for name, details in hyperparams.items()
@@ -762,32 +766,32 @@ def print_final_config_panel(_config: Dict[str, Any]):
     stop_cond_path = main_algo_path + [STOP_CONDITIONS]
 
     config_details = (
-        f"[cyan]Experiment Name:[/cyan] {_get_nested_config(_config, ['project', 'name'])}\n"
-        f"[cyan]Seed:[/cyan] {_get_nested_config(_config, ['project', 'seed'])}\n"
-        f"[cyan]Evaluation Mode:[/cyan] {_get_nested_config(_config, [PARALLEL_CONFIG, 'evaluation_mode'])}\n"
-        f"[cyan]CPU Cores:[/cyan] {_get_nested_config(_config, [PARALLEL_CONFIG, 'cpu_workers'])}\n"
-        f"[cyan]GPU Devices:[/cyan] {_get_nested_config(_config, [PARALLEL_CONFIG, 'gpu_workers'])}\n"
+        f"[cyan]Experiment Name:[/cyan] {_get_nested_config(config, ['project', 'name'])}\n"
+        f"[cyan]Seed:[/cyan] {_get_nested_config(config, ['project', 'seed'])}\n"
+        f"[cyan]Evaluation Mode:[/cyan] {_get_nested_config(config, [PARALLEL_CONFIG, 'evaluation_mode'])}\n"
+        f"[cyan]CPU Cores:[/cyan] {_get_nested_config(config, [PARALLEL_CONFIG, 'cpu_workers'])}\n"
+        f"[cyan]GPU Devices:[/cyan] {_get_nested_config(config, [PARALLEL_CONFIG, 'gpu_workers'])}\n"
         f"-------------------\n"
         f"[bold]CNN Params:[/bold]\n"
-        f"  [cyan]Conv Blocks:[/cyan] {_get_nested_config(_config, [NN_CONFIG, 'conv_blocks'])}\n"
-        f"  [cyan]Activation:[/cyan] {_get_nested_config(_config, [NN_CONFIG, 'fixed_parameters', 'activation_function'])}\n"
+        f"  [cyan]Conv Blocks:[/cyan] {_get_nested_config(config, [NN_CONFIG, 'conv_blocks'])}\n"
+        f"  [cyan]Activation:[/cyan] {_get_nested_config(config, [NN_CONFIG, 'fixed_parameters', 'activation_function'])}\n"
         f"-------------------\n"
         f"[bold]Hyperparameter Space:[/bold]\n{hyper_str}\n"
         f"-------------------\n"
-        f"[cyan]Nested Validation Enabled:[/cyan] {_get_nested_config(_config, ['nested_validation_config', 'enabled'])}\n"
-        f"[cyan]Outer K Folds:[/cyan] {_get_nested_config(_config, ['nested_validation_config', 'outer_k_folds'])}\n"
+        f"[cyan]Nested Validation Enabled:[/cyan] {_get_nested_config(config, ['nested_validation_config', 'enabled'])}\n"
+        f"[cyan]Outer K Folds:[/cyan] {_get_nested_config(config, ['nested_validation_config', 'outer_k_folds'])}\n"
         f"-------------------\n"
         f"[bold]Main Algorithm:[/bold]\n"
-        f"  [cyan]Calibration Enabled:[/cyan] {_get_nested_config(_config, [GA_CONFIG, CALIBRATION, 'enabled'])}\n"
-        f"  [cyan]Genetic Operators Active:[/cyan] {', '.join(_get_nested_config(_config, [GA_CONFIG, GENETIC_OPERATORS, 'active'], []))}\n"
-        f"  [cyan]Population Size:[/cyan] {_get_nested_config(_config, main_algo_path + ['population_size'])}\n"
-        f"  [cyan]Generations:[/cyan] {_get_nested_config(_config, main_algo_path + ['generations'])}\n"
-        f"  [cyan]Training Epochs:[/cyan] {_get_nested_config(_config, main_algo_path + ['training_epochs'])}\n"
+        f"  [cyan]Calibration Enabled:[/cyan] {_get_nested_config(config, [GA_CONFIG, CALIBRATION, 'enabled'])}\n"
+        f"  [cyan]Genetic Operators Active:[/cyan] {', '.join(_get_nested_config(config, [GA_CONFIG, GENETIC_OPERATORS, 'active'], []))}\n"
+        f"  [cyan]Population Size:[/cyan] {_get_nested_config(config, main_algo_path + ['population_size'])}\n"
+        f"  [cyan]Generations:[/cyan] {_get_nested_config(config, main_algo_path + ['generations'])}\n"
+        f"  [cyan]Training Epochs:[/cyan] {_get_nested_config(config, main_algo_path + ['training_epochs'])}\n"
         f"  [cyan]Stop Conditions:[/cyan]\n"
-        f"    [cyan]Max Gen:[/cyan] {_get_nested_config(_config, stop_cond_path + ['max_generations'])}\n"
-        f"    [cyan]Early Stop Gen:[/cyan] {_get_nested_config(_config, stop_cond_path + ['early_stop_generations'])}\n"
-        f"    [cyan]Fitness Goal:[/cyan] {_get_nested_config(_config, stop_cond_path + ['fitness_goal'])}\n"
-        f"    [cyan]Time Limit (min):[/cyan] {_get_nested_config(_config, stop_cond_path + ['time_limit_minutes'])}"
+        f"    [cyan]Max Gen:[/cyan] {_get_nested_config(config, stop_cond_path + ['max_generations'])}\n"
+        f"    [cyan]Early Stop Gen:[/cyan] {_get_nested_config(config, stop_cond_path + ['early_stop_generations'])}\n"
+        f"    [cyan]Fitness Goal:[/cyan] {_get_nested_config(config, stop_cond_path + ['fitness_goal'])}\n"
+        f"    [cyan]Time Limit (min):[/cyan] {_get_nested_config(config, stop_cond_path + ['time_limit_minutes'])}"
     )
 
     panel = Panel(
@@ -798,11 +802,7 @@ def print_final_config_panel(_config: Dict[str, Any]):
     )
     console.print(panel)
 
-    # Remove Sacred seed
-    formatted_config = _config.copy()
-    if formatted_config["seed"]:
-        del formatted_config["seed"]
-
-    logger.file_only(
-        f"Configuration\n: {json.dumps(formatted_config, indent=4)}"
+    logger.info(
+        f"Configuration\n: {json.dumps(config, indent=4)}",
+        file_only=True,
     )

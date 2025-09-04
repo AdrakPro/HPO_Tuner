@@ -22,15 +22,17 @@ class ModelSaver:
         filename_with_time = f"{filename}_{timestamp}.pth"
         self.filepath = os.path.join(self.dir, filename_with_time)
 
-    def save(self, model: Module) -> None:
+    def save(self, model: Module) -> str | None:
         """
         Save the model's state_dict to the file.
 
         Args:
             model: The PyTorch model to save.
         """
-        ensure_dir_exists(self.dir)
+        callback_msg = ensure_dir_exists(self.dir)
         torch.save(model.state_dict(), self.filepath)
+
+        return callback_msg
 
     def load(self, model: Module, map_location: str = "cpu") -> None:
         """

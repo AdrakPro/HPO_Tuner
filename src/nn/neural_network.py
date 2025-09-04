@@ -4,19 +4,19 @@ Allows user-defined number of convolutional blocks with global config for paddin
 """
 
 from enum import Enum
-from typing import Tuple, Dict, Callable
+from typing import Any, Callable, Dict, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as functional
 from torch import optim
 from torch.optim.lr_scheduler import (
-    LRScheduler,
-    LinearLR,
-    SequentialLR,
     CosineAnnealingLR,
     ExponentialLR,
+    LinearLR,
+    LRScheduler,
     OneCycleLR,
+    SequentialLR,
 )
 from torch.utils.data import DataLoader
 
@@ -53,15 +53,15 @@ class CNN(nn.Module):
     CNN for CIFAR-10 with user-defined conv blocks.
     """
 
-    def __init__(self, chromosome: Chromosome, config: Dict) -> None:
+    def __init__(self, chromosome: Chromosome, neural_config: Dict) -> None:
         super().__init__()
 
-        conv_blocks: int = config["conv_blocks"]
-        in_channels: int = config["input_shape"][0]
-        output_classes: int = config["output_classes"]
+        conv_blocks: int = neural_config["conv_blocks"]
+        in_channels: int = neural_config["input_shape"][0]
+        output_classes: int = neural_config["output_classes"]
 
         self.activation = ActivationFunction(
-            config["fixed_parameters"]["activation_function"]
+            neural_config["fixed_parameters"]["activation_function"]
         ).get_fn()
 
         # Conv layers preserve dimensions
@@ -70,7 +70,7 @@ class CNN(nn.Module):
         pool_stride = 2
 
         padding = 1
-        base_filters: int = config["fixed_parameters"]["base_filters"]
+        base_filters: int = neural_config["fixed_parameters"]["base_filters"]
 
         base = int(base_filters * chromosome.width_scale)
         out_channels = [base * (2**i) for i in range(conv_blocks)]
@@ -96,7 +96,7 @@ class CNN(nn.Module):
 
         # Dynamically calculate the flatten size for fc1 using a dummy forward pass
         with torch.no_grad():
-            dummy = torch.zeros(1, *config["input_shape"])
+            dummy = torch.zeros(1, *neural_config["input_shape"])
             out = self.conv_seq(dummy)
             fc1_in_features = out.view(1, -1).shape[1]
 
@@ -122,9 +122,9 @@ class CNN(nn.Module):
         return x
 
 
-def get_network(chromosome: Chromosome, config: Dict) -> CNN:
+def get_network(chromosome: Chromosome, neural_config: Dict[str, Any]) -> CNN:
     """Factory function to create the CNN model."""
-    return CNN(chromosome, config)
+    return CNN(chromosome, neural_config)
 
 
 def get_optimizer_and_scheduler(

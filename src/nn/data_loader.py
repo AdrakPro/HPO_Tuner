@@ -3,15 +3,14 @@ Data loader module for CIFAR-10 using PyTorch.
 Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 """
 
+import multiprocessing as mp
 import os
 
 import numpy.random as random
-from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, transforms
 
 from src.model.chromosome import AugmentationIntensity
-
-NUM_WORKERS = os.cpu_count() // 2
 
 # Precomputed statistics, ensuring images are normalized consistently for CIFAR-10
 MEANS = (0.4914, 0.4822, 0.4465)
@@ -24,7 +23,20 @@ CROP_PADDING = 4
 
 IMG_SIZE = 32
 
-# TODO: What if dataset is imbalanced. We should balance it but we stick to CIFAR-10
+
+# TODO: integrate with config x cores
+def get_num_workers():
+    """
+    Determine the number of workers for DataLoader.
+    If the current process is daemonic, return 0 because daemonic processes cannot have children.
+    Otherwise, return a reasonable number of workers.
+    """
+    try:
+        if mp.current_process().daemon:
+            return 0
+    except:
+        return 0
+    return min(4, os.cpu_count() // 2)
 
 
 class DataLoaderManager:
@@ -56,7 +68,7 @@ def get_dataset_loaders(
         (train_loader, test_loader): Tuple of DataLoaders.
     """
 
-    data_dir: str = "./model_data"
+    data_dir = "./model_data"
 
     transform_train, transform_test = get_transforms(aug_intensity)
 
@@ -72,20 +84,26 @@ def get_dataset_loaders(
         indices = random.choice(len(train_set), subset_size, replace=False)
         train_set = Subset(train_set, indices)
 
+    # Use dynamic worker count based on process type
+    num_workers = get_num_workers()
+    enable_persistent_workers = num_workers > 0
+
     train_loader = DataLoader(
         train_set,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=NUM_WORKERS,
+        num_workers=num_workers,
         pin_memory=is_gpu,
+        persistent_workers=enable_persistent_workers,
     )
 
     test_loader = DataLoader(
         test_set,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=NUM_WORKERS,
+        num_workers=num_workers,
         pin_memory=is_gpu,
+        persistent_workers=enable_persistent_workers,
     )
 
     return DataLoaderManager(train_loader, test_loader)

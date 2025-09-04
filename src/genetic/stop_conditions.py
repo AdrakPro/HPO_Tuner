@@ -5,8 +5,6 @@ Manages the stopping conditions for the genetic algorithm.
 import time
 from typing import List
 
-from src.logger.experiment_logger import logger
-
 
 class StopConditions:
     """
@@ -29,7 +27,9 @@ class StopConditions:
         self.start_time = time.monotonic()
         self.best_fitness_history: List[float] = []
 
-    def should_stop_evaluation(self, individual_fitness: float) -> bool:
+    def should_stop_evaluation(
+        self, individual_fitness: float
+    ) -> tuple[bool, str]:
         """
         Checks if the evaluation of the current generation should stop because
         an individual has reached the fitness goal.
@@ -41,12 +41,11 @@ class StopConditions:
             True if the fitness goal is met or exceeded, False otherwise.
         """
         if individual_fitness >= self.fitness_goal:
-            logger.warning(
-                f"Fitness goal of {self.fitness_goal} reached. "
-                "Stopping evaluation for current generation and proceeding to the next."
+            return (
+                True,
+                f"Fitness goal of {self.fitness_goal} reached.\n Stopping evaluation for current generation and proceeding to the next.",
             )
-            return True
-        return False
+        return False, ""
 
     def should_stop_algorithm(
         self, current_generation: int, best_fitness: float

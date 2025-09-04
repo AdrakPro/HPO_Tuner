@@ -3,13 +3,8 @@ Configuration settings for the project using Sacred.
 This file defines the experiment and its configuration based on the provided specification.
 """
 
-from sacred import Experiment
 
-ex = Experiment("Optymalizacja")
-
-
-@ex.config
-def default_config():
+def get_default_config():
     project = {"name": "HPO Paper-Based Experiment", "seed": None}
 
     # TODO: integrate
@@ -27,7 +22,7 @@ def default_config():
             "evaluation_mode": "HYBRID",  # Options: "CPU", "GPU", "HYBRID"
             "enable_parallel": True,
             "gpu_workers": 1,
-            "cpu_workers": 128,
+            "cpu_workers": 12,
             # TODO: Dynamic allocation
             "dataloader_workers": {
                 "per_gpu": 6,

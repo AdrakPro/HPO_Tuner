@@ -1,8 +1,13 @@
 import sys
-from pathlib import Path
+import signal
 from typing import Dict, List, Tuple
 
-import numpy as np
+# Pre-import heavy modules to avoid issues in worker processes
+try:
+    import torch
+    import torchvision
+except ImportError:
+    pass
 
 from src.factory.create_evaluator import create_evaluator
 from src.genetic.genetic_algorithm import (
@@ -13,8 +18,6 @@ from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
 from src.tui import print_final_config_panel, run_tui_configurator
 from src.utils.seed import seed_everything
-
-sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 # --- Main Parameters ---
 MUTATION_DECAY_RATE = 0.98
@@ -63,6 +66,9 @@ def run_ga_phase(
         config, initial_epochs, early_stop_epochs, subset_percentage
     )
     try:
+        training_epochs = initial_epochs
+        logger.warning("Progressive epochs are disabled!")
+
         for gen in range(1, stop_conditions.max_generations + 1):
             logger.info(
                 f"{phase_name.upper()} - Generation {gen}/{stop_conditions.max_generations}"
@@ -80,9 +86,6 @@ def run_ga_phase(
                 else:
                     epoch_multiplier = 1.0
                 training_epochs = int(round(initial_epochs * epoch_multiplier))
-            else:
-                training_epochs = initial_epochs
-                logger.warning("Progressive epochs are disabled!")
 
             evaluator.set_training_epochs(training_epochs)
 
@@ -90,7 +93,9 @@ def run_ga_phase(
                 population, stop_conditions
             )
 
-            best_idx = np.argmax(fitness_scores)
+            best_idx = max(
+                range(len(fitness_scores)), key=fitness_scores.__getitem__
+            )
             best_fitness = fitness_scores[best_idx]
             logger.info(f"  Best Fitness (Accuracy): {best_fitness:.4f}")
             logger.info(
@@ -104,7 +109,11 @@ def run_ga_phase(
                 logger.warning(
                     f"Stopping GA for phase '{phase_name}': {reason}"
                 )
-                sorted_indices = np.argsort(fitness_scores)[::-1]
+                sorted_indices = sorted(
+                    range(len(fitness_scores)),
+                    key=fitness_scores.__getitem__,
+                    reverse=True,
+                )
                 population = [population[i] for i in sorted_indices]
                 break
 
@@ -123,10 +132,16 @@ def run_ga_phase(
             population, stop_conditions=None, is_final=is_final
         )
 
-        sorted_indices = np.argsort(final_fitness)[::-1]
+        sorted_indices = sorted(
+            range(len(final_fitness)),
+            key=final_fitness.__getitem__,
+            reverse=True,
+        )
+
         sorted_population = [population[i] for i in sorted_indices]
         best_fitness = final_fitness[sorted_indices[0]]
         best_loss = final_loss[sorted_indices[0]]
+        # logger.warning(f"{best_fitness}, {best_loss}")
 
     except KeyboardInterrupt:
         logger.warning(f"User interrupted during {phase_name}. Cleaning up...")
@@ -185,7 +200,9 @@ def run_optimization(config):
                 f"Adding {num_random} new random individuals for diversity."
             )
             main_starting_population.extend(
-                ga.initial_population(num_random, MAIN_START_BINS)
+                ga.initial_population(
+                    num_random, MAIN_START_BINS, print_warning=False
+                )
             )
     else:
         logger.info(
@@ -210,16 +227,31 @@ def run_optimization(config):
 
 
 def main():
+    def sigint_handler(signum, frame):
+        logger.info("Received SIGINT, shutting down gracefully...")
+        sys.exit(0)
+
+    # Set up signal handler
+    signal.signal(signal.SIGINT, sigint_handler)
+
     try:
         config = run_tui_configurator()
         run_optimization(config)
     except KeyboardInterrupt:
         logger.info("User terminated the program.")
         sys.exit(0)
+    except SystemExit:
+        logger.info("Program terminated gracefully.")
     except Exception as e:
-        logger.error(f"An unexpected critical error occurred: {e}")
+        logger.exception(f"Unexpected error occurred {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
+    try:
+        # Ensure spawn, fork doesn't work well with CUDA
+        torch.multiprocessing.set_start_method("spawn", force=True)
+    except RuntimeError:
+        pass
+
     main()

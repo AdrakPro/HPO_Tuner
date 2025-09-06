@@ -70,6 +70,13 @@ class Logger:
         else:
             self.logger.error(msg)
 
+    def exception(self, msg: str, file_only: bool = False):
+        """Logs an error message."""
+        if file_only:
+            self.logger.bind(file_only=True).exception(msg)
+        else:
+            self.logger.exception(msg)
+
 
 # Global instance for the main process
 logger = Logger()

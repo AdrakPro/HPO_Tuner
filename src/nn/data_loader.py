@@ -5,8 +5,11 @@ Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 
 import multiprocessing as mp
 import os
+import signal
+import sys
 
 import numpy.random as random
+import torch.cuda
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
@@ -44,15 +47,35 @@ class DataLoaderManager:
 
     def __init__(self, *loaders):
         self.loaders = loaders
+        self._original_sigint_handler = signal.getsignal(signal.SIGINT)
 
     def __enter__(self):
+        # Set custom signal handler
+        signal.signal(signal.SIGINT, self._handle_sigint)
         return self.loaders
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Restore original signal handler
+        signal.signal(signal.SIGINT, self._original_sigint_handler)
+
+        # Clean up DataLoaders and their workers
         for loader in self.loaders:
+            if hasattr(loader, "_iterator") and loader._iterator is not None:
+                try:
+                    loader._iterator._shutdown_workers()
+                except AttributeError:
+                    pass
             del loader
 
+        # Clean up GPU memory if available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         return False
+
+    def _handle_sigint(self, signum, frame):
+        """Handle SIGINT by initiating graceful shutdown"""
+        sys.exit(1)  # This will trigger __exit__
 
 
 def get_dataset_loaders(

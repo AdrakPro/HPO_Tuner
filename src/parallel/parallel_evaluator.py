@@ -6,6 +6,7 @@ import os
 import queue
 import signal
 import sys
+import time
 from typing import Any, Dict, List, Tuple, Union
 
 import torch
@@ -31,10 +32,8 @@ def init_device(device_id: Union[str, int]) -> torch.device:
             logger.error(f"CUDA not available for GPU worker {device_id}.")
             return torch.device("cpu")
         else:
-            # logger.info(f"Worker will use GPU {device_id}.")
             return torch.device("cuda")
     else:
-        # logger.info("Worker will use CPU.")
         return torch.device("cpu")
 
 
@@ -42,10 +41,8 @@ def worker_main(worker_config: WorkerConfig) -> None:
     """
     Top-level worker function so it can be pickled by multiprocessing.
     """
-    def sigint_handler(signum, frame):
-        sys.exit(1)  # Graceful exit on SIGINT
-
-    signal.signal(signal.SIGINT, sigint_handler)
+    # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     # Set number of threads to avoid CPU oversubscription
     torch.set_num_threads(worker_config.num_threads)
@@ -56,86 +53,111 @@ def worker_main(worker_config: WorkerConfig) -> None:
         else "CPU"
     )
 
+    # Restore signal handler after imports are complete
+    signal.signal(signal.SIGINT, original_sigint_handler)
+
+    # Set up our own signal handler
+    def sigint_handler(signum, frame):
+        logger.info(
+            f"Worker {worker_config.worker_id} received SIGINT, shutting down..."
+        )
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, sigint_handler)
+
     while True:
-        task: Task = worker_config.task_queue.get()
-        if task is None:  # Sentinel to stop
+        try:
+            task: Task = worker_config.task_queue.get(timeout=1)
+            if task is None:  # Sentinel to stop
+                break
+
+            log_buffer: List[str] = [
+                f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
+                f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
+            ]
+
+            try:
+                chromosome = Chromosome.from_dict(task.individual_hyperparams)
+
+                def epoch_logger(
+                    epoch,
+                    train_acc,
+                    train_loss,
+                    test_acc,
+                    test_loss,
+                    early_stop=False,
+                    final_msg=None,
+                ):
+                    if final_msg:
+                        log_buffer.append(
+                            f"[Worker-{worker_config.worker_id} / {device_name}] {final_msg}"
+                        )
+                        return
+                    line = f"[Worker-{worker_config.worker_id} / {device_name}] Epoch {epoch}/{task.training_epochs} | Train Acc: {train_acc:.4f}, Train Loss: {train_loss:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
+                    if early_stop:
+                        line += " / Early stopping triggered"
+                    log_buffer.append(line)
+
+                accuracy, loss = train_and_eval(
+                    chromosome=chromosome,
+                    neural_config=task.neural_network_config,
+                    epochs=task.training_epochs,
+                    early_stop_epochs=task.early_stop_epochs,
+                    device=device,
+                    subset_percentage=task.subset_percentage,
+                    is_final=task.is_final,
+                    epoch_callback=epoch_logger,
+                )
+
+                log_buffer.append(
+                    f"[Worker-{worker_config.worker_id} / {device_name}] Individual {task.index} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"
+                )
+
+                result = Result(
+                    index=task.index,
+                    fitness=accuracy,
+                    loss=loss,
+                    status="SUCCESS",
+                    log_lines=log_buffer,
+                )
+
+            except (CudaOutOfMemoryError, NumericalInstabilityError) as e:
+                log_buffer.append(
+                    f"[Worker-{worker_config.worker_id} / {device_name}] Controlled failure for individual {task.index}: {e}"
+                )
+                result = Result(
+                    index=task.index,
+                    fitness=0.0,
+                    loss=float("inf"),
+                    status="FAILURE",
+                    error_message=str(e),
+                    log_lines=log_buffer,
+                )
+            except Exception as e:
+                log_buffer.append(
+                    f"[Worker-{worker_config.worker_id} / {device_name}] Unexpected error for individual {task.index}: {e}"
+                )
+                result = Result(
+                    index=task.index,
+                    fitness=0.0,
+                    loss=float("inf"),
+                    status="FAILURE",
+                    error_message=str(e),
+                    log_lines=log_buffer,
+                )
+
+            worker_config.result_queue.put(result)
+
+        except queue.Empty:
+            continue
+        except KeyboardInterrupt:
+            break
+        except SystemExit:
             break
 
-        log_buffer: List[str] = [
-            f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
-            f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
-        ]
-
-        try:
-            chromosome = Chromosome.from_dict(task.individual_hyperparams)
-
-            def epoch_logger(
-                epoch,
-                train_acc,
-                train_loss,
-                test_acc,
-                test_loss,
-                early_stop=False,
-                final_msg=None,
-            ):
-                if final_msg:
-                    log_buffer.append(
-                        f"[Worker-{worker_config.worker_id} / {device_name}] {final_msg}"
-                    )
-                    return
-                line = f"[Worker-{worker_config.worker_id} / {device_name}] Epoch {epoch}/{task.training_epochs} | Train Acc: {train_acc:.4f}, Train Loss: {train_loss:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
-                if early_stop:
-                    line += " / Early stopping triggered"
-                log_buffer.append(line)
-
-            accuracy, loss = train_and_eval(
-                chromosome=chromosome,
-                neural_config=task.neural_network_config,
-                epochs=task.training_epochs,
-                early_stop_epochs=task.early_stop_epochs,
-                device=device,
-                subset_percentage=task.subset_percentage,
-                is_final=task.is_final,
-                epoch_callback=epoch_logger,
-            )
-
-            log_buffer.append(
-                f"[Worker-{worker_config.worker_id} / {device_name}] Individual {task.index} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"
-            )
-
-            result = Result(
-                index=task.index,
-                fitness=accuracy,
-                loss=loss,
-                status="SUCCESS",
-                log_lines=log_buffer,
-            )
-
-        except (CudaOutOfMemoryError, NumericalInstabilityError) as e:
-            log_buffer.append(
-                f"[Worker-{worker_config.worker_id} / {device_name}] Controlled failure for individual {task.index}: {e}"
-            )
-            result = Result(
-                index=task.index,
-                fitness=0.0,
-                loss=float("inf"),
-                status="FAILURE",
-                error_message=str(e),
-                log_lines=log_buffer,
-            )
-        except Exception as e:
-            log_buffer.append(
-                f"[Worker-{worker_config.worker_id} / {device_name}] Unexpected error for individual {task.index}: {e}"
-            )
-            result = Result(
-                index=task.index,
-                fitness=0.0,
-                loss=float("inf"),
-                status="FAILURE",
-                error_message=str(e),
-                log_lines=log_buffer,
-            )
-        worker_config.result_queue.put(result)
+    # Clean up GPU memory
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 class ParallelEvaluator(Evaluator):
@@ -159,6 +181,8 @@ class ParallelEvaluator(Evaluator):
         self._workers: List[mp.Process] = []
         self._task_queue: mp.Queue | None = None
         self._result_queue: mp.Queue | None = None
+        self._shutting_down = False
+        self._cleaned_up = False
 
     def evaluate_population(
         self,
@@ -166,6 +190,10 @@ class ParallelEvaluator(Evaluator):
         stop_conditions: StopConditions,
         is_final: bool = False,
     ) -> Tuple[List[float], List[float]]:
+        if self._shutting_down:
+            logger.warning("Evaluator is shutting down, skipping evaluation")
+            return [0.0] * len(population), [float("inf")] * len(population)
+
         pop_size = len(population)
 
         available_gpus = torch.cuda.device_count()
@@ -238,18 +266,23 @@ class ParallelEvaluator(Evaluator):
         results_list: List[Result] = [None] * pop_size
         finished = 0
         timeout_seconds = 300
+        result_timeout_seconds = 600
 
         try:
-            while finished < pop_size:
+            while finished < pop_size and not self._shutting_down:
                 try:
-                    result: Result = self._result_queue.get(
-                        timeout=timeout_seconds
-                    )
+                    # Check if any worker has died unexpectedly
+                    for p in self._workers:
+                        if not p.is_alive():
+                            # Worker died without sending a result
+                            raise RuntimeError
+                        raise RuntimeError(
+                            f"Worker process {p.pid} terminated unexpectedly. This may be due to an out-of-memory error or insufficient shared memory."
+                        )
+
+                    result: Result = self._result_queue.get(timeout=1.0)
                 except queue.Empty:
-                    logger.error(
-                        "Timeout waiting for result from worker. Some tasks may have failed or hung."
-                    )
-                    break
+                    continue
 
                 results_list[result.index] = result
                 finished += 1
@@ -265,12 +298,22 @@ class ParallelEvaluator(Evaluator):
                 if should_stop:
                     logger.info(reason)
                     break
+        except RuntimeError as e:
+            logger.error(
+                f"A critical error occurred in the parallel evaluator: {e}"
+            )
+            self._shutting_down = True
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt detected. Cleaning up workers...")
+            self._shutting_down = True
             self.cleanup_workers()
             raise
         finally:
             self.cleanup_workers()
+
+        # If we're shutting down, don't return invalid results
+        if self._shutting_down:
+            return [0.0] * len(population), [float("inf")] * len(population)
 
         fitness_scores = [r.fitness if r else 0.0 for r in results_list]
         loss_scores = [r.loss if r else float("inf") for r in results_list]
@@ -284,10 +327,84 @@ class ParallelEvaluator(Evaluator):
         self.subset_percentage = subset_percentage
 
     def cleanup_workers(self):
+        if self._cleaned_up:
+            return
+
         logger.info("Cleaning up ParallelEvaluator workers...")
+        self._shutting_down = True
+        self._cleaned_up = True
+
+        # Clear any remaining tasks
+        if self._task_queue:
+            try:
+                while not self._task_queue.empty():
+                    self._task_queue.get_nowait()
+            except (queue.Empty, FileNotFoundError):
+                pass
+
+        # Drain the results queue
+        if self._result_queue:
+            try:
+                while not self._result_queue.empty():
+                    self._result_queue.get_nowait()
+            except (queue.Empty, FileNotFoundError):
+                pass
+
+        # Send sentinel values to workers
+        if self._task_queue:
+            for _ in range(len(self._workers)):
+                try:
+                    self._task_queue.put(None, timeout=1)
+                except queue.Full:
+                    pass
+
+        # Wait for workers to finish
         if self._workers:
             for p in self._workers:
                 if p.is_alive():
-                    p.terminate()
-                    p.join(timeout=5)
+                    p.join(timeout=10)
+
+                    if p.is_alive():
+                        logger.warning(
+                            f"Worker {p.pid} did not terminate gracefully, terminating..."
+                        )
+                        try:
+                            p.terminate()
+                            # Poll up to 2 seconds total with short sleeps
+                            max_wait = 2.0
+                            interval = 0.1
+                            waited = 0.0
+
+                            while p.is_alive() and waited < max_wait:
+                                time.sleep(interval)
+                                waited += interval
+
+                            if p.is_alive():
+                                logger.error(
+                                    f"Worker {p.pid} still alive after terminate(), killing..."
+                                )
+                                p.kill()
+                        except Exception as e:
+                            logger.eroror(
+                                f"Exception during worker termination: {e}"
+                            )
             self._workers = []
+
+        # Clean up queues
+        if self._task_queue:
+            try:
+                self._task_queue.close()
+                self._task_queue.join_thread()
+            except:
+                pass
+
+        if self._result_queue:
+            try:
+                self._result_queue.close()
+                self._result_queue.join_thread()
+            except:
+                pass
+
+        # Clean up GPU memory
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()

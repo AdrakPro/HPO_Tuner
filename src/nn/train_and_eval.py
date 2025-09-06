@@ -137,21 +137,21 @@ def train_and_eval(
     epoch_callback=None,
 ) -> tuple[float, float]:
     """
-     Train and evaluate CNN.
+    Train and evaluate CNN.
 
-     Args:
-         chromosome: Chromosome describing the model/hyperparameters.
-         neural_config: Additional model config.
-         epochs: Max number of training epochs.
-         early_stop_epochs: Number of epochs to wait for improvement.
-         device: torch device (CPU/GPU).
-         subset_percentage: Use only a subset of the dataset.
-         is_final: Save the model if True.
-         epoch_callback: Optional callback per epoch.
+    Args:
+        chromosome: Chromosome describing the model/hyperparameters.
+        neural_config: Additional model config.
+        epochs: Max number of training epochs.
+        early_stop_epochs: Number of epochs to wait for improvement.
+        device: torch device (CPU/GPU).
+        subset_percentage: Use only a subset of the dataset.
+        is_final: Save the model if True.
+        epoch_callback: Optional callback per epoch.
 
-     Returns:
-         Tuple of (final_test_accuracy, final_test_loss).
-     """
+    Returns:
+        Tuple of (final_test_accuracy, final_test_loss).
+    """
     is_gpu = device.type == "cuda"
 
     try:
@@ -236,6 +236,18 @@ def train_and_eval(
 
     except (CudaOutOfMemoryError, NumericalInstabilityError):
         raise
+    except RuntimeError as e:
+        if "DataLoader worker" in str(e) and (
+            "killed" in str(e) or "exited unexpectedly" in str(e)
+        ):
+            logger.error(
+                f"DataLoader worker failed. This is often due to insufficient shared memory."
+            )
+            logger.error(
+                f"An unexpected runtime error occurred in train_and_eval: {e}"
+            )
+
+            raise
     except Exception as e:
         logger.error(f"An unexpected error occurred in train_and_eval: {e}")
         raise

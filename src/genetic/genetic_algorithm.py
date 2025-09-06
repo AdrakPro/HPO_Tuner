@@ -174,7 +174,7 @@ class GeneticAlgorithm:
         return new_pop[:pop_size]
 
     def initial_population(
-        self, pop_size: int, strat_bins: int = 5
+        self, pop_size: int, strat_bins: int = 5, print_warning: bool = True
     ) -> List[Dict]:
         """
         Generate a diverse initial population with stratification for continuous values.
@@ -197,8 +197,8 @@ class GeneticAlgorithm:
 
         # Diversity implies a minimal pop_size
         min_required: int = len(guaranteed_individuals)
-        # TODO: CHECK IF ITS PRINTING
-        if pop_size < min_required:
+
+        if print_warning and pop_size < min_required:
             logger.warning(
                 f"Requested pop_size ({pop_size}) is smaller than the minimum required to guarantee diversity ({min_required})."
                 " Some values may not be represented."

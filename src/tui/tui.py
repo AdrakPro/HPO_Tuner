@@ -23,8 +23,8 @@ from src.config.load_config import (
 from src.logger.logger import logger
 from src.model.chromosome import AugmentationIntensity, OptimizerSchedule
 from src.nn.neural_network import ActivationFunction
-from src.utils.ensure_dir import ensure_dir_exists
 from src.utils.enum_helper import get_enum_names, get_enum_values
+from src.utils.file_helper import ensure_dir_exists
 
 console = Console(highlight=False)
 
@@ -753,56 +753,81 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     return final_config
 
 
-# --- Final Configuration Display ---
 def print_final_config_panel(config: Dict[str, Any]):
-    """Displays the final configuration in a formatted panel."""
-    hyperparams = _get_nested_config(config, [NN_CONFIG, HYPERPARAM_SPACE], {})
+    """Displays a concise summary of the most important configuration settings."""
+    project_name = _get_nested_config(config, ["project", "name"], "N/A")
+    seed = _get_nested_config(config, ["project", "seed"], "N/A")
+
+    exec_cfg = _get_nested_config(config, [PARALLEL_CONFIG, "execution"], {})
+    monitor_cfg = _get_nested_config(
+        config, [PARALLEL_CONFIG, "monitoring"], {}
+    )
+
+    nn_cfg = _get_nested_config(config, [NN_CONFIG], {})
+    fixed_params = nn_cfg.get("fixed_parameters", {})
+    hyperparams = nn_cfg.get(HYPERPARAM_SPACE, {})
+
+    ga_cfg = _get_nested_config(config, [GA_CONFIG, MAIN_ALGORITHM], {})
+    ga_ops = _get_nested_config(
+        config, [GA_CONFIG, GENETIC_OPERATORS, "active"], []
+    )
+    elitism = _get_nested_config(
+        config, [GA_CONFIG, GENETIC_OPERATORS, "elitism_percent"], "N/A"
+    )
+    stop_cfg = ga_cfg.get(STOP_CONDITIONS, {})
+
+    cpu_workers = exec_cfg.get("cpu_workers", 0) or 0
+    gpu_workers = exec_cfg.get("gpu_workers", 0) or 0
+    dl_workers = exec_cfg.get("dataloader_workers", {})
+
+    per_gpu = dl_workers.get("per_gpu", 0)
+    per_cpu = dl_workers.get("per_cpu", 0)
+
+    total_dataloader_cpus = gpu_workers * per_gpu + cpu_workers * per_cpu
+    total_cpus_used = cpu_workers + total_dataloader_cpus
+
     hyper_str = "\n".join(
-        f"  [cyan]{name}:[/cyan] {details.get('range') or details.get('values')}"
+        f"  • {name}: {details.get('range') or details.get('values')}"
         for name, details in hyperparams.items()
     )
 
-    main_algo_path = [GA_CONFIG, MAIN_ALGORITHM]
-    stop_cond_path = main_algo_path + [STOP_CONDITIONS]
-
     config_details = (
-        f"[cyan]Experiment Name:[/cyan] {_get_nested_config(config, ['project', 'name'])}\n"
-        f"[cyan]Seed:[/cyan] {_get_nested_config(config, ['project', 'seed'])}\n"
-        f"[cyan]Evaluation Mode:[/cyan] {_get_nested_config(config, [PARALLEL_CONFIG, 'evaluation_mode'])}\n"
-        f"[cyan]CPU Cores:[/cyan] {_get_nested_config(config, [PARALLEL_CONFIG, 'cpu_workers'])}\n"
-        f"[cyan]GPU Devices:[/cyan] {_get_nested_config(config, [PARALLEL_CONFIG, 'gpu_workers'])}\n"
-        f"-------------------\n"
-        f"[bold]CNN Params:[/bold]\n"
-        f"  [cyan]Conv Blocks:[/cyan] {_get_nested_config(config, [NN_CONFIG, 'conv_blocks'])}\n"
-        f"  [cyan]Activation:[/cyan] {_get_nested_config(config, [NN_CONFIG, 'fixed_parameters', 'activation_function'])}\n"
-        f"-------------------\n"
-        f"[bold]Hyperparameter Space:[/bold]\n{hyper_str}\n"
-        f"-------------------\n"
-        f"[cyan]Nested Validation Enabled:[/cyan] {_get_nested_config(config, ['nested_validation_config', 'enabled'])}\n"
-        f"[cyan]Outer K Folds:[/cyan] {_get_nested_config(config, ['nested_validation_config', 'outer_k_folds'])}\n"
-        f"-------------------\n"
-        f"[bold]Main Algorithm:[/bold]\n"
-        f"  [cyan]Calibration Enabled:[/cyan] {_get_nested_config(config, [GA_CONFIG, CALIBRATION, 'enabled'])}\n"
-        f"  [cyan]Genetic Operators Active:[/cyan] {', '.join(_get_nested_config(config, [GA_CONFIG, GENETIC_OPERATORS, 'active'], []))}\n"
-        f"  [cyan]Population Size:[/cyan] {_get_nested_config(config, main_algo_path + ['population_size'])}\n"
-        f"  [cyan]Generations:[/cyan] {_get_nested_config(config, main_algo_path + ['generations'])}\n"
-        f"  [cyan]Training Epochs:[/cyan] {_get_nested_config(config, main_algo_path + ['training_epochs'])}\n"
-        f"  [cyan]Stop Conditions:[/cyan]\n"
-        f"    [cyan]Max Gen:[/cyan] {_get_nested_config(config, stop_cond_path + ['max_generations'])}\n"
-        f"    [cyan]Early Stop Gen:[/cyan] {_get_nested_config(config, stop_cond_path + ['early_stop_generations'])}\n"
-        f"    [cyan]Fitness Goal:[/cyan] {_get_nested_config(config, stop_cond_path + ['fitness_goal'])}\n"
-        f"    [cyan]Time Limit (min):[/cyan] {_get_nested_config(config, stop_cond_path + ['time_limit_minutes'])}"
+        f"[bold cyan]PROJECT[/bold cyan]\n"
+        f"  Name: {project_name}\n"
+        f"  Seed: {seed}\n\n"
+        f"[bold cyan]EXECUTION[/bold cyan]\n"
+        f"  Mode: {exec_cfg.get('evaluation_mode')}\n"
+        f"  CPU Workers: {cpu_workers}\n"
+        f"  GPU Workers: {gpu_workers}\n"
+        f"  Dataloader Workers: per_gpu={per_gpu}, per_cpu={per_cpu}\n"
+        f"  [cyan]-> Total CPUs used: {total_cpus_used}[/cyan]\n"
+        f"  Metrics Enabled: {monitor_cfg.get('enable_metrics')}\n\n"
+        f"[bold cyan]NEURAL NET[/bold cyan]\n"
+        f"  Conv Blocks: {nn_cfg.get('conv_blocks')}\n"
+        f"  Base Filters: {fixed_params.get('base_filters')}\n"
+        f"  Activation: {fixed_params.get('activation_function')}\n\n"
+        f"[bold cyan]HYPERPARAMETERS[/bold cyan]\n{hyper_str}\n\n"
+        f"[bold cyan]GENETIC ALGORITHM[/bold cyan]\n"
+        f"  Operators: {', '.join(ga_ops)}\n"
+        f"  Population: {ga_cfg.get('population_size')}\n"
+        f"  Generations: {ga_cfg.get('generations')}\n"
+        f"  Training Epochs: {ga_cfg.get('training_epochs')}\n"
+        f"  Elitism %: {elitism}\n\n"
+        f"[bold cyan]STOP CONDITIONS[/bold cyan]\n"
+        f"  Max Gen: {stop_cfg.get('max_generations')}\n"
+        f"  Early Stop Gen: {stop_cfg.get('early_stop_generations')}\n"
+        f"  Fitness Goal: {stop_cfg.get('fitness_goal')}\n"
     )
 
     panel = Panel(
-        config_details,
-        title="[bold cyan]Final Configuration[/bold cyan]",
+        config_details.strip(),
+        title="[bold cyan]Configuration summary[/bold cyan]",
         border_style="cyan",
         expand=False,
     )
     console.print(panel)
 
     logger.info(
-        f"Configuration\n: {json.dumps(config, indent=4)}",
+        f"Configuration summary:\n{json.dumps(config, indent=4)}",
         file_only=True,
     )

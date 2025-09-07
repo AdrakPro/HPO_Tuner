@@ -4,7 +4,7 @@ from datetime import datetime
 import torch
 from torch.nn import Module
 
-from src.utils.ensure_dir import ensure_dir_exists
+from src.utils.file_helper import ensure_dir_exists
 
 
 class ModelSaver:

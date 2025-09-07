@@ -1,6 +1,8 @@
-import sys
 import signal
+import sys
 from typing import Dict, List, Tuple
+
+from src.utils.file_helper import clear_base_log_file, rename_base_log_file
 
 # Pre-import heavy modules to avoid issues in worker processes
 try:
@@ -67,17 +69,20 @@ def run_ga_phase(
     )
     try:
         training_epochs = initial_epochs
-        logger.warning("Progressive epochs are disabled!")
+
+        enable_progressive_epochs = initial_epochs >= minimum_viable_epochs
+
+        if not enable_progressive_epochs:
+            logger.warning(
+                f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({minimum_viable_epochs})."
+            )
 
         for gen in range(1, stop_conditions.max_generations + 1):
             logger.info(
                 f"{phase_name.upper()} - Generation {gen}/{stop_conditions.max_generations}"
             )
 
-            if (
-                ENABLE_PROGRESSIVE_EPOCHS
-                and initial_epochs >= minimum_viable_epochs
-            ):
+            if enable_progressive_epochs:
                 progress = gen / max_generations
                 if progress <= 0.3:
                     epoch_multiplier = 0.2
@@ -85,6 +90,7 @@ def run_ga_phase(
                     epoch_multiplier = 0.6
                 else:
                     epoch_multiplier = 1.0
+
                 training_epochs = int(round(initial_epochs * epoch_multiplier))
 
             evaluator.set_training_epochs(training_epochs)
@@ -141,7 +147,6 @@ def run_ga_phase(
         sorted_population = [population[i] for i in sorted_indices]
         best_fitness = final_fitness[sorted_indices[0]]
         best_loss = final_loss[sorted_indices[0]]
-        # logger.warning(f"{best_fitness}, {best_loss}")
 
     except KeyboardInterrupt:
         logger.warning(f"User interrupted during {phase_name}. Cleaning up...")
@@ -235,8 +240,10 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     try:
+        clear_base_log_file()
         config = run_tui_configurator()
         run_optimization(config)
+        rename_base_log_file()
     except KeyboardInterrupt:
         logger.info("User terminated the program.")
         sys.exit(0)

@@ -15,6 +15,7 @@ from src.logger.logger import logger
 from src.model.evaluator_interface import Evaluator
 from src.model.parallel import Result
 
+
 # TODO: Enhance DDP Pytorch
 class ParallelEvaluator(Evaluator):
     """

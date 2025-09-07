@@ -1,13 +1,14 @@
-import random
-from copy import deepcopy
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
+from copy import deepcopy
+import random
+import math
 
 from src.logger.logger import logger
 
 
+# TODO: add chromosome typing for Any
 class GeneticAlgorithm:
     def __init__(
         self,
@@ -53,12 +54,15 @@ class GeneticAlgorithm:
         self, population: List[Any], fitness: List[float]
     ) -> Any:
         tournament_size: int = self.config["selection"]["tournament_size"]
-        selected_indices = np.random.choice(
-            len(population), tournament_size, replace=False
+
+        if tournament_size > len(population):
+            tournament_size = len(population)
+
+        selected_indices = random.sample(
+            range(len(population)), tournament_size
         )
-        best_idx = selected_indices[
-            np.argmax([fitness[i] for i in selected_indices])
-        ]
+        best_idx = max(selected_indices, key=lambda i: fitness[i])
+
         return deepcopy(population[best_idx])
 
     def uniform_crossover(self, parent1: Dict, parent2: Dict) -> Dict:
@@ -66,31 +70,31 @@ class GeneticAlgorithm:
         crossover_prob: int = self.config["crossover"]["crossover_prob"]
         for k in parent1:
             child[k] = (
-                parent1[k] if np.random.rand() < crossover_prob else parent2[k]
+                parent1[k] if random.random() < crossover_prob else parent2[k]
             )
         return child
 
     def mutate(self, chromosome: Dict) -> Dict:
         for gene, info in self.chromosome_space.items():
             if info["type"] == DataType.CONTINUOUS:
-                if np.random.rand() < self.mutation_prob_continuous:
+                if random.random() < self.mutation_prob_continuous:
                     sigma = self.mutation_sigma_continuous
 
                     if info.get("scale") == "log":
-                        log_val = np.log10(chromosome[gene])
-                        mutated_log = log_val + np.random.normal(0, sigma)
+                        log_val = math.log10(chromosome[gene])
+                        mutated_log = log_val + random.gauss(0, sigma)
                         mutated = 10**mutated_log
                     else:
-                        mutated = chromosome[gene] + np.random.normal(0, sigma)
+                        mutated = chromosome[gene] + random.gauss(0, sigma)
                     chromosome[gene] = float(
-                        np.clip(mutated, info["min"], info["max"])
+                        max(min(mutated, info["max"]), info["min"])
                     )
             else:
                 prob = self.mutation_prob_discrete
                 if info["type"] == DataType.CATEGORICAL:
                     prob = self.mutation_prob_categorical
 
-                if np.random.rand() < prob:
+                if random.random() < prob:
                     possible = [
                         v for v in info["values"] if v != chromosome[gene]
                     ]
@@ -101,7 +105,10 @@ class GeneticAlgorithm:
     def elitism(self, population: List[Any], fitness: List[float]) -> List[Any]:
         percent = self.config["elitism_percent"]
         elite_num = max(1, int(len(population) * percent))
-        elite_indices = np.argsort(fitness)[-elite_num:]
+        elite_indices = sorted(range(len(fitness)), key=lambda i: fitness[i])[
+            -elite_num:
+        ]
+
         return [deepcopy(population[i]) for i in elite_indices]
 
     def set_adaptive_mutation(
@@ -121,7 +128,7 @@ class GeneticAlgorithm:
         new_pop = []
 
         if self._is_random_mode:
-            numer_of_ga_operators = 2
+            numer_of_ga_operators = min(2, len(self.available_operators))
             active_ops = set(
                 random.sample(
                     list(self.available_operators), numer_of_ga_operators
@@ -132,15 +139,15 @@ class GeneticAlgorithm:
             active_ops = self.active_operators
 
         # Always preserve the single best individual to avoid losing progress
-        best_overall_idx = np.argmax(fitness)
+        best_overall_idx = max(range(len(fitness)), key=lambda i: fitness[i])
         new_pop.append(deepcopy(population[best_overall_idx]))
 
         if "elitism" in active_ops:
             # Avoid adding the best individual twice
             elite = self.elitism(population, fitness)
             for ind in elite:
-                if len(new_pop) < pop_size and ind not in new_pop:
-                    new_pop.append(ind)
+                if len(new_pop) < pop_size:
+                    new_pop.append(deepcopy(ind))
 
         # Main loop
         while len(new_pop) < pop_size:
@@ -152,9 +159,16 @@ class GeneticAlgorithm:
                     parent2 = self.tournament_selection(population, fitness)
                 else:
                     # If crossover is active without selection, pick parents randomly
-                    parents = random.sample(population, 2)
-                    parent1 = deepcopy(parents[0])
-                    parent2 = deepcopy(parents[1])
+                    if pop_size >= 2:
+                        parents = random.sample(population, 2)
+                    else:
+                        parents = [
+                            deepcopy(population[0]),
+                            deepcopy(population[0]),
+                        ]
+                    parent1, parent2 = deepcopy(parents[0]), deepcopy(
+                        parents[1]
+                    )
 
                 child = self.uniform_crossover(parent1, parent2)
 
@@ -196,11 +210,11 @@ class GeneticAlgorithm:
                     guaranteed_individuals.append(individual)
 
         # Diversity implies a minimal pop_size
-        min_required: int = len(guaranteed_individuals)
+        min_required = len(guaranteed_individuals)
 
         if print_warning and pop_size < min_required:
             logger.warning(
-                f"Requested pop_size ({pop_size}) is smaller than the minimum required to guarantee diversity ({min_required})."
+                f"Requested population size ({pop_size}) is smaller than the minimum required to guarantee diversity ({min_required})."
                 " Some values may not be represented."
             )
 
@@ -211,13 +225,18 @@ class GeneticAlgorithm:
         for gene, info in self.chromosome_space.items():
             if info["type"] == DataType.CONTINUOUS:
                 if info.get("scale") == "log":
-                    log_min = np.log10(info["min"])
-                    log_max = np.log10(info["max"])
-                    bin_edges = np.linspace(log_min, log_max, strat_bins + 1)
+                    log_min = math.log10(info["min"])
+                    log_max = math.log10(info["max"])
+                    bin_edges = [
+                        log_min + i * (log_max - log_min) / strat_bins
+                        for i in range(strat_bins + 1)
+                    ]
                 else:
-                    bin_edges = np.linspace(
-                        info["min"], info["max"], strat_bins + 1
-                    )
+                    bin_edges = [
+                        info["min"]
+                        + i * (info["max"] - info["min"]) / strat_bins
+                        for i in range(strat_bins + 1)
+                    ]
 
                 for i in range(strat_bins):
                     bin_range = (float(bin_edges[i]), float(bin_edges[i + 1]))
@@ -289,20 +308,20 @@ class GeneticAlgorithm:
             return random.choice(info["values"])
         elif info["type"] == DataType.CONTINUOUS:
             if info.get("scale") == "log":
-                log_min = np.log10(info["min"])
-                log_max = np.log10(info["max"])
+                log_min = math.log10(info["min"])
+                log_max = math.log10(info["max"])
 
                 if bin_range is not None:
                     return float(
-                        10 ** np.random.uniform(bin_range[0], bin_range[1])
+                        10 ** random.uniform(bin_range[0], bin_range[1])
                     )
                 else:
-                    return float(10 ** np.random.uniform(log_min, log_max))
+                    return float(10 ** random.uniform(log_min, log_max))
             else:
                 if bin_range is not None:
-                    return float(np.random.uniform(bin_range[0], bin_range[1]))
+                    return float(random.uniform(bin_range[0], bin_range[1]))
                 else:
-                    return float(np.random.uniform(info["min"], info["max"]))
+                    return float(random.uniform(info["min"], info["max"]))
         raise ValueError(f"Unknown gene type: {info['type']}")
 
 

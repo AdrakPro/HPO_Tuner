@@ -7,8 +7,8 @@ import multiprocessing as mp
 import os
 import signal
 import sys
+import random
 
-import numpy.random as random
 import torch.cuda
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
@@ -104,7 +104,7 @@ def get_dataset_loaders(
 
     if subset_percentage < 1.0:
         subset_size = int(len(train_set) * subset_percentage)
-        indices = random.choice(len(train_set), subset_size, replace=False)
+        indices = random.sample(range(len(train_set)), subset_size)
         train_set = Subset(train_set, indices)
 
     # Use dynamic worker count based on process type

@@ -1,17 +1,15 @@
 import random
 
-import numpy as np
 import torch
 
 
 def seed_everything(seed: int) -> None:
-    """Set SEED for Python, NumPy, and PyTorch (CPU & GPU)."""
+    """Set SEED for Python and PyTorch."""
 
     if seed is None:
         return
 
     random.seed(seed)
-    np.random.default_rng(seed)
     torch.manual_seed(seed)
 
     if torch.cuda.is_available():

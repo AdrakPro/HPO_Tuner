@@ -23,9 +23,9 @@ def get_default_config():
             "enable_parallel": True,
             "gpu_workers": 1,
             "cpu_workers": 12,
-            # TODO: Dynamic allocation
+            # TODO: Dynamic allocation, cpu oversubscription, set_threads
             "dataloader_workers": {
-                "per_gpu": 6,
+                "per_gpu": 4,
                 "per_cpu": 2,
             },
         },

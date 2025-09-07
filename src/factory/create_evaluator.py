@@ -1,31 +1,60 @@
+"""
+Factory function for creating the appropriate population evaluator.
+"""
+
+from typing import Any, Dict
+
 from src.genetic.individual_evaluator import IndividualEvaluator
+from src.genetic.scheduling_strategy import (
+    CPUOnlyStrategy,
+    GPUOnlyStrategy,
+    HybridStrategy,
+    SchedulingStrategy,
+)
 from src.logger.logger import logger
+from src.model.evaluator_interface import Evaluator
 from src.parallel.parallel_evaluator import ParallelEvaluator
 
 
 def create_evaluator(
-    config: dict,
+    config: Dict,
     training_epochs: int,
     early_stop_epochs: int,
     subset_percentage: float,
-):
+) -> Evaluator:
     """
-    Factory function to create the appropriate evaluator based on config.
+    Selects and creates the appropriate evaluator (sequential or parallel)
+    based on the application configuration.
     """
-    enable_parallel: bool = config["parallel_config"]["execution"][
-        "enable_parallel"
-    ]
-
-    if enable_parallel:
-        logger.info("Using parallel evaluator.")
-        return ParallelEvaluator(
-            config,
-            training_epochs,
-            early_stop_epochs,
-            subset_percentage,
-        )
-    else:
+    parallel_enabled = config["parallel_config"]["execution"]["enable_parallel"]
+    if not parallel_enabled:
         logger.info("Using sequential evaluator.")
         return IndividualEvaluator(
             config, training_epochs, early_stop_epochs, subset_percentage
         )
+
+    eval_mode = config["parallel_config"]["execution"]["evaluation_mode"]
+    strategy: SchedulingStrategy
+
+    if eval_mode == "CPU":
+        strategy = CPUOnlyStrategy()
+    elif eval_mode == "GPU":
+        strategy = GPUOnlyStrategy()
+    elif eval_mode == "HYBRID":
+        strategy = HybridStrategy()
+    else:
+        logger.error(
+            f"Unknown evaluation mode: {eval_mode}. Defaulting to sequential."
+        )
+        return IndividualEvaluator(
+            config, training_epochs, early_stop_epochs, subset_percentage
+        )
+
+    logger.info(f"Using parallel evaluator with {eval_mode} strategy.")
+    return ParallelEvaluator(
+        config=config,
+        training_epochs=training_epochs,
+        early_stop_epochs=early_stop_epochs,
+        subset_percentage=subset_percentage,
+        strategy=strategy,
+    )

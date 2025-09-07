@@ -60,7 +60,7 @@ class IndividualEvaluator(Evaluator):
     def evaluate_population(
         self,
         population: List[Dict],
-        stop_conditions: StopConditions,
+        stop_conditions: StopConditions | None,
         is_final: bool = False,
     ) -> Tuple[List[float], List[float]]:
         """
@@ -98,20 +98,18 @@ class IndividualEvaluator(Evaluator):
                     f"Individual {i + 1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"
                 )
 
-                should_stop, reason = stop_conditions.should_stop_evaluation(
-                    accuracy
-                )
+                if stop_conditions:
+                    should_stop, reason = (
+                        stop_conditions.should_stop_evaluation(accuracy)
+                    )
 
-                if should_stop:
-                    logger.info(reason)
-                    remaining_count = len(population) - (i + 1)
-                    if remaining_count > 0:
-                        logger.warning(
-                            f"Assigning fitness of 0.0 to the {remaining_count} unevaluated individuals."
-                        )
-                        fitness_scores.extend([0.0] * remaining_count)
-                        loss_scores.extend([float("inf")] * remaining_count)
-                    return fitness_scores, loss_scores
+                    if should_stop:
+                        logger.warning(reason)
+                        remaining_count = len(population) - (i + 1)
+                        if remaining_count > 0:
+                            fitness_scores.extend([0.0] * remaining_count)
+                            loss_scores.extend([float("inf")] * remaining_count)
+                        return fitness_scores, loss_scores
 
             except Exception as e:
                 logger.error(f"Error evaluating individual {i + 1}: {e}")

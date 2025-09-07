@@ -4,6 +4,7 @@ Provides synchronized file and console logging suitable for multiprocessing.
 """
 
 import sys
+import warnings
 
 from loguru import logger as loguru_logger
 
@@ -48,6 +49,17 @@ class Logger:
                 ),
                 colorize=True,
             )
+
+        def _loguru_warning_handler(
+            message, category, filename, lineno, file=None, line=None
+        ):
+            if category is not [DeprecationWarning, UserWarning]:
+                self.logger.warning(
+                    f"{category.__name__}: {message} (file: {filename}, line: {lineno})"
+                )
+
+        warnings.showwarning = _loguru_warning_handler
+        warnings.simplefilter("default")
 
     def info(self, msg: str, file_only: bool = False):
         """Logs an info message."""

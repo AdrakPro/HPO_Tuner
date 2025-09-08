@@ -10,6 +10,7 @@ warnings.filterwarnings("ignore")
 from src.tui.tui_screen import TUI
 from src.utils.file_helper import clear_base_log_file, rename_base_log_file
 
+# Pre-import heavy modules to avoid issues in worker processes
 try:
     import torch
     import torchvision

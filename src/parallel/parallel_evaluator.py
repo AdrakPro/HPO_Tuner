@@ -1,25 +1,26 @@
 """
-Handles the parallel evaluation of a population of individuals.
+Handles the parallel evaluation of a population of individuals using a persistent worker pool.
 """
 
 import queue
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import torch
 import torch.multiprocessing as mp
+from rich.progress import TaskID, Progress
 
 from src.genetic.scheduling_strategy import SchedulingStrategy
 from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
 from src.model.evaluator_interface import Evaluator
-from src.model.parallel import Result
+from src.model.parallel import Result, Task
 
 
-# TODO: Enhance DDP Pytorch
 class ParallelEvaluator(Evaluator):
     """
-    Orchestrates the evaluation of a population across multiple processes.
+    Orchestrates evaluation across multiple processes using a persistent pool of workers.
+    This class is a context manager to ensure proper startup and cleanup.
     """
 
     def __init__(
@@ -29,6 +30,8 @@ class ParallelEvaluator(Evaluator):
         early_stop_epochs: int,
         subset_percentage: float,
         strategy: SchedulingStrategy,
+        progress: Progress,
+        task_id: TaskID,
     ):
         self.training_epochs = training_epochs
         self.early_stop_epochs = early_stop_epochs
@@ -37,92 +40,143 @@ class ParallelEvaluator(Evaluator):
         self.neural_network_config = config["neural_network_config"]
         self.strategy = strategy
 
-        self._workers: List[mp.Process] = []
-        self._task_queue: mp.Queue | None = None
-        self._result_queue: mp.Queue | None = None
         self._shutting_down = False
         self._cleaned_up = False
+
+        self.progress = progress
+        self.task_id = task_id
+
+        ctx = mp.get_context("spawn")
+        self.task_queue: mp.Queue = ctx.Queue()
+        self.result_queue: mp.Queue = ctx.Queue()
+
+        logger.info("Initializing worker pool...")
+        self._workers: List[mp.Process] = self.strategy.launch_workers(
+            ctx=ctx,
+            task_queue=self.task_queue,
+            result_queue=self.result_queue,
+            execution_config=self.execution_config,
+        )
+
+        if not self._workers:
+            raise RuntimeError(
+                "The selected scheduling strategy failed to launch any workers."
+            )
+        logger.info(
+            f"Worker pool initialized with {len(self._workers)} workers."
+        )
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup_workers()
 
     def evaluate_population(
         self,
         population: List[Dict],
         stop_conditions: StopConditions | None,
         is_final: bool = False,
-    ) -> Tuple[List[float], List[float]]:
+    ) -> List[Result]:
         if self._shutting_down:
             logger.warning("Evaluator is shutting down, skipping evaluation")
-            return [0.0] * len(population), [float("inf")] * len(population)
+            return self._generate_placeholder_results(
+                len(population), "Shutdown in progress."
+            )
 
         pop_size = len(population)
-
-        ctx = mp.get_context("spawn")
-        self._result_queue = ctx.Queue()
-        self._task_queue = ctx.Queue()
-
-        # Delegate all task distribution and worker launching to the strategy object.
-        self._workers = self.strategy.distribute_and_run(
-            population=population,
-            task_queue=self._task_queue,
-            result_queue=self._result_queue,
-            neural_network_config=self.neural_network_config,
-            execution_config=self.execution_config,
-            training_epochs=self.training_epochs,
-            early_stop_epochs=self.early_stop_epochs,
-            subset_percentage=self.subset_percentage,
-            is_final=is_final,
-        )
-
-        if not self._workers:
-            logger.error(
-                "The selected scheduling strategy failed to launch any workers. Aborting evaluation."
+        for i, ind in enumerate(population):
+            self.task_queue.put(
+                Task(
+                    index=i,
+                    neural_network_config=self.neural_network_config,
+                    individual_hyperparams=ind,
+                    training_epochs=self.training_epochs,
+                    early_stop_epochs=self.early_stop_epochs,
+                    subset_percentage=self.subset_percentage,
+                    pop_size=pop_size,
+                    is_final=is_final,
+                )
             )
-            return [0.0] * len(population), [float("inf")] * len(population)
 
-        # Collect results
         results_list: List[Result] = [None] * pop_size
         finished = 0
 
         try:
             while finished < pop_size and not self._shutting_down:
                 try:
-                    result: Result = self._result_queue.get(timeout=3.0)
+                    result: Result = self.result_queue.get(timeout=1.0)
+                    results_list[result.index] = result
+                    finished += 1
+
+                    self.progress.update(self.task_id, advance=1)
+
+                    for line in result.log_lines:
+                        logger.info(line)
+
+                    if stop_conditions:
+                        should_stop, reason = (
+                            stop_conditions.should_stop_evaluation(
+                                result.fitness
+                            )
+                        )
+
+                        if should_stop:
+                            self._clear_pending_tasks()
+                            logger.warning(reason)
+                            break
                 except queue.Empty:
                     continue
-
-                results_list[result.index] = result
-                finished += 1
-
-                # Flush logs sequentially per individual
-                for line in result.log_lines:
-                    logger.info(line)
-
-                if stop_conditions:
-                    should_stop, reason = (
-                        stop_conditions.should_stop_evaluation(result.fitness)
-                    )
-
-                    if should_stop:
-                        logger.warning(reason)
-                        break
-        except RuntimeError as e:
+        except (RuntimeError, KeyboardInterrupt) as e:
             logger.error(
-                f"A critical error occurred in the parallel evaluator: {e}"
+                f"A critical error occurred: {e}. Shutting down worker pool."
             )
             self._shutting_down = True
-        except KeyboardInterrupt:
-            logger.info("KeyboardInterrupt detected. Cleaning up workers...")
-            self._shutting_down = True
+            raise
 
-        # If we're shutting down, don't return invalid results
-        if self._shutting_down:
-            self.cleanup_workers()
-            return [0.0] * len(population), [float("inf")] * len(population)
+        if finished < pop_size:
+            for i in range(pop_size):
+                if results_list[i] is None:
+                    results_list[i] = Result(
+                        index=i,
+                        fitness=0.0,
+                        loss=float("inf"),
+                        status="CANCELLED",
+                        log_lines=[],
+                        duration_seconds=0,
+                        error_message="Evaluation stopped early.",
+                    )
+        return results_list
 
-        fitness_scores = [r.fitness if r else 0.0 for r in results_list]
-        loss_scores = [r.loss if r else float("inf") for r in results_list]
-        return fitness_scores, loss_scores
+    @staticmethod
+    def _generate_placeholder_results(
+        num_results: int, reason: str
+    ) -> List[Result]:
+        return [
+            Result(
+                index=i,
+                fitness=0.0,
+                loss=float("inf"),
+                status="FAILURE",
+                log_lines=[],
+                duration_seconds=0,
+                error_message=reason,
+            )
+            for i in range(num_results)
+        ]
+
+    def _clear_pending_tasks(self):
+        logger.info(
+            "Early stop triggered. Draining task queue to unblock workers."
+        )
+        try:
+            while not self.task_queue.empty():
+                self.task_queue.get_nowait()
+        except queue.Empty:
+            pass
 
     def set_training_epochs(self, epochs: int) -> None:
+        """Updates the training epochs."""
         self.training_epochs = epochs
 
     def set_subset_percentage(self, subset_percentage: float) -> None:
@@ -133,81 +187,56 @@ class ParallelEvaluator(Evaluator):
         if self._cleaned_up:
             return
 
-        logger.info("Cleaning up ParallelEvaluator workers...")
+        logger.info("Cleaning up worker pool...")
         self._shutting_down = True
         self._cleaned_up = True
 
-        # Clear any remaining tasks
-        if self._task_queue:
+        # Drain queues first
+        for q in [self.task_queue, self.result_queue]:
             try:
-                while not self._task_queue.empty():
-                    self._task_queue.get_nowait()
-            except (queue.Empty, FileNotFoundError):
-                pass
-
-        # Drain the results queue
-        if self._result_queue:
-            try:
-                while not self._result_queue.empty():
-                    self._result_queue.get_nowait()
-            except (queue.Empty, FileNotFoundError):
+                while not q.empty():
+                    q.get_nowait()
+            except (queue.Empty, OSError, ValueError):
                 pass
 
         # Send sentinel values to workers
-        if self._task_queue:
-            for _ in range(len(self._workers)):
-                try:
-                    self._task_queue.put(None, timeout=1)
-                except queue.Full:
-                    pass
+        for _ in range(len(self._workers)):
+            try:
+                self.task_queue.put(None, timeout=1.0)
+            except (queue.Full, OSError, ValueError):
+                break
 
-        # Wait for workers to finish
-        if self._workers:
-            for p in self._workers:
+        timeout = 5.0
+        start_time = time.time()
+
+        for p in self._workers:
+            if p.is_alive():
+                p.join(
+                    timeout=max(0, int(timeout - (time.time() - start_time)))
+                )
+
                 if p.is_alive():
-                    p.join(timeout=10)
+                    try:
+                        p.terminate()
+                        p.join(timeout=1.0)
+                        if p.is_alive():
+                            p.kill()
+                    except Exception as e:
+                        logger.debug(f"Error terminating worker {p.pid}: {e}")
 
-                    if p.is_alive():
-                        logger.warning(
-                            f"Worker {p.pid} did not terminate gracefully, terminating..."
-                        )
-                        try:
-                            p.terminate()
-                            # Poll up to 2 seconds total with short sleeps
-                            max_wait = 2.0
-                            interval = 0.1
-                            waited = 0.0
+        self._workers = []
 
-                            while p.is_alive() and waited < max_wait:
-                                time.sleep(interval)
-                                waited += interval
-
-                            if p.is_alive():
-                                logger.error(
-                                    f"Worker {p.pid} still alive after terminate(), killing..."
-                                )
-                                p.kill()
-                        except Exception as e:
-                            logger.eroror(
-                                f"Exception during worker termination: {e}"
-                            )
-            self._workers = []
-
-        # Clean up queues
-        if self._task_queue:
+        # Close queues
+        for q in [self.task_queue, self.result_queue]:
             try:
-                self._task_queue.close()
-                self._task_queue.join_thread()
-            except:
+                q.close()
+                q.join_thread()
+            except (OSError, ValueError):
                 pass
 
-        if self._result_queue:
-            try:
-                self._result_queue.close()
-                self._result_queue.join_thread()
-            except:
-                pass
-
-        # Clean up GPU memory
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+    @property
+    def num_workers(self) -> int:
+        return len(self._workers)

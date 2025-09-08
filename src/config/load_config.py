@@ -84,27 +84,11 @@ def _validate_parallel_config(config: Dict):
             "'scheduling.min_job_duration_seconds' must be a non-negative integer."
         )
 
-    metrics_interval = scheduling["metrics_interval_seconds"]
-    if not isinstance(metrics_interval, int) or metrics_interval <= 0:
-        raise ValueError(
-            "'scheduling.metrics_interval_seconds' must be a positive integer."
-        )
-
     checkpoint_interval = scheduling["checkpoint_interval"]
     if not isinstance(checkpoint_interval, int) or checkpoint_interval <= 0:
         raise ValueError(
             "'scheduling.checkpoint_interval' must be a positive integer."
         )
-
-    # --- Monitoring ---
-    monitoring = config["monitoring"]
-    enable_metrics = monitoring["enable_metrics"]
-    if not isinstance(enable_metrics, bool):
-        raise ValueError("'monitoring.enable_metrics' must be a boolean.")
-
-    track_resources = monitoring["track_resources"]
-    if not isinstance(track_resources, bool):
-        raise ValueError("'monitoring.track_resources' must be a boolean.")
 
 
 def _validate_neural_network_config(config: Dict):
@@ -302,7 +286,6 @@ def sanitize_config(config: Dict) -> Dict:
         logger.error(f"Configuration validation error: {e}")
         sys.exit(1)
 
-    logger.info("Configuration has been successfully checked.")
     return config
 
 
@@ -319,13 +302,12 @@ def prompt_and_load_json_config(
             logger.error("Filename cannot be empty. Please try again.")
             continue
 
-        # Temporary for testing purposes (filename)
+        # TODO: Temporary for testing purposes (filename)
         path = os.path.join(config_dir, "config_2025-08-28_20-12-33.json")
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:
                     loaded_config = json.load(f)
-                    logger.info(f"Loaded configuration from {path}")
                     return sanitize_config(loaded_config)
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error while loading the file: {e}")

@@ -31,7 +31,6 @@ def get_default_config():
         },
         "scheduling": {
             "min_job_duration_seconds": 300,
-            "metrics_interval_seconds": 5,
             "checkpoint_interval": 2,
         },
         "monitoring": {

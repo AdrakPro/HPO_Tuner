@@ -29,8 +29,9 @@ class Result:
     index: int
     fitness: float
     loss: float
-    status: str  # 'SUCCESS', 'FAILURE'
+    status: str  # 'SUCCESS', 'FAILURE', 'CANCELLED'
     log_lines: [str]
+    duration_seconds: float
     error_message: Optional[str] = None
 
 

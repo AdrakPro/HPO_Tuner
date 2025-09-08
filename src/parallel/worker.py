@@ -37,7 +37,7 @@ def init_device(device_id: Union[str, int]) -> torch.device:
 
 def worker_main(worker_config: WorkerConfig) -> None:
     """
-    Top-level worker function so it can be pickled by multiprocessing.
+    Top-level worker function, so it can be pickled by multiprocessing.
     """
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -54,7 +54,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Restore signal handler after imports are complete
     signal.signal(signal.SIGINT, original_sigint_handler)
 
-    # Set up our own signal handler
+    # Set up signal handler
     def sigint_handler(signum, frame):
         logger.info(
             f"Worker {worker_config.worker_id} received SIGINT, shutting down..."
@@ -75,7 +75,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
             ]
 
             try:
-                start_time = time.time()
+                start_time = time.perf_counter()
                 chromosome = Chromosome.from_dict(task.individual_hyperparams)
 
                 def epoch_logger(
@@ -110,8 +110,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     epoch_callback=epoch_logger,
                 )
 
-                finish_time = time.time()
-                duration = finish_time - start_time
+                duration = time.perf_counter() - start_time
 
                 log_buffer.append(
                     f"[Worker-{worker_config.worker_id} / {device_name}] Individual {task.index} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f} | Duration: {duration:.2f}s"
@@ -121,6 +120,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     index=task.index,
                     fitness=accuracy,
                     loss=loss,
+                    duration_seconds=duration,
                     status="SUCCESS",
                     log_lines=log_buffer,
                 )
@@ -133,6 +133,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     index=task.index,
                     fitness=0.0,
                     loss=float("inf"),
+                    duration_seconds=0.0,
                     status="FAILURE",
                     error_message=str(e),
                     log_lines=log_buffer,
@@ -145,6 +146,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     index=task.index,
                     fitness=0.0,
                     loss=float("inf"),
+                    duration_seconds=0.0,
                     status="FAILURE",
                     error_message=str(e),
                     log_lines=log_buffer,

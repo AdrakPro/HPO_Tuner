@@ -2,13 +2,14 @@
 Data loader module for CIFAR-10 using PyTorch.
 Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 """
+
 import os
+import random
 import signal
 import sys
-import random
 
-import torch.multiprocessing as mp
 import torch.cuda
+import torch.multiprocessing as mp
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 

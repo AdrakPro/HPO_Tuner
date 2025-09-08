@@ -7,13 +7,11 @@ Text-based User Interface (TUI) for configuring the experiment.
 This module collects user input and returns a dictionary of configuration overrides.
 """
 import collections
-import json
 import os
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 from rich.console import Console
-from rich.panel import Panel
 
 from src.config.default_config import get_default_config
 from src.config.load_config import (
@@ -258,12 +256,7 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         int,
         positive_only=True,
     )
-    metrics_interval = _prompt_for_numeric(
-        "Worker metrics logging interval (seconds)",
-        scheduling_defaults.get("metrics_interval_seconds", 5),
-        int,
-        positive_only=True,
-    )
+
     checkpoint_interval = _prompt_for_numeric(
         "Checkpoint interval (generations)",
         scheduling_defaults.get("checkpoint_interval", 2),
@@ -273,23 +266,8 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     parallel_updates["scheduling"] = {
         "min_job_duration_seconds": min_job
         or scheduling_defaults.get("min_job_duration_seconds", 300),
-        "metrics_interval_seconds": metrics_interval
-        or scheduling_defaults.get("metrics_interval_seconds", 5),
         "checkpoint_interval": checkpoint_interval
         or scheduling_defaults.get("checkpoint_interval", 2),
-    }
-
-    # --- Monitoring ---
-    enable_metrics = console.input(
-        f"Enable metrics tracking? (y/n, Enter={monitoring_defaults.get('enable_metrics', 'y')}): "
-    ).lower()
-    track_resources = console.input(
-        f"Track CPU/GPU resources? (y/n, Enter={monitoring_defaults.get('track_resources', 'y')}): "
-    ).lower()
-
-    parallel_updates["monitoring"] = {
-        "enable_metrics": enable_metrics != "n",
-        "track_resources": track_resources != "n",
     }
 
     return {PARALLEL_CONFIG: parallel_updates}
@@ -751,83 +729,3 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     final_config = _deep_merge_dicts(default_config, config_updates)
     prompt_and_save_json_config(final_config, console, CONFIG_DIR)
     return final_config
-
-
-def print_final_config_panel(config: Dict[str, Any]):
-    """Displays a concise summary of the most important configuration settings."""
-    project_name = _get_nested_config(config, ["project", "name"], "N/A")
-    seed = _get_nested_config(config, ["project", "seed"], "N/A")
-
-    exec_cfg = _get_nested_config(config, [PARALLEL_CONFIG, "execution"], {})
-    monitor_cfg = _get_nested_config(
-        config, [PARALLEL_CONFIG, "monitoring"], {}
-    )
-
-    nn_cfg = _get_nested_config(config, [NN_CONFIG], {})
-    fixed_params = nn_cfg.get("fixed_parameters", {})
-    hyperparams = nn_cfg.get(HYPERPARAM_SPACE, {})
-
-    ga_cfg = _get_nested_config(config, [GA_CONFIG, MAIN_ALGORITHM], {})
-    ga_ops = _get_nested_config(
-        config, [GA_CONFIG, GENETIC_OPERATORS, "active"], []
-    )
-    elitism = _get_nested_config(
-        config, [GA_CONFIG, GENETIC_OPERATORS, "elitism_percent"], "N/A"
-    )
-    stop_cfg = ga_cfg.get(STOP_CONDITIONS, {})
-
-    cpu_workers = exec_cfg.get("cpu_workers", 0) or 0
-    gpu_workers = exec_cfg.get("gpu_workers", 0) or 0
-    dl_workers = exec_cfg.get("dataloader_workers", {})
-
-    per_gpu = dl_workers.get("per_gpu", 0)
-    per_cpu = dl_workers.get("per_cpu", 0)
-
-    total_dataloader_cpus = gpu_workers * per_gpu + cpu_workers * per_cpu
-    total_cpus_used = cpu_workers + total_dataloader_cpus
-
-    hyper_str = "\n".join(
-        f"  • {name}: {details.get('range') or details.get('values')}"
-        for name, details in hyperparams.items()
-    )
-
-    config_details = (
-        f"[bold cyan]PROJECT[/bold cyan]\n"
-        f"  Name: {project_name}\n"
-        f"  Seed: {seed}\n\n"
-        f"[bold cyan]EXECUTION[/bold cyan]\n"
-        f"  Mode: {exec_cfg.get('evaluation_mode')}\n"
-        f"  CPU Workers: {cpu_workers}\n"
-        f"  GPU Workers: {gpu_workers}\n"
-        f"  Dataloader Workers: per_gpu={per_gpu}, per_cpu={per_cpu}\n"
-        f"  [cyan]-> Total CPUs used: {total_cpus_used}[/cyan]\n"
-        f"  Metrics Enabled: {monitor_cfg.get('enable_metrics')}\n\n"
-        f"[bold cyan]NEURAL NET[/bold cyan]\n"
-        f"  Conv Blocks: {nn_cfg.get('conv_blocks')}\n"
-        f"  Base Filters: {fixed_params.get('base_filters')}\n"
-        f"  Activation: {fixed_params.get('activation_function')}\n\n"
-        f"[bold cyan]HYPERPARAMETERS[/bold cyan]\n{hyper_str}\n\n"
-        f"[bold cyan]GENETIC ALGORITHM[/bold cyan]\n"
-        f"  Operators: {', '.join(ga_ops)}\n"
-        f"  Population: {ga_cfg.get('population_size')}\n"
-        f"  Generations: {ga_cfg.get('generations')}\n"
-        f"  Training Epochs: {ga_cfg.get('training_epochs')}\n"
-        f"  Elitism %: {elitism}\n\n"
-        f"[bold cyan]STOP CONDITIONS[/bold cyan]\n"
-        f"  Max Gen: {stop_cfg.get('max_generations')}\n"
-        f"  Early Stop Gen: {stop_cfg.get('early_stop_generations')}\n"
-        f"  Fitness Goal: {stop_cfg.get('fitness_goal')}\n"
-    )
-
-    panel = Panel(
-        config_details.strip(),
-        title="[bold cyan]Configuration summary[/bold cyan]",
-        border_style="cyan",
-        expand=False,
-    )
-    console.print(panel)
-
-    logger.info(
-        f"Configuration summary:\n{json.dumps(config, indent=4)}",
-        file_only=True,
-    )

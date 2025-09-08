@@ -1,1 +1,1 @@
-from .tui import print_final_config_panel, run_tui_configurator
+from .tui_configurator import run_tui_configurator

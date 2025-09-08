@@ -13,32 +13,27 @@ import torch
 import torch.multiprocessing as mp
 
 from src.logger.logger import logger
-from src.model.parallel import Task, WorkerConfig
+from src.model.parallel import WorkerConfig
 from src.parallel.worker import worker_main
 
 
 class SchedulingStrategy(ABC):
     """
     Abstract base class for a scheduling strategy.
-    Defines the interface for distributing tasks and launching workers.
+    Defines the interface for launching a persistent pool of worker processes.
     """
 
     @abstractmethod
-    def distribute_and_run(
+    def launch_workers(
         self,
-        population: List[Dict],
+        ctx,
         task_queue: mp.Queue,
         result_queue: mp.Queue,
-        neural_network_config: Dict,
         execution_config: Dict,
-        training_epochs: int,
-        early_stop_epochs: int,
-        subset_percentage: float,
-        is_final: bool = False,
     ) -> List[mp.Process]:
         """
-        The core method for a strategy. It must populate the task queue
-        and launch the necessary worker processes.
+        The core method for a strategy. It must launch the necessary
+        worker processes based on the execution config.
 
         Returns:
             A list of the started multiprocessing.Process objects.
@@ -46,40 +41,14 @@ class SchedulingStrategy(ABC):
         pass
 
     @staticmethod
-    def _enqueue_tasks(
-        population: List[Dict],
-        task_queue: mp.Queue,
-        neural_network_config: Dict,
-        training_epochs: int,
-        early_stop_epochs: int,
-        subset_percentage: float,
-        is_final: bool,
-    ) -> None:
-        """Helper to populate the task queue."""
-        pop_size = len(population)
-        for i, ind in enumerate(population):
-            task_queue.put(
-                Task(
-                    index=i,
-                    neural_network_config=neural_network_config,
-                    individual_hyperparams=ind,
-                    training_epochs=training_epochs,
-                    early_stop_epochs=early_stop_epochs,
-                    subset_percentage=subset_percentage,
-                    pop_size=pop_size,
-                    is_final=is_final,
-                )
-            )
-
-    @staticmethod
-    def _launch_workers(
+    def _spawn_processes(
         ctx,
         task_queue: mp.Queue,
         result_queue: mp.Queue,
         num_gpu_workers: int = 0,
         num_cpu_workers: int = 0,
     ) -> List[mp.Process]:
-        """Helper to spawn worker processes."""
+        """Helper to spawn and start worker processes."""
         workers = []
         total_workers = num_gpu_workers + num_cpu_workers
         if total_workers == 0:
@@ -119,29 +88,13 @@ class SchedulingStrategy(ABC):
 class CPUOnlyStrategy(SchedulingStrategy):
     """Schedules all tasks to be run on CPU workers."""
 
-    def distribute_and_run(self, **kwargs) -> List[mp.Process]:
-        ctx = mp.get_context("spawn")
-        task_queue = kwargs["task_queue"]
-
-        self._enqueue_tasks(
-            population=kwargs["population"],
-            task_queue=task_queue,
-            neural_network_config=kwargs["neural_network_config"],
-            training_epochs=kwargs["training_epochs"],
-            early_stop_epochs=kwargs["early_stop_epochs"],
-            subset_percentage=kwargs["subset_percentage"],
-            is_final=kwargs["is_final"],
-        )
-
+    def launch_workers(self, **kwargs) -> List[mp.Process]:
+        logger.info("Using CPUOnly scheduling strategy.")
         num_cpu_workers = kwargs["execution_config"].get("cpu_workers", 1)
 
-        # Add sentinel tasks
-        for _ in range(num_cpu_workers):
-            task_queue.put(None)
-
-        return self._launch_workers(
-            ctx=ctx,
-            task_queue=task_queue,
+        return self._spawn_processes(
+            ctx=kwargs["ctx"],
+            task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
             num_cpu_workers=num_cpu_workers,
         )
@@ -150,20 +103,8 @@ class CPUOnlyStrategy(SchedulingStrategy):
 class GPUOnlyStrategy(SchedulingStrategy):
     """Schedules all tasks to be run on GPU workers."""
 
-    def distribute_and_run(self, **kwargs) -> List[mp.Process]:
-        ctx = mp.get_context("spawn")
-        task_queue = kwargs["task_queue"]
-
-        self._enqueue_tasks(
-            population=kwargs["population"],
-            task_queue=task_queue,
-            neural_network_config=kwargs["neural_network_config"],
-            training_epochs=kwargs["training_epochs"],
-            early_stop_epochs=kwargs["early_stop_epochs"],
-            subset_percentage=kwargs["subset_percentage"],
-            is_final=kwargs["is_final"],
-        )
-
+    def launch_workers(self, **kwargs) -> List[mp.Process]:
+        logger.info("Using GPUOnly scheduling strategy.")
         available_gpus = torch.cuda.device_count()
         num_gpu_workers = kwargs["execution_config"].get("gpu_workers", 0)
 
@@ -179,13 +120,9 @@ class GPUOnlyStrategy(SchedulingStrategy):
             )
             return []
 
-        # Add sentinel tasks
-        for _ in range(num_gpu_workers):
-            task_queue.put(None)
-
-        return self._launch_workers(
-            ctx=ctx,
-            task_queue=task_queue,
+        return self._spawn_processes(
+            ctx=kwargs["ctx"],
+            task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
             num_gpu_workers=num_gpu_workers,
         )
@@ -194,20 +131,8 @@ class GPUOnlyStrategy(SchedulingStrategy):
 class HybridStrategy(SchedulingStrategy):
     """Schedules tasks on both GPU and CPU workers."""
 
-    def distribute_and_run(self, **kwargs) -> List[mp.Process]:
-        ctx = mp.get_context("spawn")
-        task_queue = kwargs["task_queue"]
-
-        self._enqueue_tasks(
-            population=kwargs["population"],
-            task_queue=task_queue,
-            neural_network_config=kwargs["neural_network_config"],
-            training_epochs=kwargs["training_epochs"],
-            early_stop_epochs=kwargs["early_stop_epochs"],
-            subset_percentage=kwargs["subset_percentage"],
-            is_final=kwargs["is_final"],
-        )
-
+    def launch_workers(self, **kwargs) -> List[mp.Process]:
+        logger.info("Using Hybrid scheduling strategy.")
         available_gpus = torch.cuda.device_count()
         num_gpu_workers = kwargs["execution_config"].get("gpu_workers", 0)
         num_cpu_workers = kwargs["execution_config"].get("cpu_workers", 0)
@@ -218,21 +143,15 @@ class HybridStrategy(SchedulingStrategy):
             )
             num_gpu_workers = available_gpus
 
-        total_workers = num_gpu_workers + num_cpu_workers
-
-        if total_workers == 0:
+        if num_gpu_workers + num_cpu_workers == 0:
             logger.error(
                 "HybridStrategy selected, but no workers are configured."
             )
             return []
 
-        # Add sentinel tasks
-        for _ in range(total_workers):
-            task_queue.put(None)
-
-        return self._launch_workers(
-            ctx=ctx,
-            task_queue=task_queue,
+        return self._spawn_processes(
+            ctx=kwargs["ctx"],
+            task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
             num_gpu_workers=num_gpu_workers,
             num_cpu_workers=num_cpu_workers,

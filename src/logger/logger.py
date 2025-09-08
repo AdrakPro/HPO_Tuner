@@ -4,7 +4,7 @@ Provides synchronized file and console logging suitable for multiprocessing.
 """
 
 import sys
-import warnings
+from typing import Callable
 
 from loguru import logger as loguru_logger
 
@@ -39,8 +39,10 @@ class Logger:
             format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {message}",
         )
 
+        self._console_sink_id = None
+
         if console and sys.stdout.isatty():
-            self.logger.add(
+            self._console_sink_id = self.logger.add(
                 sys.stderr,
                 level="INFO",
                 format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}",
@@ -50,16 +52,22 @@ class Logger:
                 colorize=True,
             )
 
-        def _loguru_warning_handler(
-            message, category, filename, lineno, file=None, line=None
-        ):
-            if category is not [DeprecationWarning, UserWarning]:
-                self.logger.warning(
-                    f"{category.__name__}: {message} (file: {filename}, line: {lineno})"
-                )
+    def add_tui_sink(self, sink: Callable[[str], None]):
+        """
+        Redirects console output into the TUI logs panel.
+        """
+        if self._console_sink_id is not None:
+            self.logger.remove(self._console_sink_id)
+            self._console_sink_id = None
 
-        warnings.showwarning = _loguru_warning_handler
-        warnings.simplefilter("default")
+        # Add the new sink that writes to the TUI's internal log buffer
+        self._console_sink_id = self.logger.add(
+            sink,
+            level="INFO",
+            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}",
+            colorize=True,
+            filter=lambda record: not record["extra"].get("file_only", False),
+        )
 
     def info(self, msg: str, file_only: bool = False):
         """Logs an info message."""

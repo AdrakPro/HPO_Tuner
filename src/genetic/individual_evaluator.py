@@ -1,15 +1,18 @@
 """
-Handles the sequential evaluation of a population of individuals (chromosomes).
+Handles the sequential evaluation of a population of individuals on a single device.
 """
 
-from typing import Any, Dict, List, Tuple
+import time
+from typing import Any, Dict, List
 
 import torch
+from rich.progress import Progress, TaskID
 
 from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
 from src.model.chromosome import Chromosome
 from src.model.evaluator_interface import Evaluator
+from src.model.parallel import Result
 from src.nn.train_and_eval import train_and_eval
 
 
@@ -20,49 +23,36 @@ class IndividualEvaluator(Evaluator):
 
     def __init__(
         self,
-        config: Dict[str, Any],
+        neural_config: Dict[str, Any],
         training_epochs: int,
         early_stop_epochs: int,
         subset_percentage: float,
+        progress: Progress,
+        task_id: TaskID,
     ):
-        """
-        Initializes the IndividualEvaluator.
-
-        Args:
-            training_epochs: The number of epochs to train each individual.
-            early_stop_epochs: Number of epochs without improvement for early stop.
-            subset_percentage: Fraction of the dataset to use.
-        """
+        self.neural_config = neural_config
         self.training_epochs = training_epochs
-        self.subset_percentage = subset_percentage
         self.early_stop_epochs = early_stop_epochs
-        self.neural_config = config["neural_network_config"]
+        self.subset_percentage = subset_percentage
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
 
-        eval_mode = config["parallel_config"]["execution"]["evaluation_mode"]
+        self.progress = progress
+        self.task_id = task_id
+        logger.info(f"Evaluator initialized on device: {self.device}")
 
-        if eval_mode == "HYBRID":
-            logger.warning(
-                "Sequential evaluator does not support HYBRID mode. Falling back to CPU."
-            )
-            self.device = torch.device("cpu")
-        elif eval_mode == "GPU" and torch.cuda.is_available():
-            self.device = torch.device("cuda")
-            logger.info("Sequential evaluator initialized on device: CUDA")
-        else:
-            if eval_mode == "GPU" in eval_mode:
-                logger.warning(
-                    "GPU mode requested, but CUDA not available. Falling back to CPU."
-                )
-            self.device = torch.device("cpu")
-            logger.info("Sequential evaluator initialized on device: CPU")
+    @property
+    def num_workers(self) -> int:
+        """The individual evaluator runs on the main thread, so it has 1 worker."""
+        return 1
 
-    # TODO: is_final works correctly? how it saves?
     def evaluate_population(
         self,
         population: List[Dict],
-        stop_conditions: StopConditions | None,
+        stop_conditions: StopConditions | None = None,
         is_final: bool = False,
-    ) -> Tuple[List[float], List[float]]:
+    ) -> List[Result]:
         """
         Fitness function for the GA. Evaluates each individual sequentially.
 
@@ -72,51 +62,100 @@ class IndividualEvaluator(Evaluator):
             is_final: Flag for last evaluation.
 
         Returns:
-            A tuple containing (fitness_scores, loss_scores).
+            A list of Result objects, one per individual in the population.
         """
-        fitness_scores, loss_scores = [], []
-        for i, individual_dict in enumerate(population):
-            logger.info(
-                f"Evaluating Individual {i + 1}/{len(population)} ({self.training_epochs} epochs)"
-            )
-            logger.info(f"Hyperparameters: {individual_dict}")
+
+        results: List[Result] = []
+        pop_size = len(population)
+
+        for i, ind in enumerate(population):
+            start_time = time.perf_counter()
+            logger.info(f"Evaluating Individual {i + 1}/{pop_size}")
+
             try:
-                chromosome = Chromosome.from_dict(individual_dict)
+                chromosome = Chromosome.from_dict(ind)
+
+                def epoch_logger(
+                    epoch,
+                    train_acc,
+                    train_loss,
+                    test_acc,
+                    test_loss,
+                    early_stop=False,
+                    final_msg=None,
+                ):
+                    """Logs epoch progress directly to the main logger."""
+                    if final_msg:
+                        logger.info(f"[Sequential] {final_msg}")
+                        return
+
+                    line = f"Epoch {epoch}/{self.training_epochs} | Train Acc: {train_acc:.4f}, Train Loss: {train_loss:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
+
+                    if early_stop:
+                        line += " / Early stopping triggered"
+                    logger.info(line)
+
                 accuracy, loss = train_and_eval(
-                    chromosome,
-                    self.neural_config,
-                    self.training_epochs,
-                    self.early_stop_epochs,
-                    self.device,
-                    self.subset_percentage,
-                    is_final,
+                    chromosome=chromosome,
+                    neural_config=self.neural_config,
+                    epochs=self.training_epochs,
+                    early_stop_epochs=self.early_stop_epochs,
+                    device=self.device,
+                    subset_percentage=self.subset_percentage,
+                    is_final=is_final,
+                    epoch_callback=epoch_logger,
                 )
-                fitness_scores.append(accuracy)
-                loss_scores.append(loss)
-
-                logger.info(
-                    f"Individual {i + 1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f}"
-                )
-
-                if stop_conditions:
-                    should_stop, reason = (
-                        stop_conditions.should_stop_evaluation(accuracy)
-                    )
-
-                    if should_stop:
-                        logger.warning(reason)
-                        remaining_count = len(population) - (i + 1)
-                        if remaining_count > 0:
-                            fitness_scores.extend([0.0] * remaining_count)
-                            loss_scores.extend([float("inf")] * remaining_count)
-                        return fitness_scores, loss_scores
+                status = "SUCCESS"
+                error_msg = None
 
             except Exception as e:
-                logger.error(f"Error evaluating individual {i + 1}: {e}")
-                fitness_scores.append(0.0)
-                loss_scores.append(float("inf"))
+                logger.error(f"Error evaluating individual {i}: {e}")
+                accuracy = 0.0
+                loss = float("inf")
+                status = "FAILURE"
+                error_msg = str(e)
 
-        return fitness_scores, loss_scores
+            duration = time.perf_counter() - start_time
+            self.progress.update(self.task_id, advance=1)
+
+            logger.info(
+                f"Individual {i + 1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f} | Duration: {duration:.2f}s"
+            )
+
+            current_result = Result(
+                index=i,
+                fitness=accuracy,
+                loss=loss,
+                status=status,
+                log_lines=[],
+                duration_seconds=duration,
+                error_message=error_msg,
+            )
+            results.append(current_result)
+
+            if stop_conditions:
+                should_stop, reason = stop_conditions.should_stop_evaluation(
+                    accuracy
+                )
+                if should_stop:
+                    logger.warning(reason)
+                    break
+
+        if len(results) < pop_size:
+            for i in range(len(results), pop_size):
+                results.append(
+                    Result(
+                        index=i,
+                        fitness=0.0,
+                        loss=float("inf"),
+                        status="CANCELLED",
+                        log_lines=[],
+                        duration_seconds=0,
+                        error_message="Evaluation stopped early.",
+                    )
+                )
+
+        return results
 
     def set_training_epochs(self, epochs: int) -> None:
         """Updates the number of training epochs."""
@@ -125,3 +164,7 @@ class IndividualEvaluator(Evaluator):
     def set_subset_percentage(self, subset_percentage: float) -> None:
         """Updates the subset percentage."""
         self.subset_percentage = subset_percentage
+
+    def cleanup_workers(self):
+        """No-op for the individual evaluator."""
+        pass

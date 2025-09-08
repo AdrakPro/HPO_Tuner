@@ -1,9 +1,9 @@
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
-from copy import deepcopy
-import random
 import math
+import random
+from copy import deepcopy
 
 from src.logger.logger import logger
 
@@ -154,7 +154,7 @@ class GeneticAlgorithm:
             if "crossover" in active_ops:
                 # If crossover is active, we need two parents
                 if "selection" in active_ops:
-                    # If selection is also active, use tournament selection.
+                    # If selection is also active, use tournament selection
                     parent1 = self.tournament_selection(population, fitness)
                     parent2 = self.tournament_selection(population, fitness)
                 else:
@@ -198,7 +198,7 @@ class GeneticAlgorithm:
         """
         population: List[Dict[str, Any]] = []
 
-        # Step 1: Guarantee categorical/discrete coverage
+        # Guarantee categorical/discrete coverage
         guaranteed_individuals: List[Dict[str, Any]] = []
 
         for gene, info in self.chromosome_space.items():
@@ -220,7 +220,7 @@ class GeneticAlgorithm:
 
         population.extend(guaranteed_individuals)
 
-        # Step 2: Stratification for continuous genes
+        # Stratification for continuous genes
         stratified_individuals: List[Dict[str, Any]] = []
         for gene, info in self.chromosome_space.items():
             if info["type"] == DataType.CONTINUOUS:
@@ -252,7 +252,7 @@ class GeneticAlgorithm:
                 population.append(ind)
                 existing_population[str(ind)] = ind
 
-        # Step 3: Fill up to pop_size with random individuals, avoiding duplicates
+        # Fill up to pop_size with random individuals, avoiding duplicates
         while len(population) < pop_size:
             individual = self._generate_individual()
             if str(individual) not in existing_population:

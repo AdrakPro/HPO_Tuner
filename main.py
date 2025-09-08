@@ -46,9 +46,9 @@ def run_ga_phase(
     phase_config = config["genetic_algorithm_config"][phase_name]
     stop_conditions = StopConditions(phase_config["stop_conditions"])
     early_stop_epochs = phase_config["stop_conditions"]["early_stop_epochs"]
+    generations = phase_config["generations"]
 
     population = starting_population
-    max_generations = stop_conditions.max_generations
 
     initial_epochs = phase_config["training_epochs"]
     minimum_viable_epochs = 20
@@ -61,7 +61,7 @@ def run_ga_phase(
 
     logger.info(f"--- Starting {phase_name.upper()} Phase ---")
     logger.info(
-        f"Generations: up to {stop_conditions.max_generations}, Population: {len(starting_population)}"
+        f"Generations: {generations}, Population: {len(starting_population)}"
     )
 
     evaluator = create_evaluator(
@@ -77,13 +77,13 @@ def run_ga_phase(
                 f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({minimum_viable_epochs})."
             )
 
-        for gen in range(1, stop_conditions.max_generations + 1):
+        for gen in range(1, generations + 1):
             logger.info(
-                f"{phase_name.upper()} - Generation {gen}/{stop_conditions.max_generations}"
+                f"{phase_name.upper()} - Generation {gen}/{generations}"
             )
 
             if enable_progressive_epochs:
-                progress = gen / max_generations
+                progress = gen / generations
                 if progress <= 0.3:
                     epoch_multiplier = 0.2
                 elif progress <= 0.7:

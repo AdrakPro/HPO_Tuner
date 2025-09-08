@@ -6,6 +6,7 @@ import time
 from typing import List
 
 
+# TODO: clean max_generations
 class StopConditions:
     """
     Encapsulates the logic for stopping the genetic algorithm based on configured criteria.
@@ -19,7 +20,7 @@ class StopConditions:
             config: A dictionary containing stop condition parameters, e.g.,
                     'max_generations', 'early_stop_generations', 'fitness_goal', 'time_limit_minutes'.
         """
-        self.max_generations: int = config["max_generations"]
+        # self.max_generations: int = config["max_generations"]
         self.early_stop_generations: int = config["early_stop_generations"]
         self.fitness_goal: float = config["fitness_goal"]
         self.time_limit_minutes: float | None = config["time_limit_minutes"]
@@ -63,8 +64,8 @@ class StopConditions:
         self.best_fitness_history.append(best_fitness)
 
         # 1. Max generations
-        if current_generation >= self.max_generations:
-            return True, f"Reached max generations ({self.max_generations})."
+        # if current_generation >= self.max_generations:
+        #     return True, f"Reached max generations ({self.max_generations})."
 
         # 2. Time limit
         if self.time_limit_minutes != 0:

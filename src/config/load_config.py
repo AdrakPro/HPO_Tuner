@@ -64,8 +64,8 @@ def _validate_parallel_config(config: Dict):
     # Check worker counts
     for key in ["gpu_workers", "cpu_workers"]:
         value = execution[key]
-        if not ((isinstance(value, int) and value >= 0) or value == "-"):
-            raise ValueError(f"'{key}' must be a non-negative integer or '-'.")
+        if not isinstance(value, int) and value >= 0:
+            raise ValueError(f"'{key}' must be a non-negative integer.")
 
     # Check dataloader workers
     dataloader_workers = execution["dataloader_workers"]

@@ -269,6 +269,13 @@ def run_optimization(config: Dict, tui: TUI) -> None:
 
 
 def main():
+    try:
+        # Ensure spawn, fork isn't supported for CUDA
+        if sys.platform != "win32":
+            torch.multiprocessing.set_start_method("spawn", force=True)
+    except RuntimeError:
+        pass
+
     def sigint_handler(signum, frame):
         logger.info("Main received SIGINT, shutting down gracefully...")
         sys.exit(0)
@@ -294,18 +301,13 @@ def main():
         logger.info("User terminated the program.")
         sys.exit(0)
     except SystemExit:
+        # TODO: Check all situations, when program can unexpectedly exit and when to save log
         logger.info("Program terminated gracefully.")
+        rename_base_log_file()
     except Exception as e:
         logger.exception(f"Unexpected error occurred {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    try:
-        # Ensure spawn, fork doesn't work well with CUDA
-        if sys.platform != "win32":
-            torch.multiprocessing.set_start_method("spawn", force=True)
-    except RuntimeError:
-        pass
-
     main()

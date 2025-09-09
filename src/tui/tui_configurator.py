@@ -150,7 +150,7 @@ def _prompt_for_gpu_settings(
     gpu_updates: Dict[str, Any] = {}
     if max_devices == 0:
         console.print("[yellow]No available CUDA devices detected.[/yellow]")
-        return {"gpu_workers": "-"}
+        return {"gpu_workers": 0}
 
     # Prompt for GPU devices
     gpu_prompt = f"Enter the number of CUDA devices (Available: {max_devices}, Enter = 1): "
@@ -189,14 +189,11 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     scheduling_defaults = _get_nested_config(
         defaults, [PARALLEL_CONFIG, "scheduling"], {}
     )
-    monitoring_defaults = _get_nested_config(
-        defaults, [PARALLEL_CONFIG, "monitoring"], {}
-    )
 
     # --- Execution ---
     eval_mode = _prompt_for_evaluation_mode()
-    cpu_workers = "-"
-    gpu_workers = "-"
+    cpu_workers = 0
+    gpu_workers = 0
 
     if eval_mode in ["CPU", "HYBRID"]:
         cpu_workers_input = _prompt_for_cpu_workers(max_cpu)

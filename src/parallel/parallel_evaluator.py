@@ -183,7 +183,7 @@ class ParallelEvaluator(Evaluator):
         """Updates the subset percentage."""
         self.subset_percentage = subset_percentage
 
-    def cleanup_workers(self):
+    def cleanup_workers(self, timeout_per_worker: float = 60.0) -> None:
         if self._cleaned_up:
             return
 
@@ -191,42 +191,57 @@ class ParallelEvaluator(Evaluator):
         self._shutting_down = True
         self._cleaned_up = True
 
-        # Drain queues first
-        for q in [self.task_queue, self.result_queue]:
-            try:
-                while not q.empty():
-                    q.get_nowait()
-            except (queue.Empty, OSError, ValueError):
-                pass
-
-        # Send sentinel values to workers
-        for _ in range(len(self._workers)):
+        # 1. Send sentinel values to workers to signal shutdown
+        for _ in self._workers:
             try:
                 self.task_queue.put(None, timeout=1.0)
             except (queue.Full, OSError, ValueError):
+                logger.warning(
+                    "Could not send sentinel to worker queue, skipping."
+                )
                 break
 
-        timeout = 5.0
-        start_time = time.time()
-
+        # 2. Wait for workers to finish gracefully
         for p in self._workers:
+            if not p.is_alive():
+                continue
+
+            p.join(timeout=timeout_per_worker)
             if p.is_alive():
-                p.join(
-                    timeout=max(0, int(timeout - (time.time() - start_time)))
-                )
+                try:
+                    logger.warning(
+                        f"Worker {p.pid} did not exit, terminating..."
+                    )
+                    p.terminate()
+                    p.join(timeout=2.0)
+                    if p.is_alive():
+                        logger.error(
+                            f"Worker {p.pid} still alive after terminate(), killing..."
+                        )
+                        p.kill()
+                except Exception as e:
+                    logger.error(f"Error terminating worker {p.pid}: {e}")
 
-                if p.is_alive():
-                    try:
-                        p.terminate()
-                        p.join(timeout=1.0)
-                        if p.is_alive():
-                            p.kill()
-                    except Exception as e:
-                        logger.debug(f"Error terminating worker {p.pid}: {e}")
+        # 3. Drain remaining results safely
+        for q in [self.result_queue, self.task_queue]:
+            try:
+                while not q.empty():
+                    item = q.get_nowait()
+                    if item is None:
+                        fake_result = Result(
+                            index=-1,
+                            fitness=0.0,
+                            loss=float("inf"),
+                            status="FAILURE",
+                            log_lines=[],
+                            duration_seconds=0,
+                            error_message="Worker returned None",
+                        )
+                        q.put(fake_result)
+            except (queue.Empty, OSError, ValueError):
+                pass
 
-        self._workers = []
-
-        # Close queues
+        # 4. Close queues
         for q in [self.task_queue, self.result_queue]:
             try:
                 q.close()
@@ -234,8 +249,12 @@ class ParallelEvaluator(Evaluator):
             except (OSError, ValueError):
                 pass
 
+        # 5. Free GPU memory if applicable
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+        self._workers = []
+        logger.info("Worker pool cleanup complete.")
 
     @property
     def num_workers(self) -> int:

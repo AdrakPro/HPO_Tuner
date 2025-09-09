@@ -1,3 +1,4 @@
+import os
 from collections import deque
 from typing import Any, Callable, Dict
 
@@ -19,7 +20,6 @@ from rich.text import Text
 from src.logger.logger import logger
 from src.utils.get_nested_config import get_nested_config
 
-# TODO: If hyperparameter gets bigger (more options chosen) might not show all panel
 # --- Constants ---
 PARALLEL_CONFIG = "parallel_config"
 NN_CONFIG = "neural_network_config"
@@ -53,35 +53,17 @@ class TUI:
             self.layout, screen=True, transient=False, refresh_per_second=10
         )
 
-    def _create_layout(self) -> Layout:
-        layout = Layout(name="root")
+    def __enter__(self):
+        self.live.start()
+        return self
 
-        layout.split(
-            Layout(name="header", size=3),
-            Layout(name="config_row", size=0, visible=False),
-            Layout(name="progress", size=3),
-            Layout(name="logs", ratio=1),
-        )
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Handles graceful shutdown of the TUI."""
+        self.live.stop()
+        if exc_type is KeyboardInterrupt:
+            return True
 
-        layout["progress"].update(
-            Panel(
-                self.progress,
-                title="[bold magenta]Phase Progress[/]",
-                border_style="magenta",
-            )
-        )
-        layout["logs"].update(
-            Panel(
-                Text(""),
-                title="[bold green]Logs[/]",
-                border_style="green",
-                box=box.MINIMAL,
-                expand=True,
-            )
-        )
-        return layout
-
-    def build_config_panel(self, config: Dict[str, Any]):
+    def build_config_panel(self, config: Dict[str, Any]) -> None:
         """
         Builds and displays a two-panel summary of the configuration.
         """
@@ -97,14 +79,18 @@ class TUI:
         dl_workers = exec_cfg.get("dataloader_workers", {})
         per_gpu = dl_workers.get("per_gpu", 0)
         per_cpu = dl_workers.get("per_cpu", 0)
-        total_dl_cpus = (gpu_workers * per_gpu) + (cpu_workers * per_cpu)
+
+        total_cpu_workers = (gpu_workers * per_gpu) + (cpu_workers * per_cpu)
+        max_cpu_workers = os.cpu_count()
+
+        self._is_cpu_oversubscription(total_cpu_workers, max_cpu_workers)
 
         # --- Left Panel Content ---
         config_left_details = (
             f"[bold]Execution Mode[/]: {exec_cfg.get('evaluation_mode')}\n"
             f"[bold]CPU Processes[/]: {cpu_workers}\n"
             f"[bold]GPU Processes[/]: {gpu_workers}\n"
-            f"[bold]Dataloader CPUs[/]: {total_dl_cpus} (per_gpu={per_gpu}, per_cpu={per_cpu})\n\n"
+            f"[bold]Total CPUs with DataLoader[/]: {total_cpu_workers} (per gpu={per_gpu}, per cpu={per_cpu})\n\n"
             f"[bold cyan]-- Calibration Phase --[/]\n"
             f"  [bold]Enabled[/]: {cal_cfg.get('enabled', False)}\n"
             f"  [bold]Population[/]: {cal_cfg.get('population_size')}\n"
@@ -144,10 +130,11 @@ class TUI:
         self.layout["config_left"].update(panel_left)
         self.layout["config_right"].update(panel_right)
 
+        # TODO: Responsive height based on height of text (overflow issue)
         # Adjust size dynamically
-        vertical_padding = 1
-        left_height = len(config_left_details.split("\n")) + 2
-        right_height = len(config_right_details.split("\n")) + 2
+        vertical_padding = 5
+        left_height = len(config_left_details.split("\n"))
+        right_height = len(config_right_details.split("\n"))
         self.layout["config_row"].size = (
             max(left_height, right_height) + vertical_padding
         )
@@ -171,31 +158,35 @@ class TUI:
             Panel(title_text, style="bold blue", border_style="blue")
         )
 
-    def _update_log_panel(self):
-        """Updates the log panel with the latest logs."""
-        height = self.layout["logs"].size
+    def _update_log_panel(self) -> None:
+        """Updates the log panel with the latest logs, stretching to bottom and scrolling if needed."""
 
-        if height is None:
-            height = 20
+        term_height = self.console.size.height
 
-        max_visible = max(1, height - 2)
+        header_height = self.layout["header"].size or 3
+        config_height = self.layout["config_row"].size or 0
+        progress_height = self.layout["progress"].size or 3
+        reserved_height = header_height + config_height + progress_height
 
-        visible_logs = list(self._log_deque)[-max_visible:]
+        max_logs_height = max(1, term_height - reserved_height)
+
+        visible_logs = list(self._log_deque)[-max_logs_height:]
+
         log_text = Text("\n").join(visible_logs)
-
         content = Align.left(log_text, vertical="top")
 
-        self.layout["logs"].update(
-            Panel(
-                content,
-                title="[bold green]Logs[/]",
-                border_style="green",
-                box=box.MINIMAL,
-                expand=True,
-            )
+        panel = Panel(
+            content,
+            title="[bold green]Logs[/]",
+            border_style="green",
+            box=box.MINIMAL,
+            expand=True,
         )
 
-    def update(self):
+        self.layout["logs"].size = max_logs_height
+        self.layout["logs"].update(panel)
+
+    def update(self) -> None:
         """Updates all components of the TUI."""
         if not self.live.is_started:
             return
@@ -206,12 +197,37 @@ class TUI:
         except Exception as e:
             logger.error(f"TUI Error during update: {e}")
 
-    def __enter__(self):
-        self.live.start()
-        return self
+    @staticmethod
+    def _is_cpu_oversubscription(total_cpu_workers: int, max_cpu_workers: int) -> None:
+        if total_cpu_workers > max_cpu_workers:
+            logger.warning(
+                f"Total number of CPU workers ({total_cpu_workers}) exceeded available CPU resources ({max_cpu_workers}). Program may work slower due to CPU oversubscription."
+            )
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Handles graceful shutdown of the TUI."""
-        self.live.stop()
-        if exc_type is KeyboardInterrupt:
-            return True
+    def _create_layout(self) -> Layout:
+        layout = Layout(name="root")
+
+        layout.split(
+            Layout(name="header", size=3),
+            Layout(name="config_row", size=0, visible=False),
+            Layout(name="progress", size=3),
+            Layout(name="logs", ratio=1),
+        )
+
+        layout["progress"].update(
+            Panel(
+                self.progress,
+                title="[bold magenta]Phase Progress[/]",
+                border_style="magenta",
+            )
+        )
+        layout["logs"].update(
+            Panel(
+                Text(""),
+                title="[bold green]Logs[/]",
+                border_style="green",
+                box=box.MINIMAL,
+                expand=True,
+            )
+        )
+        return layout

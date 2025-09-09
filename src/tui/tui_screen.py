@@ -1,3 +1,4 @@
+import json
 import os
 from collections import deque
 from typing import Any, Callable, Dict
@@ -140,6 +141,11 @@ class TUI:
         )
         self.layout["config_row"].visible = True
 
+        logger.info(
+            f"Configuration:\n{json.dumps(config, indent=4)}",
+            file_only=True,
+        )
+
     def get_loguru_sink(self) -> Callable[[str], None]:
         """Returns a sink function that pipes loguru records to the TUI's log panel."""
 
@@ -198,7 +204,9 @@ class TUI:
             logger.error(f"TUI Error during update: {e}")
 
     @staticmethod
-    def _is_cpu_oversubscription(total_cpu_workers: int, max_cpu_workers: int) -> None:
+    def _is_cpu_oversubscription(
+        total_cpu_workers: int, max_cpu_workers: int
+    ) -> None:
         if total_cpu_workers > max_cpu_workers:
             logger.warning(
                 f"Total number of CPU workers ({total_cpu_workers}) exceeded available CPU resources ({max_cpu_workers}). Program may work slower due to CPU oversubscription."

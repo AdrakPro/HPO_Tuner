@@ -35,7 +35,7 @@ def _check_float_in_range(value: Any, name: str):
         raise ValueError(f"'{name}' must be a float in the range (0.0, 1.0>.")
 
 
-def _validate_project_config(config: Dict):
+def _validate_project_config(config: Dict[str, Any]):
     """Validates the 'project' section."""
     if not isinstance(config["name"], str):
         raise ValueError("'project.name' must be a string.")
@@ -43,9 +43,13 @@ def _validate_project_config(config: Dict):
         raise ValueError("'project.seed' must be an integer or null.")
 
 
-def _validate_parallel_config(config: Dict):
+def _validate_checkpoint_config(config: Dict[str, Any]):
+    """Validates the 'checkpoint' section."""
+    _check_non_negative_int(config["interval_per_gen"], "interval_per_gen")
+
+
+def _validate_parallel_config(config: Dict[str, Any]):
     """Validates the 'parallel' section."""
-    """Validates the 'parallel' section of the configuration."""
 
     # --- Execution ---
     execution = config["execution"]
@@ -76,22 +80,8 @@ def _validate_parallel_config(config: Dict):
                 f"'dataloader_workers.{key}' must be a non-negative integer."
             )
 
-    # --- Scheduling ---
-    scheduling = config["scheduling"]
-    min_job_duration = scheduling["min_job_duration_seconds"]
-    if not isinstance(min_job_duration, int) or min_job_duration < 0:
-        raise ValueError(
-            "'scheduling.min_job_duration_seconds' must be a non-negative integer."
-        )
 
-    checkpoint_interval = scheduling["checkpoint_interval"]
-    if not isinstance(checkpoint_interval, int) or checkpoint_interval <= 0:
-        raise ValueError(
-            "'scheduling.checkpoint_interval' must be a positive integer."
-        )
-
-
-def _validate_neural_network_config(config: Dict):
+def _validate_neural_network_config(config: Dict[str, Any]):
     """Validates the 'neural_network_config' section."""
     # --- Base parameter validation ---
     if len(config["input_shape"]) != 3:
@@ -194,13 +184,13 @@ def _validate_neural_network_config(config: Dict):
                 )
 
 
-def _validate_nested_validation_config(config: Dict):
+def _validate_nested_validation_config(config: Dict[str, Any]):
     """Validates the 'nested_validation_config' section."""
     _check_bool(config["enabled"], "nested_validation_config.enabled")
     _check_non_negative_int(config["outer_k_folds"], "outer_k_folds")
 
 
-def _validate_stop_conditions(config: Dict, prefix: str):
+def _validate_stop_conditions(config: Dict[str, Any], prefix: str):
     """Validates a 'stop_conditions' block."""
     for key in [
         "max_generations",
@@ -215,7 +205,7 @@ def _validate_stop_conditions(config: Dict, prefix: str):
 
 
 def _validate_algorithm_run_config(
-    config: Dict, prefix: str, is_calibration: bool
+    config: Dict[str, Any], prefix: str, is_calibration: bool
 ):
     """Validates 'calibration' or 'main_algorithm' sections."""
     if is_calibration:
@@ -240,7 +230,7 @@ def _validate_algorithm_run_config(
     _validate_stop_conditions(config["stop_conditions"], prefix)
 
 
-def _validate_genetic_algorithm_config(config: Dict):
+def _validate_genetic_algorithm_config(config: Dict[str, Any]):
     """Validates the 'genetic_algorithm_config' section."""
     operators = config["genetic_operators"]
     allowed_ops = ["selection", "mutation", "crossover", "elitism"]
@@ -276,7 +266,7 @@ def _validate_genetic_algorithm_config(config: Dict):
     )
 
 
-def sanitize_config(config: Dict) -> Dict:
+def sanitize_config(config: Dict[str, Any]) -> Dict:
     """
     Validates and sanitizes the entire configuration dictionary.
     Exits the program if any validation fails.
@@ -284,6 +274,7 @@ def sanitize_config(config: Dict) -> Dict:
     try:
         _validate_project_config(config["project"])
         _validate_parallel_config(config["parallel_config"])
+        _validate_checkpoint_config(config["checkpoint_config"])
         _validate_neural_network_config(config["neural_network_config"])
         _validate_nested_validation_config(config["nested_validation_config"])
         _validate_genetic_algorithm_config(config["genetic_algorithm_config"])
@@ -296,7 +287,7 @@ def sanitize_config(config: Dict) -> Dict:
 
 
 def prompt_and_load_json_config(
-    default_config: Dict, console, config_dir: str
+    default_config: Dict[str, Any], console, config_dir: str
 ) -> Dict:
     """Asks user to load a config from JSON, looking inside CONFIG_DIR."""
     while True:
@@ -309,7 +300,7 @@ def prompt_and_load_json_config(
             continue
 
         # TODO: Temporary for testing purposes (filename)
-        path = os.path.join(config_dir, "config_2025-08-28_20-12-33.json")
+        path = os.path.join(config_dir, "config_2025-09-09_13-18-44.json")
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:

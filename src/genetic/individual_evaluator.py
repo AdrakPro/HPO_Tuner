@@ -40,7 +40,9 @@ class IndividualEvaluator(Evaluator):
 
         self.progress = progress
         self.task_id = task_id
-        logger.info(f"Evaluator initialized on device: {self.device}")
+        logger.info(
+            f"Using sequential evaluator initialized on {self.device.type.upper()}"
+        )
 
     @property
     def num_workers(self) -> int:
@@ -71,6 +73,7 @@ class IndividualEvaluator(Evaluator):
         for i, ind in enumerate(population):
             start_time = time.perf_counter()
             logger.info(f"Evaluating Individual {i + 1}/{pop_size}")
+            logger.info(f"Hyperparameters: {ind}", file_only=True)
 
             try:
                 chromosome = Chromosome.from_dict(ind)
@@ -86,7 +89,7 @@ class IndividualEvaluator(Evaluator):
                 ):
                     """Logs epoch progress directly to the main logger."""
                     if final_msg:
-                        logger.info(f"[Sequential] {final_msg}")
+                        logger.info(final_msg)
                         return
 
                     line = f"Epoch {epoch}/{self.training_epochs} | Train Acc: {train_acc:.4f}, Train Loss: {train_loss:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"

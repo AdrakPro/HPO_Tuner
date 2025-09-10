@@ -16,6 +16,7 @@ from rich.progress import (
     TextColumn,
     TimeRemainingColumn,
 )
+from rich.prompt import Confirm
 from rich.text import Text
 
 from src.logger.logger import logger
@@ -86,7 +87,6 @@ class TUI:
 
         self._is_cpu_oversubscription(total_cpu_workers, max_cpu_workers)
 
-        # --- Left Panel Content ---
         config_left_details = (
             f"[bold]Execution Mode[/]: {exec_cfg.get('evaluation_mode')}\n"
             f"[bold]CPU Processes[/]: {cpu_workers}\n"
@@ -101,7 +101,6 @@ class TUI:
             f"  [bold]Generations[/]: {main_cfg.get('generations')}"
         )
 
-        # --- Right Panel Content ---
         hyper_str = "\n".join(
             f"  • {name}: {details.get('range') or details.get('values')}"
             for name, details in hyperparams.items()
@@ -113,7 +112,6 @@ class TUI:
             f"[bold]Hyperparameters to Tune:[/]\n{hyper_str}"
         )
 
-        # --- Panel Creation and Layout Update ---
         panel_left = Panel(
             config_left_details,
             title="[cyan]GA & Execution[/]",
@@ -163,6 +161,18 @@ class TUI:
         self.layout["header"].update(
             Panel(title_text, style="bold blue", border_style="blue")
         )
+
+    def ask_resume(self) -> bool:
+        """Asks the user if they want to resume from a checkpoint."""
+        self.console.clear()
+        self.console.print(
+            Panel(
+                "[bold yellow]Previous session checkpoint found.[/bold yellow]\n\nDo you want to resume?",
+                title="[cyan]Resume Session[/]",
+                border_style="cyan",
+            )
+        )
+        return Confirm.ask("Resume", default=True)
 
     def _update_log_panel(self) -> None:
         """Updates the log panel with the latest logs, stretching to bottom and scrolling if needed."""

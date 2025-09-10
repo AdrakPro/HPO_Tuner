@@ -18,6 +18,8 @@ def get_default_config() -> Dict[str, Any]:
                 "report_directory": "reports",
             },
         },
+        # Checkpoints
+        "checkpoint_config": {"interval_per_gen": 1},
         # Parallel execution and scheduling
         "parallel_config": {
             "execution": {
@@ -30,14 +32,6 @@ def get_default_config() -> Dict[str, Any]:
                     "per_gpu": 4,
                     "per_cpu": 2,
                 },
-            },
-            "scheduling": {
-                "min_job_duration_seconds": 300,
-                "checkpoint_interval": 2,
-            },
-            "monitoring": {
-                "enable_metrics": True,
-                "track_resources": True,
             },
         },
         # Neural network configuration

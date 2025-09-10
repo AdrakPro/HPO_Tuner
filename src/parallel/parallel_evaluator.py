@@ -3,7 +3,6 @@ Handles the parallel evaluation of a population of individuals using a persisten
 """
 
 import queue
-import time
 from typing import Any, Dict, List
 
 import torch
@@ -32,6 +31,7 @@ class ParallelEvaluator(Evaluator):
         strategy: SchedulingStrategy,
         progress: Progress,
         task_id: TaskID,
+        session_log_filename: str,
     ):
         self.training_epochs = training_epochs
         self.early_stop_epochs = early_stop_epochs
@@ -56,6 +56,7 @@ class ParallelEvaluator(Evaluator):
             task_queue=self.task_queue,
             result_queue=self.result_queue,
             execution_config=self.execution_config,
+            session_log_filename=session_log_filename,
         )
 
         if not self._workers:

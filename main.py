@@ -1,14 +1,11 @@
+import os
 import warnings
 
 import signal
 import sys
 import time
+from datetime import datetime
 from typing import Dict, List, Tuple
-
-warnings.filterwarnings("ignore")
-
-from src.tui.tui_screen import TUI
-from src.utils.file_helper import clear_base_log_file, rename_base_log_file
 
 # Pre-import heavy modules to avoid issues in worker processes
 try:
@@ -17,6 +14,9 @@ try:
 except ImportError:
     pass
 
+from src.utils.checkpoint_manager import checkpoint_manager, GaState
+from src.tui.tui_screen import TUI
+from src.utils.file_helper import ensure_dir_exists
 from src.factory.create_evaluator import create_evaluator
 from src.genetic.genetic_algorithm import (
     GeneticAlgorithm,
@@ -26,6 +26,8 @@ from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
 from src.tui.tui_configurator import run_tui_configurator
 from src.utils.seed import seed_everything
+
+warnings.filterwarnings("ignore")
 
 CAL_PHASE = "calibration"
 MAIN_PHASE = "main_algorithm"
@@ -37,6 +39,9 @@ def run_ga_phase(
     ga: GeneticAlgorithm,
     starting_population: List[Dict],
     tui: TUI,
+    session_log_filename: str,
+    start_gen: int,
+    fitness_scores: List[float] = None,
 ) -> Tuple[List[Dict], float, float]:
     """
     Runs a complete phase (calibration or main) of the genetic algorithm,
@@ -49,11 +54,10 @@ def run_ga_phase(
     initial_epochs = phase_config["training_epochs"]
     mutation_decay_rate = phase_config["mutation_decay_rate"]
     minimum_viable_epochs = 20
-    subset_percentage = (
-        phase_config["data_subset_percentage"]
-        if phase_name == CAL_PHASE
-        else 1.0
-    )
+    subset_percentage = phase_config.get("data_subset_percentage", 1.0)
+    checkpoint_interval_per_generation = config["checkpoint_config"][
+        "interval_per_gen"
+    ]
 
     logger.info(f"--- Starting {phase_name.upper()} Phase ---")
     logger.info(
@@ -61,9 +65,15 @@ def run_ga_phase(
     )
 
     population = starting_population
-    total_evaluations = generations * len(population)
+    starting_pop_size = len(population)
+    # Keep the final evaluation in evaluation track
+    total_evaluations = (generations + 1) * starting_pop_size
+    completed_evaluations = starting_pop_size * start_gen
+
     phase_task_id = tui.progress.add_task(
-        f"{phase_name.capitalize()} Phase", total=total_evaluations
+        f"{phase_name.capitalize()} Phase",
+        total=total_evaluations,
+        completed=completed_evaluations,
     )
 
     with create_evaluator(
@@ -73,6 +83,7 @@ def run_ga_phase(
         subset_percentage,
         tui,
         phase_task_id,
+        session_log_filename,
     ) as evaluator:
         try:
             training_epochs = initial_epochs
@@ -83,52 +94,71 @@ def run_ga_phase(
                     f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({minimum_viable_epochs})."
                 )
 
-            for gen in range(1, generations + 1):
+            for gen in range(start_gen, generations + 1):
                 tui.update()
-
                 logger.info(
                     f"--- {phase_name.upper()} - Generation {gen}/{generations} ---"
                 )
 
-                if enable_progressive_epochs:
-                    progress = gen / generations
-                    if progress <= 0.3:
-                        epoch_multiplier = 0.2
-                    elif progress <= 0.7:
-                        epoch_multiplier = 0.6
-                    else:
-                        epoch_multiplier = 1.0
+                if gen == start_gen and fitness_scores:
+                    logger.info(
+                        f"Using fitness scores from loaded checkpoint for this generation."
+                    )
+                    loss_scores = [0.0] * len(fitness_scores)
+                else:
+                    if enable_progressive_epochs:
+                        progress = gen / generations
+                        if progress <= 0.3:
+                            epoch_multiplier = 0.2
+                        elif progress <= 0.7:
+                            epoch_multiplier = 0.6
+                        else:
+                            epoch_multiplier = 1.0
 
-                    training_epochs = int(
-                        round(initial_epochs * epoch_multiplier)
+                        training_epochs = int(
+                            round(initial_epochs * epoch_multiplier)
+                        )
+
+                    evaluator.set_training_epochs(training_epochs)
+
+                    evaluation_start_time = time.perf_counter()
+
+                    results = evaluator.evaluate_population(
+                        population, stop_conditions
                     )
 
-                evaluator.set_training_epochs(training_epochs)
+                    evaluation_time = (
+                        time.perf_counter() - evaluation_start_time
+                    )
 
-                evaluation_start_time = time.perf_counter()
+                    fitness_scores = [r.fitness for r in results]
+                    loss_scores = [r.loss for r in results]
+                    durations = [r.duration_seconds for r in results]
 
-                results = evaluator.evaluate_population(
-                    population, stop_conditions
-                )
+                    total_worker_time = sum(durations)
+                    num_workers = evaluator.num_workers
 
-                evaluation_time = time.perf_counter() - evaluation_start_time
+                    total_available_time = evaluation_time * num_workers
+                    worker_utilization = (
+                        (total_worker_time / total_available_time) * 100
+                        if total_available_time > 0.0
+                        else 0.0
+                    )
+                    true_overhead_seconds = max(
+                        0.0, total_available_time - total_worker_time
+                    )
 
-                fitness_scores = [r.fitness for r in results]
-                loss_scores = [r.loss for r in results]
-                durations = [r.duration_seconds for r in results]
-
-                total_worker_time = sum(durations)
-                num_workers = evaluator.num_workers
-
-                total_available_time = evaluation_time * num_workers
-                worker_utilization = (
-                    (total_worker_time / total_available_time) * 100
-                    if total_available_time > 0.0
-                    else 0.0
-                )
-                true_overhead_seconds = max(
-                    0.0, total_available_time - total_worker_time
-                )
+                    logger.info(f" --- Generation ({gen}) report:  ---")
+                    logger.info(f"Wall-Clock Time: {evaluation_time:.2f}s")
+                    logger.info(
+                        f"Worker Utilization: {worker_utilization:.2f}%"
+                    )
+                    logger.info(
+                        f"Total Worker Busy Time: {total_worker_time:.2f}s"
+                    )
+                    logger.info(
+                        f"Total Worker Idle Time (Overhead): {true_overhead_seconds:.2f}s"
+                    )
 
                 best_idx = max(
                     range(len(fitness_scores)), key=fitness_scores.__getitem__
@@ -136,20 +166,30 @@ def run_ga_phase(
                 best_fitness = fitness_scores[best_idx]
                 best_loss = loss_scores[best_idx]
 
-                logger.info(f" --- Generation ({gen}) report:  ---")
                 logger.info(
                     f"Best Fitness: {best_fitness:.4f} | Loss: {best_loss:.4f}"
                 )
-                logger.info(f"Wall-Clock Time: {evaluation_time:.2f}s")
-                logger.info(f"Worker Utilization: {worker_utilization:.2f}%")
-                logger.info(f"Total Worker Busy Time: {total_worker_time:.2f}s")
-                logger.info(
-                    f"Total Worker Idle Time (Overhead): {true_overhead_seconds:.2f}s"
-                )
+
+                # Save state after a generation if fully processed
+                if (
+                    checkpoint_interval_per_generation != 0
+                    and gen % checkpoint_interval_per_generation == 0
+                ):
+                    checkpoint_state = GaState(
+                        gen,
+                        population,
+                        fitness_scores,
+                        phase_name,
+                        config,
+                        session_log_filename,
+                        phase_completed=False,
+                    )
+                    checkpoint_manager.save_checkpoint(checkpoint_state)
 
                 should_stop, reason = stop_conditions.should_stop_algorithm(
                     gen, best_fitness
                 )
+
                 if should_stop:
                     logger.warning(
                         f"Stopping GA for phase '{phase_name}': {reason}"
@@ -160,7 +200,6 @@ def run_ga_phase(
                         reverse=True,
                     )
                     population = [population[i] for i in sorted_indices]
-                    break
 
                 ga.set_adaptive_mutation(mutation_decay_rate, gen)
                 population = ga.run_generation(population, fitness_scores)
@@ -170,20 +209,19 @@ def run_ga_phase(
             is_final = phase_name == MAIN_PHASE
 
             # Re-evaluate the final population with full epochs to get a final, fair ranking
-
             final_results = evaluator.evaluate_population(
                 population, stop_conditions=None, is_final=is_final
             )
-            final_fitness = [r.fitness for r in final_results]
+            final_fitness_scores = [r.fitness for r in final_results]
             final_loss = [r.loss for r in final_results]
 
             sorted_indices = sorted(
-                range(len(final_fitness)),
-                key=final_fitness.__getitem__,
+                range(len(final_fitness_scores)),
+                key=final_fitness_scores.__getitem__,
                 reverse=True,
             )
             sorted_population = [population[i] for i in sorted_indices]
-            best_fitness = final_fitness[sorted_indices[0]]
+            best_fitness = final_fitness_scores[sorted_indices[0]]
             best_loss = final_loss[sorted_indices[0]]
 
         except KeyboardInterrupt:
@@ -198,66 +236,127 @@ def run_ga_phase(
     return sorted_population, best_fitness, best_loss
 
 
-def run_optimization(config: Dict, tui: TUI) -> None:
+def run_optimization(
+    config: Dict,
+    tui: TUI,
+    session_log_filename: str,
+    loaded_state: GaState = None,
+) -> None:
     """
     Main experiment entry point, now with a two-stage (calibration -> main) GA process.
     """
-    seed_everything(config["project"]["seed"])
+    if not loaded_state:
+        seed_everything(config["project"]["seed"])
 
     ga_config = config["genetic_algorithm_config"]
     chromosome_space = get_chromosome_search_space(config)
     ga = GeneticAlgorithm(ga_config["genetic_operators"], chromosome_space)
 
     calibrated_population = []
-    if ga_config[CAL_PHASE]["enabled"]:
-        initial_pop_size = ga_config[CAL_PHASE]["population_size"]
-        cal_strat_bins = ga_config[CAL_PHASE]["stratification_bins"]
-        initial_population = ga.initial_population(
-            initial_pop_size, cal_strat_bins
-        )
-        calibrated_population, best_fitness, best_loss = run_ga_phase(
-            CAL_PHASE, config, ga, initial_population, tui
-        )
-        logger.info(
-            f"The best individual of calibrated individual -> -> Accuracy: {best_fitness:.4f}, Loss: {best_loss:.4f}"
-        )
+
+    # Skip calibration if we are resuming from the main phase
+    is_calibration_complete = False
+
+    if loaded_state:
+        if loaded_state.phase == MAIN_PHASE:
+            is_calibration_complete = True
+            logger.info("Resuming main phase, skipping calibration.")
+        elif loaded_state.phase == CAL_PHASE and loaded_state.phase_completed:
+            is_calibration_complete = True
+            logger.info(
+                "Calibration phase already completed. Skipping to main phase."
+            )
+            calibrated_population = loaded_state.population
+
+    if not is_calibration_complete:
+        if ga_config[CAL_PHASE]["enabled"]:
+            start_gen_cal = 1
+            fitness_scores_cal = None
+
+            if loaded_state and loaded_state.phase == CAL_PHASE:
+                logger.info(
+                    f"Resuming calibration phase from generation {loaded_state.generation}."
+                )
+                initial_population_cal = loaded_state.population
+                start_gen_cal = loaded_state.generation
+                fitness_scores_cal = loaded_state.fitness_scores
+            else:
+                logger.info("Starting new calibration phase.")
+                initial_pop_size = ga_config[CAL_PHASE]["population_size"]
+                cal_strat_bins = ga_config[CAL_PHASE]["stratification_bins"]
+                initial_population_cal = ga.initial_population(
+                    initial_pop_size, cal_strat_bins
+                )
+
+            calibrated_population, best_fitness, best_loss = run_ga_phase(
+                CAL_PHASE,
+                config,
+                ga,
+                initial_population_cal,
+                tui,
+                session_log_filename,
+                start_gen_cal,
+                fitness_scores_cal,
+            )
+            logger.info(
+                f"The best individual of calibrated individual -> -> Accuracy: {best_fitness:.4f}, Loss: {best_loss:.4f}"
+            )
 
     # --- STAGE 2: MAIN ALGORITHM ---
-    main_pop_size = ga_config[MAIN_PHASE]["population_size"]
-    main_strat_bins = ga_config[MAIN_PHASE]["stratification_bins"]
     main_starting_population = []
+    start_gen_main = 1
+    fitness_scores_main = None
 
-    if calibrated_population:
+    if loaded_state and loaded_state.phase == MAIN_PHASE:
         logger.info(
-            "Seeding main algorithm with population from calibration phase."
+            f"Resuming main phase from generation {loaded_state.generation}."
         )
-        num_elites = int(main_pop_size * 0.9)
-        num_random = main_pop_size - num_elites
-        elites = calibrated_population[:num_elites]
-        main_starting_population.extend(elites)
-        logger.info(
-            f"Transferring top {len(elites)} individuals from calibration."
-        )
-
-        if num_random > 0:
-            logger.info(
-                f"Adding {num_random} new random individuals for diversity."
-            )
-            main_starting_population.extend(
-                ga.initial_population(
-                    num_random, main_strat_bins, print_warning=False
-                )
-            )
+        main_starting_population = loaded_state.population
+        start_gen_main = loaded_state.generation
+        fitness_scores_main = loaded_state.fitness_scores
     else:
-        logger.info(
-            "Calibration disabled. Starting main algorithm with random population."
-        )
-        main_starting_population = ga.initial_population(
-            main_pop_size, main_strat_bins
-        )
+        main_pop_size = ga_config[MAIN_PHASE]["population_size"]
+        main_strat_bins = ga_config[MAIN_PHASE]["stratification_bins"]
+
+        if calibrated_population:
+            logger.info(
+                "Seeding main algorithm with population from calibration phase."
+            )
+            num_elites = int(main_pop_size * 0.9)
+            num_random = main_pop_size - num_elites
+            elites = calibrated_population[:num_elites]
+            main_starting_population.extend(elites)
+
+            logger.info(
+                f"Transferring top {len(elites)} individuals from calibration."
+            )
+
+            if num_random > 0:
+                logger.info(
+                    f"Adding {num_random} new random individuals for diversity."
+                )
+                main_starting_population.extend(
+                    ga.initial_population(
+                        num_random, main_strat_bins, print_warning=False
+                    )
+                )
+        else:
+            logger.info(
+                "Calibration disabled. Starting main algorithm with random population."
+            )
+            main_starting_population = ga.initial_population(
+                main_pop_size, main_strat_bins
+            )
 
     final_population, best_fitness, best_loss = run_ga_phase(
-        MAIN_PHASE, config, ga, main_starting_population, tui
+        MAIN_PHASE,
+        config,
+        ga,
+        main_starting_population,
+        tui,
+        session_log_filename,
+        start_gen_main,
+        fitness_scores_main,
     )
 
     logger.info("Full optimization process finished.")
@@ -283,27 +382,48 @@ def main():
     # Set up signal handler
     signal.signal(signal.SIGINT, sigint_handler)
 
+    tui = TUI()
+    loaded_state: GaState | None = None
+
+    if checkpoint_manager.is_checkpoint_exists():
+        if tui.ask_resume():
+            loaded_state = checkpoint_manager.load_checkpoint()
+        else:
+            checkpoint_manager.delete_checkpoint()
+
     try:
-        clear_base_log_file()
-        config = run_tui_configurator()
+        if loaded_state:
+            config = loaded_state.config
+            session_log_filename = loaded_state.session_log_filename
+            logger.add_file_sink(session_log_filename)
+        else:
+            config = run_tui_configurator()
+            if not config:
+                return
 
-        tui = TUI()
-        tui_sink = tui.get_loguru_sink()
-        logger.add_tui_sink(tui_sink)
+            log_dir = "logs"
+            ensure_dir_exists(log_dir)
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
+            session_log_filename = os.path.join(log_dir, f"log_{timestamp}.log")
 
+            logger.add_file_sink(session_log_filename)
+
+        logger.add_tui_sink(tui.get_loguru_sink())
         tui.build_config_panel(config)
 
         with tui:
-            run_optimization(config, tui)
+            logger.info(
+                f"Logger initialized. Log file at {session_log_filename}"
+            )
+            run_optimization(config, tui, session_log_filename, loaded_state)
 
-        rename_base_log_file()
+        logger.info("Optimization complete. Deleting final checkpoint.")
+        checkpoint_manager.delete_checkpoint()
     except KeyboardInterrupt:
         logger.info("User terminated the program.")
         sys.exit(0)
     except SystemExit:
-        # TODO: Check all situations, when program can unexpectedly exit and when to save log
         logger.info("Program terminated gracefully.")
-        rename_base_log_file()
     except Exception as e:
         logger.exception(f"Unexpected error occurred {e}")
         sys.exit(1)

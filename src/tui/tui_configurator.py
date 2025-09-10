@@ -31,6 +31,7 @@ CONFIG_DIR = os.path.abspath("configs")
 PARALLEL_CONFIG = "parallel_config"
 NN_CONFIG = "neural_network_config"
 GA_CONFIG = "genetic_algorithm_config"
+CHECKPOINT_CONFIG = "checkpoint_config"
 HYPERPARAM_SPACE = "hyperparameter_space"
 GENETIC_OPERATORS = "genetic_operators"
 CALIBRATION = "calibration"
@@ -173,6 +174,24 @@ def _prompt_for_gpu_settings(
     return gpu_updates
 
 
+def _get_scheduling_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
+    """Prompts for scheduling settings."""
+    _print_header("Checkpoint Configuration")
+
+    checkpoint_defaults = _get_nested_config(defaults, [CHECKPOINT_CONFIG], {})
+
+    checkpoint_interval_per_gen = _prompt_for_numeric(
+        "Checkpoint interval per generation",
+        checkpoint_defaults.get("interval_per_gen", 1),
+        int,
+        positive_only=True,
+    )
+
+    checkpoint_defaults["interval_per_gen"] = checkpoint_interval_per_gen
+
+    return checkpoint_defaults
+
+
 def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts the user for parallel execution, scheduling, and monitoring settings."""
     _print_header("Parallel Execution Configuration")
@@ -186,10 +205,6 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     execution_defaults = _get_nested_config(
         defaults, [PARALLEL_CONFIG, "execution"], {}
     )
-    scheduling_defaults = _get_nested_config(
-        defaults, [PARALLEL_CONFIG, "scheduling"], {}
-    )
-
     # --- Execution ---
     eval_mode = _prompt_for_evaluation_mode()
     cpu_workers = 0
@@ -247,25 +262,12 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     # --- Scheduling ---
-    min_job = _prompt_for_numeric(
-        "Minimum job duration in seconds",
-        scheduling_defaults.get("min_job_duration_seconds", 300),
-        int,
-        positive_only=True,
-    )
-
     checkpoint_interval = _prompt_for_numeric(
         "Checkpoint interval (generations)",
         scheduling_defaults.get("checkpoint_interval", 2),
         int,
         positive_only=True,
     )
-    parallel_updates["scheduling"] = {
-        "min_job_duration_seconds": min_job
-        or scheduling_defaults.get("min_job_duration_seconds", 300),
-        "checkpoint_interval": checkpoint_interval
-        or scheduling_defaults.get("checkpoint_interval", 2),
-    }
 
     return {PARALLEL_CONFIG: parallel_updates}
 
@@ -698,6 +700,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     # Interactive configuration
     config_updates: Dict[str, Any] = {}
 
+    config_updates.update(_get_scheduling_config(default_config))
     config_updates.update(_get_parallel_config(default_config))
     nn_updates = _get_neural_network_config(default_config)
     hyperparam_updates = _get_hyperparameter_config(default_config)

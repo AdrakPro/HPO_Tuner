@@ -26,6 +26,7 @@ def create_evaluator(
     subset_percentage: float,
     tui: TUI,
     task_id: TaskID,
+    session_log_filename: str,
 ) -> Evaluator:
     """
     Selects and creates the appropriate evaluator (sequential or parallel)
@@ -35,7 +36,6 @@ def create_evaluator(
     neural_config = config["neural_network_config"]
 
     if not parallel_enabled:
-        logger.info("Using sequential evaluator.")
         return IndividualEvaluator(
             neural_config=neural_config,
             training_epochs=training_epochs,
@@ -76,4 +76,5 @@ def create_evaluator(
         strategy=strategy,
         progress=tui.progress,
         task_id=task_id,
+        session_log_filename=session_log_filename,
     )

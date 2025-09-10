@@ -29,17 +29,8 @@ class Logger:
         self.logger = loguru_logger
         self.logger.remove()
 
-        log_file_path = f"logs/log.log"
-        self.logger.add(
-            log_file_path,
-            level="INFO",
-            enqueue=True,
-            backtrace=True,
-            diagnose=True,
-            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {message}",
-        )
-
         self._console_sink_id = None
+        self._file_sink_id = None
 
         if console and sys.stdout.isatty():
             self._console_sink_id = self.logger.add(
@@ -52,6 +43,20 @@ class Logger:
                 colorize=True,
             )
 
+    def add_file_sink(self, log_file_path: str) -> None:
+        """Adds a synchronized file sink to the logger. Can only be called once."""
+        if self._file_sink_id is not None:
+            return
+
+        self._file_sink_id = self.logger.add(
+            log_file_path,
+            level="INFO",
+            enqueue=True,
+            backtrace=True,
+            diagnose=True,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {message}",
+        )
+
     def add_tui_sink(self, sink: Callable[[str], None]):
         """
         Redirects console output into the TUI logs panel.
@@ -60,7 +65,6 @@ class Logger:
             self.logger.remove(self._console_sink_id)
             self._console_sink_id = None
 
-        # Add the new sink that writes to the TUI's internal log buffer
         self._console_sink_id = self.logger.add(
             sink,
             level="INFO",

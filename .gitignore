@@ -7,6 +7,7 @@ todo.txt
 /logs
 /model_data
 /saved_models
+/checkpoints
 
 # C extensions
 *.so

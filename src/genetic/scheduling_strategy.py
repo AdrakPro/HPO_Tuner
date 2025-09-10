@@ -30,6 +30,7 @@ class SchedulingStrategy(ABC):
         task_queue: mp.Queue,
         result_queue: mp.Queue,
         execution_config: Dict,
+        session_log_filename: str,
     ) -> List[mp.Process]:
         """
         The core method for a strategy. It must launch the necessary
@@ -45,6 +46,7 @@ class SchedulingStrategy(ABC):
         ctx,
         task_queue: mp.Queue,
         result_queue: mp.Queue,
+        session_log_filename: str,
         num_gpu_workers: int = 0,
         num_cpu_workers: int = 0,
     ) -> List[mp.Process]:
@@ -64,6 +66,7 @@ class SchedulingStrategy(ABC):
                 task_queue=task_queue,
                 result_queue=result_queue,
                 num_threads=num_threads_per_process,
+                session_log_filename=session_log_filename,
             )
             p = ctx.Process(target=worker_main, args=(w_config,))
             p.start()
@@ -77,6 +80,7 @@ class SchedulingStrategy(ABC):
                 task_queue=task_queue,
                 result_queue=result_queue,
                 num_threads=num_threads_per_process,
+                session_log_filename=session_log_filename,
             )
             p = ctx.Process(target=worker_main, args=(w_config,))
             p.start()
@@ -97,6 +101,7 @@ class CPUOnlyStrategy(SchedulingStrategy):
             task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
             num_cpu_workers=num_cpu_workers,
+            session_log_filename=kwargs["session_log_filename"],
         )
 
 
@@ -125,6 +130,7 @@ class GPUOnlyStrategy(SchedulingStrategy):
             task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
             num_gpu_workers=num_gpu_workers,
+            session_log_filename=kwargs["session_log_filename"],
         )
 
 
@@ -155,4 +161,5 @@ class HybridStrategy(SchedulingStrategy):
             result_queue=kwargs["result_queue"],
             num_gpu_workers=num_gpu_workers,
             num_cpu_workers=num_cpu_workers,
+            session_log_filename=kwargs["session_log_filename"],
         )

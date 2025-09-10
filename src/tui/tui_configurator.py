@@ -647,7 +647,10 @@ def _get_algorithm_settings(
     for key, (desc, val_type) in params.items():
         val = _prompt_for_numeric(desc, algo_defaults.get(key), val_type)
         if val is not None:
-            if key in ["data_subset_percentage", "mutation_decay_rate"] and val > 1.0:
+            if (
+                key in ["data_subset_percentage", "mutation_decay_rate"]
+                and val > 1.0
+            ):
                 console.print(
                     f"[yellow]{key} percentage cannot be greater than 1.0! Using value {algo_defaults.get(key)}.[/yellow]"
                 )

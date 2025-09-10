@@ -225,10 +225,17 @@ def _validate_algorithm_run_config(
             f"{prefix}.data_subset_percentage",
         )
 
-    for key in ["population_size", "generations", "training_epochs", "stratification_bins"]:
+    for key in [
+        "population_size",
+        "generations",
+        "training_epochs",
+        "stratification_bins",
+    ]:
         _check_non_negative_int(config[key], f"{prefix}.{key}")
 
-    _check_float_in_range(config["mutation_decay_rate"], f"{prefix}.mutation_decay_rate")
+    _check_float_in_range(
+        config["mutation_decay_rate"], f"{prefix}.mutation_decay_rate"
+    )
 
     _validate_stop_conditions(config["stop_conditions"], prefix)
 

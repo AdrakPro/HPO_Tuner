@@ -197,7 +197,6 @@ def _get_scheduling_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     return {CHECKPOINT_CONFIG: checkpoint_defaults}
 
 
-
 def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts the user for parallel execution, scheduling, and monitoring settings."""
     _print_header("Parallel Execution Configuration")

@@ -222,7 +222,9 @@ def run_ga_phase(
                 reverse=True,
             )
             sorted_population = [population[i] for i in sorted_indices]
-            sorted_final_fitness = [final_fitness_scores[i] for i in sorted_indices]
+            sorted_final_fitness = [
+                final_fitness_scores[i] for i in sorted_indices
+            ]
 
             best_fitness = sorted_final_fitness[0]
             best_loss = final_loss_scores[sorted_indices[0]]

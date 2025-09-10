@@ -68,8 +68,8 @@ def run_ga_phase(
     population = starting_population
     starting_pop_size = len(population)
     # Keep the final evaluation in evaluation track
-    total_evaluations = (generations + 1) * starting_pop_size
-    completed_evaluations = starting_pop_size * start_gen
+    total_evaluations = (generations * starting_pop_size) + starting_pop_size
+    completed_evaluations = starting_pop_size * (start_gen - 1)
 
     phase_task_id = tui.progress.add_task(
         f"{phase_name.capitalize()} Phase",
@@ -214,7 +214,7 @@ def run_ga_phase(
                 population, stop_conditions=None, is_final=is_final
             )
             final_fitness_scores = [r.fitness for r in final_results]
-            final_loss = [r.loss for r in final_results]
+            final_loss_scores = [r.loss for r in final_results]
 
             sorted_indices = sorted(
                 range(len(final_fitness_scores)),
@@ -222,8 +222,10 @@ def run_ga_phase(
                 reverse=True,
             )
             sorted_population = [population[i] for i in sorted_indices]
-            best_fitness = final_fitness_scores[sorted_indices[0]]
-            best_loss = final_loss[sorted_indices[0]]
+            sorted_final_fitness = [final_fitness_scores[i] for i in sorted_indices]
+
+            best_fitness = sorted_final_fitness[0]
+            best_loss = final_loss_scores[sorted_indices[0]]
 
         except KeyboardInterrupt:
             logger.warning(
@@ -234,6 +236,18 @@ def run_ga_phase(
             tui.progress.remove_task(phase_task_id)
 
     logger.info(f"--- {phase_name.upper()} Phase Finished ---")
+
+    checkpoint_state = GaState(
+        gen,
+        population,
+        sorted_final_fitness,
+        phase_name,
+        config,
+        session_log_filename,
+        phase_completed=True,
+    )
+    checkpoint_manager.save_checkpoint(checkpoint_state)
+
     return sorted_population, best_fitness, best_loss
 
 
@@ -279,7 +293,7 @@ def run_optimization(
                     f"Resuming calibration phase from generation {loaded_state.generation}."
                 )
                 initial_population_cal = loaded_state.population
-                start_gen_cal = loaded_state.generation
+                start_gen_cal = loaded_state.generation + 1
                 fitness_scores_cal = loaded_state.fitness_scores
             else:
                 logger.info("Starting new calibration phase.")
@@ -300,7 +314,7 @@ def run_optimization(
                 fitness_scores_cal,
             )
             logger.info(
-                f"The best individual of calibrated individual -> -> Accuracy: {best_fitness:.4f}, Loss: {best_loss:.4f}"
+                f"The best individual of calibrated individual -> Accuracy: {best_fitness:.4f}, Loss: {best_loss:.4f}"
             )
 
     # --- STAGE 2: MAIN ALGORITHM ---
@@ -362,7 +376,7 @@ def run_optimization(
 
     logger.info("Full optimization process finished.")
     best_individual = final_population[0]
-    logger.info("\n--- Best Overall Result ---")
+    logger.info("--- Best Overall Result ---")
     logger.info(f"Best Fitness (Accuracy): {best_fitness:.4f}")
     logger.info(f"Corresponding Loss: {best_loss:.4f}")
     logger.info(f"Optimal Hyperparameters: {best_individual}")

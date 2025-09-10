@@ -63,7 +63,7 @@ class _CheckpointManager:
                 pickle.dump(state, f)
             os.rename(self.temp_filepath, self.filepath)
             logger.info(
-                f"Generation {state.generation} saved successfully to {self.filepath}"
+                f"Generation {state.generation} checkpointed successfully."
             )
 
         except Exception as e:

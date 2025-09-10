@@ -132,6 +132,8 @@ def get_default_config() -> Dict[str, Any]:
                 "generations": 8,
                 "training_epochs": 25,
                 "data_subset_percentage": 0.2,
+                "mutation_decay_rate": 0.98,
+                "stratification_bins": 3,
                 "stop_conditions": {
                     "max_generations": 8,
                     "early_stop_generations": 3,
@@ -144,6 +146,8 @@ def get_default_config() -> Dict[str, Any]:
                 "population_size": 20,
                 "generations": 15,
                 "training_epochs": 80,
+                "mutation_decay_rate": 0.98,
+                "stratification_bins": 5,
                 "stop_conditions": {
                     "max_generations": 15,
                     "early_stop_generations": 5,

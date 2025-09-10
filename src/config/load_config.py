@@ -31,8 +31,8 @@ def _check_bool(value: Any, name: str):
 
 def _check_float_in_range(value: Any, name: str):
     """Checks if a float is in the range (0.0, 1.0)."""
-    if not isinstance(value, (float, int)) or not (0.0 < value < 1.0):
-        raise ValueError(f"'{name}' must be a float in the range (0.0, 1.0).")
+    if not isinstance(value, (float, int)) or not (0.0 < value <= 1.0):
+        raise ValueError(f"'{name}' must be a float in the range (0.0, 1.0>.")
 
 
 def _validate_project_config(config: Dict):
@@ -225,8 +225,10 @@ def _validate_algorithm_run_config(
             f"{prefix}.data_subset_percentage",
         )
 
-    for key in ["population_size", "generations", "training_epochs"]:
+    for key in ["population_size", "generations", "training_epochs", "stratification_bins"]:
         _check_non_negative_int(config[key], f"{prefix}.{key}")
+
+    _check_float_in_range(config["mutation_decay_rate"], f"{prefix}.mutation_decay_rate")
 
     _validate_stop_conditions(config["stop_conditions"], prefix)
 
@@ -265,9 +267,6 @@ def _validate_genetic_algorithm_config(config: Dict):
     _validate_algorithm_run_config(
         config["main_algorithm"], "main_algorithm", is_calibration=False
     )
-
-
-# --- Main Sanitization Function ---
 
 
 def sanitize_config(config: Dict) -> Dict:

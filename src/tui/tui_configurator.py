@@ -635,6 +635,8 @@ def _get_algorithm_settings(
         ),
         "generations": ("Enter the number of generations", int),
         "training_epochs": ("Enter the number of training epochs", int),
+        "mutation_decay_rate": ("Enter the mutation decay rate percent", float),
+        "stratification_bins": ("Enter the number of stratification bins", int),
     }
     if config_key == CALIBRATION:
         params["data_subset_percentage"] = (
@@ -645,9 +647,9 @@ def _get_algorithm_settings(
     for key, (desc, val_type) in params.items():
         val = _prompt_for_numeric(desc, algo_defaults.get(key), val_type)
         if val is not None:
-            if key == "data_subset_percentage" and val > 1.0:
+            if key in ["data_subset_percentage", "mutation_decay_rate"] and val > 1.0:
                 console.print(
-                    f"[yellow]Data subset percentage cannot be greater than 1.0! Using value {algo_defaults.get(key)}.[/yellow]"
+                    f"[yellow]{key} percentage cannot be greater than 1.0! Using value {algo_defaults.get(key)}.[/yellow]"
                 )
                 updates[key] = algo_defaults.get(key)
                 continue

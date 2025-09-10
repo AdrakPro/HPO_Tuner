@@ -27,9 +27,6 @@ from src.logger.logger import logger
 from src.tui.tui_configurator import run_tui_configurator
 from src.utils.seed import seed_everything
 
-MUTATION_DECAY_RATE = 0.98
-CAL_STRAT_BINS = 3
-MAIN_START_BINS = 5
 CAL_PHASE = "calibration"
 MAIN_PHASE = "main_algorithm"
 
@@ -50,6 +47,7 @@ def run_ga_phase(
     early_stop_epochs = phase_config["stop_conditions"]["early_stop_epochs"]
     generations = phase_config["generations"]
     initial_epochs = phase_config["training_epochs"]
+    mutation_decay_rate = phase_config["mutation_decay_rate"]
     minimum_viable_epochs = 20
     subset_percentage = (
         phase_config["data_subset_percentage"]
@@ -164,7 +162,7 @@ def run_ga_phase(
                     population = [population[i] for i in sorted_indices]
                     break
 
-                ga.set_adaptive_mutation(MUTATION_DECAY_RATE, gen)
+                ga.set_adaptive_mutation(mutation_decay_rate, gen)
                 population = ga.run_generation(population, fitness_scores)
 
             logger.info("Starting final evaluation for the best population...")
@@ -213,8 +211,9 @@ def run_optimization(config: Dict, tui: TUI) -> None:
     calibrated_population = []
     if ga_config[CAL_PHASE]["enabled"]:
         initial_pop_size = ga_config[CAL_PHASE]["population_size"]
+        cal_strat_bins = ga_config[CAL_PHASE]["stratification_bins"]
         initial_population = ga.initial_population(
-            initial_pop_size, CAL_STRAT_BINS
+            initial_pop_size, cal_strat_bins
         )
         calibrated_population, best_fitness, best_loss = run_ga_phase(
             CAL_PHASE, config, ga, initial_population, tui
@@ -225,6 +224,7 @@ def run_optimization(config: Dict, tui: TUI) -> None:
 
     # --- STAGE 2: MAIN ALGORITHM ---
     main_pop_size = ga_config[MAIN_PHASE]["population_size"]
+    main_strat_bins = ga_config[MAIN_PHASE]["stratification_bins"]
     main_starting_population = []
 
     if calibrated_population:
@@ -245,7 +245,7 @@ def run_optimization(config: Dict, tui: TUI) -> None:
             )
             main_starting_population.extend(
                 ga.initial_population(
-                    num_random, MAIN_START_BINS, print_warning=False
+                    num_random, main_strat_bins, print_warning=False
                 )
             )
     else:
@@ -253,7 +253,7 @@ def run_optimization(config: Dict, tui: TUI) -> None:
             "Calibration disabled. Starting main algorithm with random population."
         )
         main_starting_population = ga.initial_population(
-            main_pop_size, MAIN_START_BINS
+            main_pop_size, main_strat_bins
         )
 
     final_population, best_fitness, best_loss = run_ga_phase(

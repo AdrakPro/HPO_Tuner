@@ -176,7 +176,7 @@ def _prompt_for_gpu_settings(
 
 
 def _get_scheduling_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
-    """Prompts for scheduling settings."""
+    """Prompts for scheduling settings and returns the full checkpoint config."""
     _print_header("Checkpoint Configuration")
 
     checkpoint_defaults = defaults[CHECKPOINT_CONFIG]
@@ -194,7 +194,8 @@ def _get_scheduling_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         else checkpoint_defaults.get("interval_per_gen", 1)
     )
 
-    return checkpoint_defaults
+    return {CHECKPOINT_CONFIG: checkpoint_defaults}
+
 
 
 def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:

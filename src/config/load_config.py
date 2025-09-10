@@ -299,8 +299,7 @@ def prompt_and_load_json_config(
             logger.error("Filename cannot be empty. Please try again.")
             continue
 
-        # TODO: Temporary for testing purposes (filename)
-        path = os.path.join(config_dir, "config_2025-09-09_13-18-44.json")
+        path = os.path.join(config_dir, filename)
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:
@@ -313,6 +312,29 @@ def prompt_and_load_json_config(
 
     logger.warning("Default configuration loaded.")
     return default_config
+
+
+def load_newest_config(
+    default_config: Dict[str, Any], config_dir: str
+) -> Dict[str, Any]:
+    """Automatically loads the newest config JSON file from a folder."""
+    try:
+        files = [f for f in os.listdir(config_dir) if f.endswith(".json")]
+        if not files:
+            return default_config
+
+        # Sort files by their timestamp in filename, descending
+        newest_file = max(
+            files, key=lambda x: os.path.getmtime(os.path.join(config_dir, x))
+        )
+
+        path = os.path.join(config_dir, newest_file)
+        with open(path, "r") as f:
+            loaded_config = json.load(f)
+            return sanitize_config(loaded_config)
+    except Exception as e:
+        logger.error(f"Failed to load newest config: {e}")
+        return default_config
 
 
 def prompt_and_save_json_config(config_data: Dict, console, config_dir: str):

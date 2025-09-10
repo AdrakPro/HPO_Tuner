@@ -27,7 +27,7 @@ CROP_PADDING = 4
 IMG_SIZE = 32
 
 
-# TODO: integrate with config x cores
+# TODO: integrate with config x cores, dynamically allocate
 def get_num_workers():
     """
     Determine the number of workers for DataLoader.
@@ -39,7 +39,7 @@ def get_num_workers():
             return 0
     except:
         return 0
-    return min(4, os.cpu_count() // 2)
+    return min(1, os.cpu_count() // 2)
 
 
 class DataLoaderManager:

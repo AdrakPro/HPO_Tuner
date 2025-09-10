@@ -17,6 +17,7 @@ from src.config.default_config import get_default_config
 from src.config.load_config import (
     prompt_and_load_json_config,
     prompt_and_save_json_config,
+    load_newest_config,
 )
 from src.logger.logger import logger
 from src.model.chromosome import AugmentationIntensity, OptimizerSchedule
@@ -178,16 +179,20 @@ def _get_scheduling_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts for scheduling settings."""
     _print_header("Checkpoint Configuration")
 
-    checkpoint_defaults = _get_nested_config(defaults, [CHECKPOINT_CONFIG], {})
+    checkpoint_defaults = defaults[CHECKPOINT_CONFIG]
 
-    checkpoint_interval_per_gen = _prompt_for_numeric(
+    user_value = _prompt_for_numeric(
         "Checkpoint interval per generation",
         checkpoint_defaults.get("interval_per_gen", 1),
         int,
         positive_only=True,
     )
 
-    checkpoint_defaults["interval_per_gen"] = checkpoint_interval_per_gen
+    checkpoint_defaults["interval_per_gen"] = (
+        user_value
+        if user_value is not None
+        else checkpoint_defaults.get("interval_per_gen", 1)
+    )
 
     return checkpoint_defaults
 
@@ -260,14 +265,6 @@ def _get_parallel_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
             ),
         },
     }
-
-    # --- Scheduling ---
-    checkpoint_interval = _prompt_for_numeric(
-        "Checkpoint interval (generations)",
-        scheduling_defaults.get("checkpoint_interval", 2),
-        int,
-        positive_only=True,
-    )
 
     return {PARALLEL_CONFIG: parallel_updates}
 
@@ -681,18 +678,18 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     default_config = get_default_config()
 
     _print_header("GENETIC OPTIMIZATION OF CNN")
-    prompt = (
-        "[1] Create new configuration\n[2] Load configuration\n[3] Exit\n> "
-    )
-    error_msg = "Invalid choice. Please enter 1, 2, or 3."
+    prompt = "[1] Create new configuration\n[2] Load last configuration file\n[3] Load configuration from a file\n[4] Exit\n> "
+    error_msg = "Invalid choice. Please enter 1, 2, 3 or 4."
     choice = _prompt_for_validated_input(
-        prompt, lambda x: x in ["1", "2", "3"], error_msg
+        prompt, lambda x: x in ["1", "2", "3", "4"], error_msg
     )
 
-    if choice == "3":
+    if choice == "4":
         console.print("Exiting program...")
         return None
     if choice == "2":
+        return load_newest_config(default_config, CONFIG_DIR)
+    elif choice == "3":
         return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
 
     logger.info("New configuration started", file_only=True)
@@ -700,7 +697,6 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     # Interactive configuration
     config_updates: Dict[str, Any] = {}
 
-    config_updates.update(_get_scheduling_config(default_config))
     config_updates.update(_get_parallel_config(default_config))
     nn_updates = _get_neural_network_config(default_config)
     hyperparam_updates = _get_hyperparameter_config(default_config)
@@ -713,6 +709,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
         )
 
     config_updates.update(_get_genetic_operators_config(default_config))
+    config_updates.update(_get_scheduling_config(default_config))
 
     calib_updates = _get_algorithm_settings(
         "Initial Calibration Settings", CALIBRATION, default_config

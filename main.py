@@ -7,6 +7,8 @@ import time
 from datetime import datetime
 from typing import Dict, List, Tuple
 
+warnings.filterwarnings("ignore")
+
 # Pre-import heavy modules to avoid issues in worker processes
 try:
     import torch
@@ -27,7 +29,6 @@ from src.logger.logger import logger
 from src.tui.tui_configurator import run_tui_configurator
 from src.utils.seed import seed_everything
 
-warnings.filterwarnings("ignore")
 
 CAL_PHASE = "calibration"
 MAIN_PHASE = "main_algorithm"

@@ -67,7 +67,6 @@ def create_evaluator(
             task_id=task_id,
         )
 
-    logger.info(f"Using parallel evaluator with {eval_mode} strategy.")
     return ParallelEvaluator(
         config=config,
         training_epochs=training_epochs,

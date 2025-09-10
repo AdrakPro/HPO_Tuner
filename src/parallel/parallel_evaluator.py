@@ -112,8 +112,11 @@ class ParallelEvaluator(Evaluator):
 
                     self.progress.update(self.task_id, advance=1)
 
-                    for line in result.log_lines:
-                        logger.info(line)
+                    for entry in result.log_lines:
+                        if isinstance(entry, tuple):
+                            logger.info(entry, file_only=True)
+                        else:
+                            logger.info(entry)
 
                     if stop_conditions:
                         should_stop, reason = (

@@ -71,11 +71,8 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
             log_buffer: List[str] = [
                 f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
-            ]
-            logger.info(
-                f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
-                file_only=True,
-            )
+                (f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
+                 "file_only")]
 
             try:
                 start_time = time.perf_counter()

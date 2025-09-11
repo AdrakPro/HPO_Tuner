@@ -215,4 +215,4 @@ When enabled, this provides a highly reliable estimate of the chosen hyperparame
 The final performance is the average score across all `K` folds, giving a much more robust metric than a single train/test split.
 
 # Contact me
-Click here[adam.makarewicz@proton.me]
+adam.makarewicz@proton.me

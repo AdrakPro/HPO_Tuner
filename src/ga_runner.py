@@ -64,6 +64,8 @@ def run_ga_phase(
         completed=completed_evaluations,
     )
 
+    gen = start_gen - 1
+
     with create_evaluator(
         config,
         initial_epochs,

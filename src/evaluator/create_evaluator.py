@@ -7,8 +7,8 @@ from typing import Dict, Optional
 import numpy as np
 from rich.progress import TaskID
 
-from src.genetic.individual_evaluator import IndividualEvaluator
-from src.genetic.scheduling_strategy import (
+from src.evaluator.individual_evaluator import IndividualEvaluator
+from src.evaluator.scheduling_strategy import (
     CPUOnlyStrategy,
     GPUOnlyStrategy,
     HybridStrategy,
@@ -16,7 +16,7 @@ from src.genetic.scheduling_strategy import (
 )
 from src.logger.logger import logger
 from src.model.evaluator_interface import Evaluator
-from src.parallel.parallel_evaluator import ParallelEvaluator
+from src.evaluator.parallel_evaluator import ParallelEvaluator
 from src.tui.tui_screen import TUI
 
 

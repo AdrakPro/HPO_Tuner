@@ -10,7 +10,7 @@ import torch
 import torch.multiprocessing as mp
 from rich.progress import TaskID, Progress
 
-from src.genetic.scheduling_strategy import SchedulingStrategy
+from src.evaluator.scheduling_strategy import SchedulingStrategy
 from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
 from src.model.evaluator_interface import Evaluator

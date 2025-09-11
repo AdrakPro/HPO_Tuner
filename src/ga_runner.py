@@ -5,7 +5,7 @@ import numpy as np
 
 from src.utils.checkpoint_manager import checkpoint_manager, GaState
 from src.tui.tui_screen import TUI
-from src.factory.create_evaluator import create_evaluator
+from src.evaluator.create_evaluator import create_evaluator
 from src.genetic.genetic_algorithm import (
     GeneticAlgorithm,
     get_chromosome_search_space,

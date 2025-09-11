@@ -14,7 +14,7 @@ import torch.multiprocessing as mp
 
 from src.logger.logger import logger
 from src.model.parallel import WorkerConfig
-from src.parallel.worker import worker_main
+from src.evaluator.worker import worker_main
 
 
 class SchedulingStrategy(ABC):

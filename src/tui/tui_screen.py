@@ -108,17 +108,19 @@ class TUI:
 
         config_left_details = (
             f"[bold]Execution Mode[/]: {execution_mode}\n"
-            f"[bold]CPU Processes[/]: {cpu_workers}\n"
-            f"[bold]GPU Processes[/]: {gpu_workers}\n"
+            f"[bold]CPU Workers[/]: {cpu_workers}\n"
+            f"[bold]GPU Workers[/]: {gpu_workers}\n"
             f"[bold]Nested Resampling[/]: {resampling_status}\n\n"
             f"[bold]Total workers count with DataLoaders[/]: {total_cpu_workers} \n(per gpu={per_gpu}, per cpu={per_cpu})\n\n"
             f"[bold cyan]-- Calibration Phase --[/]\n"
             f"  [bold]Enabled[/]: {cal_cfg.get('enabled', False)}\n"
             f"  [bold]Population[/]: {cal_cfg.get('population_size')}\n"
-            f"  [bold]Generations[/]: {cal_cfg.get('generations')}\n\n"
+            f"  [bold]Generations[/]: {cal_cfg.get('generations')}\n"
+            f"  [bold]Training epochs[/]: {cal_cfg.get('training_epochs')}\n\n"
             f"[bold cyan]-- Main Phase --[/]\n"
             f"  [bold]Population[/]: {main_cfg.get('population_size')}\n"
-            f"  [bold]Generations[/]: {main_cfg.get('generations')}"
+            f"  [bold]Generations[/]: {main_cfg.get('generations')}\n"
+            f"  [bold]Training epochs[/]: {main_cfg.get('training_epochs')}"
         )
 
         hyper_str = "\n".join(
@@ -150,7 +152,7 @@ class TUI:
         self.layout["config_right"].update(panel_right)
 
         # Adjust size dynamically
-        vertical_padding = 5
+        vertical_padding = 2
         left_height = len(config_left_details.split("\n"))
         right_height = len(config_right_details.split("\n"))
         self.layout["config_row"].size = (

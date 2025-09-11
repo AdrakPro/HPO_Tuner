@@ -31,7 +31,7 @@ The primary use case demonstrated is tuning a CNN for image classification on th
 *   **Python 3.10+**
 *   **PyTorch**: For neural network definition, training, and evaluation.
 *   **Rich**: For the interactive and feature-rich TUI.
-*   **Loguru**: For flexible and powerful logging.
+*   **Loguru**: For flexible logging.
 *   **Scikit-learn**: For splitting data into K folds.
 
 ## Project Structure
@@ -215,4 +215,4 @@ When enabled, this provides a highly reliable estimate of the chosen hyperparame
 The final performance is the average score across all `K` folds, giving a much more robust metric than a single train/test split.
 
 # Contact me
-Click here[adam.makarewicz@proton.me]
+adam.makarewicz@proton.me

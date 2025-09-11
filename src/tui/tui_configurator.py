@@ -15,9 +15,9 @@ from rich.console import Console
 
 from src.config.default_config import get_default_config
 from src.config.load_config import (
+    load_newest_config,
     prompt_and_load_json_config,
     prompt_and_save_json_config,
-    load_newest_config,
 )
 from src.logger.logger import logger
 from src.model.chromosome import AugmentationIntensity, OptimizerSchedule

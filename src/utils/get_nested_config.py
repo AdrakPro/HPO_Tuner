@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 
 def get_nested_config(cfg: Dict, path: List[str], default: Any = None) -> Any:

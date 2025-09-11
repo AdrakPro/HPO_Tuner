@@ -9,15 +9,6 @@ def get_default_config() -> Dict[str, Any]:
 
     return {
         "project": {"name": "HPO Paper-Based Experiment", "seed": None},
-        # Environment settings
-        "environment": {
-            "data_source": {"dataset": "CIFAR-10", "path": "./model_data"},
-            "logging": {
-                "log_file": "logs/experiment.log",
-                "error_log_file": "logs/error.log",
-                "report_directory": "reports",
-            },
-        },
         # Checkpoints
         "checkpoint_config": {"interval_per_gen": 1},
         # Parallel execution and scheduling
@@ -27,7 +18,6 @@ def get_default_config() -> Dict[str, Any]:
                 "enable_parallel": True,
                 "gpu_workers": 1,
                 "cpu_workers": 12,
-                # TODO: Dynamic allocation, cpu oversubscription, set_threads
                 "dataloader_workers": {
                     "per_gpu": 4,
                     "per_cpu": 2,
@@ -42,7 +32,6 @@ def get_default_config() -> Dict[str, Any]:
             # Parameters not subject to optimization
             "fixed_parameters": {
                 "activation_function": "relu",  # Options: relu, gelu, leaky_relu
-                # TODO: Maybe this should also be available for search with width_scale
                 "base_filters": 32,
             },
             "hyperparameter_space": {

@@ -8,6 +8,7 @@ import numpy as np
 from rich.progress import TaskID
 
 from src.evaluator.individual_evaluator import IndividualEvaluator
+from src.evaluator.parallel_evaluator import ParallelEvaluator
 from src.evaluator.scheduling_strategy import (
     CPUOnlyStrategy,
     GPUOnlyStrategy,
@@ -16,7 +17,6 @@ from src.evaluator.scheduling_strategy import (
 )
 from src.logger.logger import logger
 from src.model.evaluator_interface import Evaluator
-from src.evaluator.parallel_evaluator import ParallelEvaluator
 from src.tui.tui_screen import TUI
 
 

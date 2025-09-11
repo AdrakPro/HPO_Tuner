@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import torch
 import torch.multiprocessing as mp
-from rich.progress import TaskID, Progress
+from rich.progress import Progress, TaskID
 
 from src.evaluator.scheduling_strategy import SchedulingStrategy
 from src.genetic.stop_conditions import StopConditions

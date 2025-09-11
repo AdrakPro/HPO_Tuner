@@ -5,16 +5,15 @@ This module uses the Strategy design pattern to encapsulate different ways of
 distributing the evaluation workload (e.g., CPU only, GPU only, Hybrid).
 """
 
-import os
 from abc import ABC, abstractmethod
 from typing import Dict, List
 
 import torch
 import torch.multiprocessing as mp
 
+from src.evaluator.worker import worker_main
 from src.logger.logger import logger
 from src.model.parallel import WorkerConfig
-from src.evaluator.worker import worker_main
 
 
 class SchedulingStrategy(ABC):

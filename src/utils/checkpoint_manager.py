@@ -1,8 +1,8 @@
 import os
 import pickle
 import random
-from typing import Any, Optional, List, Dict
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 import torch
 

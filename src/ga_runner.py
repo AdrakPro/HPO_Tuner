@@ -1,10 +1,8 @@
 import time
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from src.utils.checkpoint_manager import checkpoint_manager, GaState
-from src.tui.tui_screen import TUI
 from src.evaluator.create_evaluator import create_evaluator
 from src.genetic.genetic_algorithm import (
     GeneticAlgorithm,
@@ -12,6 +10,8 @@ from src.genetic.genetic_algorithm import (
 )
 from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
+from src.tui.tui_screen import TUI
+from src.utils.checkpoint_manager import GaState, checkpoint_manager
 from src.utils.seed import seed_everything
 
 CAL_PHASE = "calibration"

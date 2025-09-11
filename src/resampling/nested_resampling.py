@@ -1,10 +1,12 @@
-import numpy as np
 from typing import Dict
-from src.utils.checkpoint_manager import GaState, checkpoint_manager
+
+import numpy as np
+
+from src.ga_runner import run_optimization
 from src.logger.logger import logger
 from src.tui.tui_screen import TUI
+from src.utils.checkpoint_manager import GaState, checkpoint_manager
 from src.utils.data_splitter import create_stratified_k_folds
-from src.ga_runner import run_optimization
 
 
 def run_nested_resampling(

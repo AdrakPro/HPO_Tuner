@@ -1,7 +1,8 @@
+from typing import List, Tuple
+
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from torchvision.datasets import CIFAR10
-from typing import List, Tuple
 
 
 def create_stratified_k_folds(

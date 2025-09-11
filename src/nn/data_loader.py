@@ -3,7 +3,6 @@ Data loader module for CIFAR-10 using PyTorch.
 Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 """
 
-import os
 import random
 import signal
 import sys

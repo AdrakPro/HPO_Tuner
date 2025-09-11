@@ -31,7 +31,7 @@ The primary use case demonstrated is tuning a CNN for image classification on th
 *   **Python 3.10+**
 *   **PyTorch**: For neural network definition, training, and evaluation.
 *   **Rich**: For the interactive and feature-rich TUI.
-*   **Loguru**: For flexible and powerful logging.
+*   **Loguru**: For flexible logging.
 *   **Scikit-learn**: For splitting data into K folds.
 
 ## Project Structure

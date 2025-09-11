@@ -2,8 +2,9 @@
 Factory function for creating the appropriate population evaluator.
 """
 
-from typing import Dict
+from typing import Dict, Optional
 
+import numpy as np
 from rich.progress import TaskID
 
 from src.genetic.individual_evaluator import IndividualEvaluator
@@ -27,6 +28,8 @@ def create_evaluator(
     tui: TUI,
     task_id: TaskID,
     session_log_filename: str,
+    train_indices: Optional[np.ndarray] = None,
+    test_indices: Optional[np.ndarray] = None,
 ) -> Evaluator:
     """
     Selects and creates the appropriate evaluator (sequential or parallel)
@@ -43,6 +46,8 @@ def create_evaluator(
             subset_percentage=subset_percentage,
             progress=tui.progress,
             task_id=task_id,
+            train_indices=train_indices,
+            test_indices=test_indices,
         )
 
     eval_mode = config["parallel_config"]["execution"]["evaluation_mode"]
@@ -65,6 +70,8 @@ def create_evaluator(
             subset_percentage=subset_percentage,
             progress=tui.progress,
             task_id=task_id,
+            train_indices=train_indices,
+            test_indices=test_indices,
         )
 
     return ParallelEvaluator(
@@ -76,4 +83,6 @@ def create_evaluator(
         progress=tui.progress,
         task_id=task_id,
         session_log_filename=session_log_filename,
+        train_indices=train_indices,
+        test_indices=test_indices,
     )

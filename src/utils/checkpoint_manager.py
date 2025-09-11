@@ -11,13 +11,18 @@ from src.logger.logger import logger
 
 @dataclass
 class GaState:
+    """
+    A dataclass representing the complete state of a GA run at a specific point.
+    """
+
     generation: int
     population: List[Dict]
     fitness_scores: List[float]
     phase: str
-    config: Dict
+    config: Dict[str, Any]
     session_log_filename: str
     phase_completed: bool
+    outer_fold_k: int = -1
     rng_state: Optional[Dict[str, Any]] = None
 
 
@@ -28,11 +33,9 @@ class _CheckpointManager:
 
     def __init__(
         self,
-        checkpoint_dir: str = "checkpoints",
-        filename: str = "ga_checkpoint.pkl",
     ):
-        self.checkpoint_dir = checkpoint_dir
-        self.filepath = os.path.join(self.checkpoint_dir, filename)
+        self.checkpoint_dir = "checkpoints"
+        self.filepath = os.path.join(self.checkpoint_dir, "ga_checkpoint.pkl")
         self.temp_filepath = f"{self.filepath}.tmp"
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
@@ -62,8 +65,14 @@ class _CheckpointManager:
             with open(self.temp_filepath, "wb") as f:
                 pickle.dump(state, f)
             os.rename(self.temp_filepath, self.filepath)
+
+            fold_info = (
+                f" (Fold {state.outer_fold_k + 1})"
+                if state.outer_fold_k != -1
+                else ""
+            )
             logger.info(
-                f"Generation {state.generation} checkpointed successfully."
+                f"Generation {state.generation}/{fold_info} checkpointed successfully."
             )
 
         except Exception as e:
@@ -88,6 +97,12 @@ class _CheckpointManager:
 
             if torch.cuda.is_available() and rng_state.get("torch_cuda_random"):
                 torch.cuda.set_rng_state_all(rng_state["torch_cuda_random"])
+
+            if not hasattr(state, "outer_fold_k"):
+                logger.warning(
+                    "Loaded a legacy checkpoint. Disabling nested resampling."
+                )
+                state.outer_fold_k = -1
 
             return state
 

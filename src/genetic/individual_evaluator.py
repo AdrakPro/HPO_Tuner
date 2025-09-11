@@ -3,8 +3,9 @@ Handles the sequential evaluation of a population of individuals on a single dev
 """
 
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+import numpy as np
 import torch
 from rich.progress import Progress, TaskID
 
@@ -29,6 +30,8 @@ class IndividualEvaluator(Evaluator):
         subset_percentage: float,
         progress: Progress,
         task_id: TaskID,
+        train_indices: Optional[np.ndarray],
+        test_indices: Optional[np.ndarray],
     ):
         self.neural_config = neural_config
         self.training_epochs = training_epochs
@@ -37,6 +40,8 @@ class IndividualEvaluator(Evaluator):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
+        self.train_indices = train_indices
+        self.test_indices = test_indices
 
         self.progress = progress
         self.task_id = task_id
@@ -107,6 +112,8 @@ class IndividualEvaluator(Evaluator):
                     subset_percentage=self.subset_percentage,
                     is_final=is_final,
                     epoch_callback=epoch_logger,
+                    train_indices=self.train_indices,
+                    test_indices=self.test_indices,
                 )
                 status = "SUCCESS"
                 error_msg = None

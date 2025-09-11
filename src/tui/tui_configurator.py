@@ -639,7 +639,7 @@ def _get_algorithm_settings(
     }
     if config_key == CALIBRATION:
         params["data_subset_percentage"] = (
-            "Enter the data subset percentage",
+            "Enter the dataset subset percentage (used when nested resampling is disabled)",
             float,
         )
 

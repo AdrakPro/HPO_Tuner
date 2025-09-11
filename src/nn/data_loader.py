@@ -7,7 +7,9 @@ import os
 import random
 import signal
 import sys
+from typing import Optional
 
+import numpy as np
 import torch.cuda
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader, Subset
@@ -83,6 +85,8 @@ def get_dataset_loaders(
     aug_intensity: AugmentationIntensity,
     is_gpu: bool,
     subset_percentage: float = 1.0,
+    train_indices: Optional[np.ndarray] = None,
+    test_indices: Optional[np.ndarray] = None,
 ) -> DataLoaderManager:
     """
     Get CIFAR-10 train/test DataLoaders.
@@ -92,20 +96,32 @@ def get_dataset_loaders(
     """
 
     data_dir = "./model_data"
-
     transform_train, transform_test = get_transforms(aug_intensity)
 
-    train_set = datasets.CIFAR10(
-        root=data_dir, train=True, download=True, transform=transform_train
-    )
-    test_set = datasets.CIFAR10(
-        root=data_dir, train=False, download=True, transform=transform_test
-    )
+    if train_indices is not None and test_indices is not None:
+        # Cross-validation fold. The "test set" is a holdout part of the original training set
+        full_train_set_with_train_transforms = datasets.CIFAR10(
+            root=data_dir, train=True, download=True, transform=transform_train
+        )
+        full_train_set_with_test_transforms = datasets.CIFAR10(
+            root=data_dir, train=True, download=True, transform=transform_test
+        )
 
-    if subset_percentage < 1.0:
-        subset_size = int(len(train_set) * subset_percentage)
-        indices = random.sample(range(len(train_set)), subset_size)
-        train_set = Subset(train_set, indices)
+        train_set = Subset(full_train_set_with_train_transforms, train_indices)
+        test_set = Subset(full_train_set_with_test_transforms, test_indices)
+    else:
+        # Use the original full train/test split
+        train_set = datasets.CIFAR10(
+            root=data_dir, train=True, download=True, transform=transform_train
+        )
+        test_set = datasets.CIFAR10(
+            root=data_dir, train=False, download=True, transform=transform_test
+        )
+
+        if subset_percentage < 1.0:
+            subset_size = int(len(train_set) * subset_percentage)
+            indices = random.sample(range(len(train_set)), subset_size)
+            train_set = Subset(train_set, indices)
 
     # Use dynamic worker count based on process type
     num_workers = get_num_workers()

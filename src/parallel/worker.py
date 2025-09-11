@@ -71,8 +71,11 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
             log_buffer: List[str] = [
                 f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
-                (f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
-                 "file_only")]
+                (
+                    f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
+                    "file_only",
+                ),
+            ]
 
             try:
                 start_time = time.perf_counter()
@@ -108,6 +111,8 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     subset_percentage=task.subset_percentage,
                     is_final=task.is_final,
                     epoch_callback=epoch_logger,
+                    train_indices=task.train_indices,
+                    test_indices=task.test_indices,
                 )
 
                 duration = time.perf_counter() - start_time

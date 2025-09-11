@@ -3,8 +3,9 @@ Handles the parallel evaluation of a population of individuals using a persisten
 """
 
 import queue
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+import numpy as np
 import torch
 import torch.multiprocessing as mp
 from rich.progress import TaskID, Progress
@@ -32,6 +33,8 @@ class ParallelEvaluator(Evaluator):
         progress: Progress,
         task_id: TaskID,
         session_log_filename: str,
+        train_indices: Optional[np.ndarray],
+        test_indices: Optional[np.ndarray],
     ):
         self.training_epochs = training_epochs
         self.early_stop_epochs = early_stop_epochs
@@ -39,6 +42,8 @@ class ParallelEvaluator(Evaluator):
         self.execution_config = config["parallel_config"]["execution"]
         self.neural_network_config = config["neural_network_config"]
         self.strategy = strategy
+        self.train_indices = train_indices
+        self.test_indices = test_indices
 
         self._shutting_down = False
         self._cleaned_up = False
@@ -97,6 +102,8 @@ class ParallelEvaluator(Evaluator):
                     subset_percentage=self.subset_percentage,
                     pop_size=pop_size,
                     is_final=is_final,
+                    train_indices=self.train_indices,
+                    test_indices=self.test_indices,
                 )
             )
 

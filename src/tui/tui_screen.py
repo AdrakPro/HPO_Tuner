@@ -27,6 +27,7 @@ PARALLEL_CONFIG = "parallel_config"
 NN_CONFIG = "neural_network_config"
 HYPERPARAM_SPACE = "hyperparameter_space"
 GA_CONFIG = "genetic_algorithm_config"
+NESTED_VALIDATION_CONFIG = "nested_validation_config"
 GENETIC_OPERATORS = "genetic_operators"
 CALIBRATION_PHASE = "calibration"
 MAIN_ALGORITHM = "main_algorithm"
@@ -75,23 +76,44 @@ class TUI:
         hyperparams = nn_cfg.get(HYPERPARAM_SPACE, {})
         cal_cfg = get_nested_config(config, [GA_CONFIG, CALIBRATION_PHASE], {})
         main_cfg = get_nested_config(config, [GA_CONFIG, MAIN_ALGORITHM], {})
+        nested_validation_cfg = config[NESTED_VALIDATION_CONFIG]
 
+        execution_mode = exec_cfg.get("evaluation_mode")
         cpu_workers = exec_cfg.get("cpu_workers", 0) or 0
         gpu_workers = exec_cfg.get("gpu_workers", 0) or 0
         dl_workers = exec_cfg.get("dataloader_workers", {})
         per_gpu = dl_workers.get("per_gpu", 0)
         per_cpu = dl_workers.get("per_cpu", 0)
+        total_cpu_workers = 0
 
-        total_cpu_workers = (gpu_workers * per_gpu) + (cpu_workers * per_cpu)
+        if execution_mode == "CPU":
+            total_cpu_workers = cpu_workers * per_cpu
+            gpu_workers = 0
+        elif execution_mode == "GPU":
+            total_cpu_workers = gpu_workers * per_gpu
+            cpu_workers = 0
+        elif execution_mode == "HYBRID":
+            total_cpu_workers = (gpu_workers * per_gpu) + (
+                cpu_workers * per_cpu
+            )
+
         max_cpu_workers = os.cpu_count()
 
         self._is_cpu_oversubscription(total_cpu_workers, max_cpu_workers)
 
+        folds = nested_validation_cfg["outer_k_folds"]
+
+        if nested_validation_cfg["enabled"] and folds > 1:
+            resampling_status = f"Enabled ({folds} Folds)"
+        else:
+            resampling_status = "Disabled"
+
         config_left_details = (
-            f"[bold]Execution Mode[/]: {exec_cfg.get('evaluation_mode')}\n"
+            f"[bold]Execution Mode[/]: {execution_mode}\n"
             f"[bold]CPU Processes[/]: {cpu_workers}\n"
             f"[bold]GPU Processes[/]: {gpu_workers}\n"
-            f"[bold]Total CPUs with DataLoader[/]: {total_cpu_workers} (per gpu={per_gpu}, per cpu={per_cpu})\n\n"
+            f"[bold]Nested Resampling[/]: {resampling_status}\n\n"
+            f"[bold]Total workers count with DataLoaders[/]: {total_cpu_workers} \n(per gpu={per_gpu}, per cpu={per_cpu})\n\n"
             f"[bold cyan]-- Calibration Phase --[/]\n"
             f"  [bold]Enabled[/]: {cal_cfg.get('enabled', False)}\n"
             f"  [bold]Population[/]: {cal_cfg.get('population_size')}\n"
@@ -213,6 +235,22 @@ class TUI:
         except Exception as e:
             logger.error(f"TUI Error during update: {e}")
 
+    def update_fold_status(self, current_fold: int, total_folds: int):
+        """Updates the fold status panel in the TUI."""
+        status_text = Text(
+            f"Running Fold {current_fold} of {total_folds}",
+            justify="center",
+            style="bold yellow",
+        )
+        status_panel = Panel(
+            status_text,
+            title="[yellow]Resampling Status[/]",
+            border_style="yellow",
+        )
+        self.layout["fold_status_row"].update(status_panel)
+        self.layout["fold_status_row"].visible = True
+        self.update()
+
     @staticmethod
     def _is_cpu_oversubscription(
         total_cpu_workers: int, max_cpu_workers: int
@@ -228,6 +266,7 @@ class TUI:
         layout.split(
             Layout(name="header", size=3),
             Layout(name="config_row", size=0, visible=False),
+            Layout(name="fold_status_row", size=3, visible=False),
             Layout(name="progress", size=3),
             Layout(name="logs", ratio=1),
         )

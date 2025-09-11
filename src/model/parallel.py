@@ -5,6 +5,7 @@ Data structures for parallel processing communication.
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
+import numpy as np
 import torch.multiprocessing as mp
 
 
@@ -19,6 +20,8 @@ class Task:
     early_stop_epochs: int
     subset_percentage: float
     pop_size: int
+    train_indices: Optional[np.ndarray]
+    test_indices: Optional[np.ndarray]
     is_final: bool = False
 
 

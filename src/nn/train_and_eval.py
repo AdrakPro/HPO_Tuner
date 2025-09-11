@@ -1,5 +1,6 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -133,6 +134,8 @@ def train_and_eval(
     early_stop_epochs: int,
     device: torch.device,
     subset_percentage: float,
+    train_indices: Optional[np.ndarray] = None,
+    test_indices: Optional[np.ndarray] = None,
     is_final: bool = False,
     epoch_callback=None,
 ) -> tuple[float, float]:
@@ -160,6 +163,8 @@ def train_and_eval(
             chromosome.aug_intensity,
             is_gpu,
             subset_percentage,
+            train_indices,
+            test_indices,
         ) as loaders:
             train_loader, test_loader = loaders
             model: nn.Module = get_network(chromosome, neural_config).to(device)

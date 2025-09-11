@@ -29,19 +29,18 @@ CROP_PADDING = 4
 IMG_SIZE = 32
 
 
-# TODO: integrate with config x cores, dynamically allocate
-def get_num_workers():
+def get_num_workers(num_workers_from_config: int) -> int:
     """
     Determine the number of workers for DataLoader.
-    If the current process is daemonic, return 0 because daemonic processes cannot have children.
-    Otherwise, return a reasonable number of workers.
+    If the current process is daemonic, return 0.
+    Otherwise, return the number provided from the (adjusted) config.
     """
     try:
         if mp.current_process().daemon:
             return 0
     except:
         return 0
-    return min(1, os.cpu_count() // 2)
+    return num_workers_from_config
 
 
 class DataLoaderManager:
@@ -84,6 +83,7 @@ def get_dataset_loaders(
     batch_size: int,
     aug_intensity: AugmentationIntensity,
     is_gpu: bool,
+    num_dataloader_workers: int,
     subset_percentage: float = 1.0,
     train_indices: Optional[np.ndarray] = None,
     test_indices: Optional[np.ndarray] = None,
@@ -124,7 +124,7 @@ def get_dataset_loaders(
             train_set = Subset(train_set, indices)
 
     # Use dynamic worker count based on process type
-    num_workers = get_num_workers()
+    num_workers = get_num_workers(num_dataloader_workers)
     enable_persistent_workers = num_workers > 0
 
     train_loader = DataLoader(

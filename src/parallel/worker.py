@@ -42,8 +42,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    # Set number of threads to avoid CPU oversubscription
-    torch.set_num_threads(worker_config.num_threads)
     device = init_device(worker_config.device)
     device_name = (
         f"GPU-{worker_config.device}"
@@ -113,6 +111,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     epoch_callback=epoch_logger,
                     train_indices=task.train_indices,
                     test_indices=task.test_indices,
+                    num_dataloader_workers=worker_config.num_dataloader_workers,
                 )
 
                 duration = time.perf_counter() - start_time

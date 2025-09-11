@@ -49,14 +49,15 @@ class SchedulingStrategy(ABC):
         session_log_filename: str,
         num_gpu_workers: int = 0,
         num_cpu_workers: int = 0,
+        dl_workers_per_gpu: int = 1,
+        dl_workers_per_cpu: int = 1,
     ) -> List[mp.Process]:
         """Helper to spawn and start worker processes."""
         workers = []
         total_workers = num_gpu_workers + num_cpu_workers
+
         if total_workers == 0:
             return []
-
-        num_threads_per_process = max(1, os.cpu_count() // total_workers)
 
         # Spawn GPU workers
         for i in range(num_gpu_workers):
@@ -65,8 +66,8 @@ class SchedulingStrategy(ABC):
                 device=i,
                 task_queue=task_queue,
                 result_queue=result_queue,
-                num_threads=num_threads_per_process,
                 session_log_filename=session_log_filename,
+                num_dataloader_workers=dl_workers_per_gpu,
             )
             p = ctx.Process(target=worker_main, args=(w_config,))
             p.start()
@@ -79,8 +80,8 @@ class SchedulingStrategy(ABC):
                 device="cpu",
                 task_queue=task_queue,
                 result_queue=result_queue,
-                num_threads=num_threads_per_process,
                 session_log_filename=session_log_filename,
+                num_dataloader_workers=dl_workers_per_cpu,
             )
             p = ctx.Process(target=worker_main, args=(w_config,))
             p.start()
@@ -93,8 +94,12 @@ class CPUOnlyStrategy(SchedulingStrategy):
     """Schedules all tasks to be run on CPU workers."""
 
     def launch_workers(self, **kwargs) -> List[mp.Process]:
-        logger.info("Using CPUOnly scheduling strategy.")
-        num_cpu_workers = kwargs["execution_config"].get("cpu_workers", 1)
+        logger.info("Using CPU-Only scheduling strategy.")
+        exec_config = kwargs["execution_config"]
+        num_cpu_workers = exec_config["cpu_workers"]
+
+        dl_config = exec_config["dataloader_workers"]
+        dl_per_cpu = dl_config["per_cpu"]
 
         return self._spawn_processes(
             ctx=kwargs["ctx"],
@@ -102,6 +107,7 @@ class CPUOnlyStrategy(SchedulingStrategy):
             result_queue=kwargs["result_queue"],
             num_cpu_workers=num_cpu_workers,
             session_log_filename=kwargs["session_log_filename"],
+            dl_workers_per_cpu=dl_per_cpu,
         )
 
 
@@ -109,9 +115,11 @@ class GPUOnlyStrategy(SchedulingStrategy):
     """Schedules all tasks to be run on GPU workers."""
 
     def launch_workers(self, **kwargs) -> List[mp.Process]:
-        logger.info("Using GPUOnly scheduling strategy.")
+        logger.info("Using GPU-Only scheduling strategy.")
+
         available_gpus = torch.cuda.device_count()
-        num_gpu_workers = kwargs["execution_config"].get("gpu_workers", 0)
+        exec_config = kwargs["execution_config"]
+        num_gpu_workers = kwargs["execution_config"]["gpu_workers"]
 
         if num_gpu_workers > available_gpus:
             logger.warning(
@@ -121,9 +129,12 @@ class GPUOnlyStrategy(SchedulingStrategy):
 
         if num_gpu_workers == 0:
             logger.error(
-                "GPUOnlyStrategy selected, but no GPU workers are configured or available."
+                "GPU-Only Strategy selected, but no GPU workers are configured or available."
             )
             return []
+
+        dl_config = exec_config["dataloader_workers"]
+        dl_per_gpu = dl_config["per_gpu"]
 
         return self._spawn_processes(
             ctx=kwargs["ctx"],
@@ -131,6 +142,7 @@ class GPUOnlyStrategy(SchedulingStrategy):
             result_queue=kwargs["result_queue"],
             num_gpu_workers=num_gpu_workers,
             session_log_filename=kwargs["session_log_filename"],
+            dl_workers_per_gpu=dl_per_gpu,
         )
 
 
@@ -138,10 +150,11 @@ class HybridStrategy(SchedulingStrategy):
     """Schedules tasks on both GPU and CPU workers."""
 
     def launch_workers(self, **kwargs) -> List[mp.Process]:
-        logger.info("Using Hybrid scheduling strategy.")
+        logger.info("Using HYBRID scheduling strategy.")
+        exec_config = kwargs["execution_config"]
         available_gpus = torch.cuda.device_count()
-        num_gpu_workers = kwargs["execution_config"].get("gpu_workers", 0)
-        num_cpu_workers = kwargs["execution_config"].get("cpu_workers", 0)
+        num_gpu_workers = kwargs["execution_config"]["gpu_workers"]
+        num_cpu_workers = kwargs["execution_config"]["cpu_workers"]
 
         if num_gpu_workers > available_gpus:
             logger.warning(
@@ -151,9 +164,13 @@ class HybridStrategy(SchedulingStrategy):
 
         if num_gpu_workers + num_cpu_workers == 0:
             logger.error(
-                "HybridStrategy selected, but no workers are configured."
+                "HYBRID Strategy selected, but no workers are configured."
             )
             return []
+
+        dl_config = exec_config["dataloader_workers"]
+        dl_per_gpu = dl_config["per_gpu"]
+        dl_per_cpu = dl_config["per_cpu"]
 
         return self._spawn_processes(
             ctx=kwargs["ctx"],
@@ -162,4 +179,6 @@ class HybridStrategy(SchedulingStrategy):
             num_gpu_workers=num_gpu_workers,
             num_cpu_workers=num_cpu_workers,
             session_log_filename=kwargs["session_log_filename"],
+            dl_workers_per_gpu=dl_per_gpu,
+            dl_workers_per_cpu=dl_per_cpu,
         )

@@ -47,4 +47,4 @@ class WorkerConfig:
     task_queue: mp.Queue
     result_queue: mp.Queue
     session_log_filename: str
-    num_threads: int = (1,)
+    num_dataloader_workers: int

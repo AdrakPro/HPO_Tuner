@@ -14,6 +14,7 @@ from src.tui.tui_screen import TUI
 from src.utils.file_helper import ensure_dir_exists
 from src.logger.logger import logger
 from src.tui.tui_configurator import run_tui_configurator
+from src.utils.resource_manager import adjust_worker_config
 
 
 def main():
@@ -56,8 +57,11 @@ def main():
             session_log_filename = os.path.join(log_dir, f"log_{timestamp}.log")
 
             logger.add_file_sink(session_log_filename)
-
         logger.add_tui_sink(tui.get_loguru_sink())
+
+        if not loaded_state:
+            config = adjust_worker_config(config)
+
         tui.build_config_panel(config)
 
         with tui:

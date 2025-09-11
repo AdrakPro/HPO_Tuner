@@ -1,8 +1,8 @@
 import json
-import os
 from collections import deque
 from typing import Any, Callable, Dict
 
+import torch.cuda
 from rich import box
 from rich.align import Align
 from rich.console import Console
@@ -14,7 +14,6 @@ from rich.progress import (
     Progress,
     SpinnerColumn,
     TextColumn,
-    TimeRemainingColumn,
 )
 from rich.prompt import Confirm
 from rich.text import Text
@@ -47,7 +46,6 @@ class TUI:
             TextColumn("[bold blue]{task.description}"),
             BarColumn(),
             TextColumn("{task.completed} of {task.total} Evals"),
-            TimeRemainingColumn(),
             expand=True,
         )
 
@@ -86,6 +84,10 @@ class TUI:
         per_cpu = dl_workers.get("per_cpu", 0)
         total_cpu_workers = 0
 
+        available_gpus = torch.cuda.device_count()
+        if gpu_workers > available_gpus:
+            gpu_workers = available_gpus
+
         if execution_mode == "CPU":
             total_cpu_workers = cpu_workers * per_cpu
             gpu_workers = 0
@@ -96,10 +98,6 @@ class TUI:
             total_cpu_workers = (gpu_workers * per_gpu) + (
                 cpu_workers * per_cpu
             )
-
-        max_cpu_workers = os.cpu_count()
-
-        self._is_cpu_oversubscription(total_cpu_workers, max_cpu_workers)
 
         folds = nested_validation_cfg["outer_k_folds"]
 
@@ -151,7 +149,6 @@ class TUI:
         self.layout["config_left"].update(panel_left)
         self.layout["config_right"].update(panel_right)
 
-        # TODO: Responsive height based on height of text (overflow issue)
         # Adjust size dynamically
         vertical_padding = 5
         left_height = len(config_left_details.split("\n"))
@@ -250,15 +247,6 @@ class TUI:
         self.layout["fold_status_row"].update(status_panel)
         self.layout["fold_status_row"].visible = True
         self.update()
-
-    @staticmethod
-    def _is_cpu_oversubscription(
-        total_cpu_workers: int, max_cpu_workers: int
-    ) -> None:
-        if total_cpu_workers > max_cpu_workers:
-            logger.warning(
-                f"Total number of CPU workers ({total_cpu_workers}) exceeded available CPU resources ({max_cpu_workers}). Program may work slower due to CPU oversubscription."
-            )
 
     def _create_layout(self) -> Layout:
         layout = Layout(name="root")

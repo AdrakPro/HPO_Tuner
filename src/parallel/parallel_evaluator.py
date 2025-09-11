@@ -114,7 +114,9 @@ class ParallelEvaluator(Evaluator):
 
                     for entry in result.log_lines:
                         if isinstance(entry, tuple):
-                            logger.info(entry, file_only=True)
+                            line, mode = entry
+                            if mode == "file_only":
+                                logger.info(line, file_only=True)
                         else:
                             logger.info(entry)
 

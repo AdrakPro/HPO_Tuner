@@ -140,10 +140,8 @@ class ParallelEvaluator(Evaluator):
                             break
                 except queue.Empty:
                     continue
-        except (RuntimeError, KeyboardInterrupt) as e:
-            logger.error(
-                f"A critical error occurred: {e}. Shutting down worker pool."
-            )
+        except (RuntimeError, KeyboardInterrupt):
+            logger.warning(f"Shutting down worker pool...")
             self._shutting_down = True
             raise
 

@@ -84,11 +84,12 @@ def run_nested_resampling(
             checkpoint_manager.delete_checkpoint()
 
     logger.info("--- Nested Resampling Finished ---")
+
     if all_fold_scores:
         mean_accuracy = np.mean(all_fold_scores)
         std_accuracy = np.std(all_fold_scores)
         logger.info(
-            f"Average Accuracy across {outer_k_folds} folds: {mean_accuracy:.4f} (±{std_accuracy:.4f})"
+            f"Average Accuracy across {outer_k_folds} folds: {mean_accuracy:.4f} (±{std_accuracy:.6f})"
         )
     else:
         logger.warning("No fold scores were recorded.")

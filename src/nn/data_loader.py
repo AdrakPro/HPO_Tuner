@@ -3,9 +3,9 @@ Data loader module for CIFAR-10 using PyTorch.
 Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 """
 
+import gc
 import random
 import signal
-import sys
 from typing import Optional
 
 import numpy as np
@@ -46,7 +46,7 @@ class DataLoaderManager:
     """A context manager to ensure DataLoader workers are properly shut down."""
 
     def __init__(self, *loaders):
-        self.loaders = loaders
+        self.loaders = list(loaders)
         self._original_sigint_handler = signal.getsignal(signal.SIGINT)
 
     def __enter__(self):
@@ -59,13 +59,8 @@ class DataLoaderManager:
         signal.signal(signal.SIGINT, self._original_sigint_handler)
 
         # Clean up DataLoaders and their workers
-        for loader in self.loaders:
-            if hasattr(loader, "_iterator") and loader._iterator is not None:
-                try:
-                    loader._iterator._shutdown_workers()
-                except AttributeError:
-                    pass
-            del loader
+        self.loaders.clear()
+        gc.collect()
 
         # Clean up GPU memory if available
         if torch.cuda.is_available():

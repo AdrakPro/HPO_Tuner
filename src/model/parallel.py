@@ -3,7 +3,7 @@ Data structures for parallel processing communication.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 import numpy as np
 import torch.multiprocessing as mp
@@ -33,7 +33,7 @@ class Result:
     fitness: float
     loss: float
     status: str  # 'SUCCESS', 'FAILURE', 'CANCELLED'
-    log_lines: [str]
+    log_lines: List[str]
     duration_seconds: float
     error_message: Optional[str] = None
 

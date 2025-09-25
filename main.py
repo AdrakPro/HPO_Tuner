@@ -59,8 +59,8 @@ def main():
             logger.add_file_sink(session_log_filename)
         logger.add_tui_sink(tui.get_loguru_sink())
 
-        if not loaded_state:
-            config = adjust_worker_config(config)
+        # if not loaded_state:
+        #     config = adjust_worker_config(config)
 
         tui.build_config_panel(config)
 
@@ -72,8 +72,8 @@ def main():
                 config, tui, session_log_filename, loaded_state
             )
 
-        logger.info("Optimization complete. Deleting final checkpoint.")
-        checkpoint_manager.delete_checkpoint()
+            logger.info("Optimization complete. Deleting final checkpoint.")
+            checkpoint_manager.delete_checkpoint()
     except KeyboardInterrupt:
         logger.info("User terminated the program.")
         sys.exit(0)

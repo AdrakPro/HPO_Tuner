@@ -2,7 +2,11 @@
 Handles the parallel evaluation of a population of individuals using a persistent worker pool.
 """
 
+import atexit
 import queue
+import time
+from collections import deque
+import random
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -15,12 +19,14 @@ from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
 from src.model.evaluator_interface import Evaluator
 from src.model.parallel import Result, Task
+from src.utils.signal_manager import signal_manager
 
 
 class ParallelEvaluator(Evaluator):
     """
     Orchestrates evaluation across multiple processes using a persistent pool of workers.
-    This class is a context manager to ensure proper startup and cleanup.
+    Uses an asynchronous pipeline to ensure high throughput by not waiting
+    for slow "straggler" workers.
     """
 
     def __init__(
@@ -45,6 +51,8 @@ class ParallelEvaluator(Evaluator):
         self.train_indices = train_indices
         self.test_indices = test_indices
 
+        self._current_pop_size = 0
+
         self._shutting_down = False
         self._cleaned_up = False
 
@@ -52,8 +60,8 @@ class ParallelEvaluator(Evaluator):
         self.task_id = task_id
 
         ctx = mp.get_context("spawn")
-        self.task_queue: mp.Queue = ctx.Queue()
-        self.result_queue: mp.Queue = ctx.Queue()
+        self.task_queue: mp.Queue = ctx.Queue(maxsize=1000)
+        self.result_queue: mp.Queue = ctx.Queue(maxsize=1000)
 
         logger.info("Initializing worker pool...")
         self._workers: List[mp.Process] = self.strategy.launch_workers(
@@ -72,6 +80,15 @@ class ParallelEvaluator(Evaluator):
             f"Worker pool initialized with {len(self._workers)} workers."
         )
 
+        self._task_id_counter = 0
+        self._pending_tasks: Dict[int, Task] = {}
+        self._completed_results: deque[Result] = deque()
+        self._population_to_evaluate: deque[tuple[int, Dict]] = deque()
+
+        signal_manager.initialize()
+        signal_manager.register_cleanup_handler(self.cleanup_workers)
+        atexit.register(self.cleanup_workers)
+
     def __enter__(self):
         return self
 
@@ -84,80 +101,130 @@ class ParallelEvaluator(Evaluator):
         stop_conditions: StopConditions | None,
         is_final: bool = False,
     ) -> List[Result]:
+        self._current_pop_size = len(population)
+
         if self._shutting_down:
             logger.warning("Evaluator is shutting down, skipping evaluation")
             return self._generate_placeholder_results(
                 len(population), "Shutdown in progress."
             )
 
-        pop_size = len(population)
-        for i, ind in enumerate(population):
-            self.task_queue.put(
-                Task(
-                    index=i,
-                    neural_network_config=self.neural_network_config,
-                    individual_hyperparams=ind,
-                    training_epochs=self.training_epochs,
-                    early_stop_epochs=self.early_stop_epochs,
-                    subset_percentage=self.subset_percentage,
-                    pop_size=pop_size,
-                    is_final=is_final,
-                    train_indices=self.train_indices,
-                    test_indices=self.test_indices,
-                )
-            )
+        random.shuffle(population)
 
-        results_list: List[Result] = [None] * pop_size
-        finished = 0
+        for per_gen_index, ind in enumerate(population):
+            self._population_to_evaluate.append((per_gen_index, ind))
+
+        pop_size = len(population)
+        results_for_generation: List[Result] = []
 
         try:
-            while finished < pop_size and not self._shutting_down:
-                try:
-                    result: Result = self.result_queue.get(timeout=1.0)
-                    results_list[result.index] = result
-                    finished += 1
+            # 2. Main loop: process until we have enough results for the next generation
+            while (
+                len(results_for_generation) < pop_size
+                and not self._shutting_down
+            ):
+                self._collect_finished_tasks()
 
-                    self.progress.update(self.task_id, advance=1)
+                while (
+                    self._completed_results
+                    and len(results_for_generation) < pop_size
+                ):
+                    results_for_generation.append(
+                        self._completed_results.popleft()
+                    )
 
-                    for entry in result.log_lines:
-                        if isinstance(entry, tuple):
-                            line, mode = entry
-                            if mode == "file_only":
-                                logger.info(line, file_only=True)
-                        else:
-                            logger.info(entry)
+                self._submit_new_tasks(is_final)
 
-                    if stop_conditions:
-                        should_stop, reason = (
-                            stop_conditions.should_stop_evaluation(
-                                result.fitness
+                if len(results_for_generation) < pop_size:
+                    try:
+                        result: Result = self.result_queue.get(timeout=1.0)
+                        self._process_result(result, stop_conditions)
+
+                        self._completed_results.append(result)
+
+                    except queue.Empty:
+                        if not self._is_any_worker_alive():
+                            raise RuntimeError(
+                                "All workers have died unexpectedly."
                             )
-                        )
+                        continue
 
-                        if should_stop:
-                            self._clear_pending_tasks()
-                            logger.warning(reason)
-                            break
-                except queue.Empty:
-                    continue
-        except (RuntimeError, KeyboardInterrupt):
-            logger.warning(f"Shutting down worker pool...")
+        except (RuntimeError, KeyboardInterrupt) as e:
+            logger.warning(
+                f"Evaluation interrupted: {e}. Shutting down worker pool..."
+            )
             self._shutting_down = True
             raise
 
-        if finished < pop_size:
-            for i in range(pop_size):
-                if results_list[i] is None:
-                    results_list[i] = Result(
-                        index=i,
-                        fitness=0.0,
-                        loss=float("inf"),
-                        status="CANCELLED",
-                        log_lines=[],
-                        duration_seconds=0,
-                        error_message="Evaluation stopped early.",
-                    )
-        return results_list
+        while len(results_for_generation) < pop_size:
+            results_for_generation.extend(
+                self._generate_placeholder_results(
+                    1, "Evaluation stopped early."
+                )
+            )
+
+        return results_for_generation[:pop_size]
+
+    def _submit_new_tasks(self, is_final: bool):
+        """Submits tasks from the internal queue until all workers are busy."""
+        while (
+            self._population_to_evaluate
+            and len(self._pending_tasks) < self.num_workers
+        ):
+            per_gen_index, ind = self._population_to_evaluate.popleft()
+            task = Task(
+                index=per_gen_index,  # Use per-generation index
+                neural_network_config=self.neural_network_config,
+                individual_hyperparams=ind,
+                training_epochs=self.training_epochs,
+                early_stop_epochs=self.early_stop_epochs,
+                subset_percentage=self.subset_percentage,
+                pop_size=self._current_pop_size,
+                is_final=is_final,
+                train_indices=self.train_indices,
+                test_indices=self.test_indices,
+            )
+            self._pending_tasks[per_gen_index] = task
+            self.task_queue.put(task)
+
+    def _collect_finished_tasks(
+        self, stop_conditions: StopConditions | None = None
+    ):
+        """Non-blocking draining the result queue."""
+        try:
+            while True:
+                result: Result = self.result_queue.get_nowait()
+                self._process_result(result, stop_conditions)
+                self._completed_results.append(result)
+        except queue.Empty:
+            pass
+
+    def _process_result(
+        self, result: Result, stop_conditions: StopConditions | None
+    ):
+        """Handles a finished result, including logging and checking stop conditions."""
+        if result.index in self._pending_tasks:
+            del self._pending_tasks[result.index]
+
+        self.progress.update(self.task_id, advance=1)
+
+        for entry in result.log_lines:
+            if isinstance(entry, tuple) and entry[1] == "file_only":
+                logger.info(entry[0], file_only=True)
+            else:
+                logger.info(entry)
+
+        if stop_conditions:
+            should_stop, reason = stop_conditions.should_stop_evaluation(
+                result.fitness
+            )
+            if should_stop:
+                self._clear_pending_tasks()
+                logger.warning(reason)
+                self._shutting_down = True  # Signal to stop evaluation loops
+
+    def _is_any_worker_alive(self) -> bool:
+        return any(p.is_alive() for p in self._workers)
 
     @staticmethod
     def _generate_placeholder_results(
@@ -194,7 +261,7 @@ class ParallelEvaluator(Evaluator):
         """Updates the subset percentage."""
         self.subset_percentage = subset_percentage
 
-    def cleanup_workers(self, timeout_per_worker: float = 60.0) -> None:
+    def cleanup_workers(self, timeout_per_worker: float = 30.0) -> None:
         if self._cleaned_up:
             return
 
@@ -202,70 +269,99 @@ class ParallelEvaluator(Evaluator):
         self._shutting_down = True
         self._cleaned_up = True
 
-        # 1. Send sentinel values to workers to signal shutdown
+        # 1. Send sentinels with better error handling
+        sentinels_sent = 0
         for _ in self._workers:
             try:
-                self.task_queue.put(None, timeout=1.0)
+                self.task_queue.put_nowait(None)  # Non-blocking put
+                sentinels_sent += 1
             except (queue.Full, OSError, ValueError):
-                logger.warning(
-                    "Could not send sentinel to worker queue, skipping."
-                )
-                break
+                logger.warning("Queue full, skipping sentinel for one worker")
 
-        # 2. Wait for workers to finish gracefully
-        for p in self._workers:
+        logger.info(
+            f"Sent {sentinels_sent}/{len(self._workers)} shutdown signals"
+        )
+
+        # 2. Wait for graceful termination with progress tracking
+        start_time = time.time()
+        alive_workers = []
+
+        for i, p in enumerate(self._workers):
             if not p.is_alive():
                 continue
 
-            p.join(timeout=timeout_per_worker)
+            remaining_time = timeout_per_worker - (time.time() - start_time)
+            if remaining_time <= 0:
+                alive_workers.append(p)
+                continue
+
+            p.join(timeout=min(5.0, remaining_time))  # Check frequently
             if p.is_alive():
-                try:
-                    logger.warning(
-                        f"Worker {p.pid} did not exit, terminating..."
-                    )
-                    p.terminate()
-                    p.join(timeout=2.0)
-                    if p.is_alive():
-                        logger.error(
-                            f"Worker {p.pid} still alive after terminate(), killing..."
-                        )
-                        p.kill()
-                except Exception as e:
-                    logger.error(f"Error terminating worker {p.pid}: {e}")
+                alive_workers.append(p)
 
-        # 3. Drain remaining results safely
-        for q in [self.result_queue, self.task_queue]:
-            try:
-                while not q.empty():
-                    item = q.get_nowait()
-                    if item is None:
-                        fake_result = Result(
-                            index=-1,
-                            fitness=0.0,
-                            loss=float("inf"),
-                            status="FAILURE",
-                            log_lines=[],
-                            duration_seconds=0,
-                            error_message="Worker returned None",
-                        )
-                        q.put(fake_result)
-            except (queue.Empty, OSError, ValueError):
-                pass
+        # 3. Force termination only if necessary
+        if alive_workers:
+            logger.warning(
+                f"Force terminating {len(alive_workers)} stuck workers"
+            )
+            for p in alive_workers:
+                self._terminate_process(p)
 
-        # 4. Close queues
-        for q in [self.task_queue, self.result_queue]:
-            try:
-                q.close()
-                q.join_thread()
-            except (OSError, ValueError):
-                pass
+        # 4. Safe queue cleanup
+        self._drain_queues()
 
-        # 5. Free GPU memory if applicable
+        # 5. Close queues and clear references
+        self._close_queues()
+        self._workers.clear()
+
+        # 6. GPU cleanup
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        self._workers = []
+        signal_manager.unregister_cleanup_handler(self.cleanup_workers)
         logger.info("Worker pool cleanup complete.")
+
+    @staticmethod
+    def _terminate_process(p: mp.Process):
+        """Safely terminate a process with escalating force."""
+        try:
+            if p.is_alive():
+                p.terminate()
+                p.join(timeout=2.0)
+
+            if p.is_alive():
+                logger.error(f"Process {p.pid} still alive, killing...")
+                p.kill()
+                p.join(timeout=1.0)
+
+            if p.is_alive():
+                logger.critical(f"Process {p.pid} cannot be killed!")
+            else:
+                logger.info(f"Process {p.pid} terminated")
+
+        except Exception as e:
+            logger.error(f"Error terminating process {p.pid}: {e}")
+
+    def _drain_queues(self):
+        """Safely drain queues without adding items."""
+        for q in [self.result_queue, self.task_queue]:
+            try:
+                drained_count = 0
+                while not q.empty():
+                    q.get_nowait()
+                    drained_count += 1
+                if drained_count > 0:
+                    logger.info(f"Drained {drained_count} items from queue")
+            except (queue.Empty, OSError, ValueError):
+                pass
+
+    def _close_queues(self):
+        """Safely close queues."""
+        for q in [self.task_queue, self.result_queue]:
+            try:
+                q.close()
+            except (OSError, ValueError):
+                pass
 
     @property
     def num_workers(self) -> int:

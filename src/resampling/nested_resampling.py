@@ -7,6 +7,7 @@ from src.logger.logger import logger
 from src.tui.tui_screen import TUI
 from src.utils.checkpoint_manager import GaState, checkpoint_manager
 from src.utils.data_splitter import create_stratified_k_folds
+from src.evaluator.create_evaluator import create_evaluator
 
 
 def run_nested_resampling(
@@ -22,6 +23,8 @@ def run_nested_resampling(
     optimization process. Otherwise, it iterates through K folds, running
     the full GA optimization within each to find the best hyperparameters,
     and then evaluates the result on the fold's test set.
+
+    Worker pool (evaluator) is created once per fold and persists for all generations in that fold.
     """
     nested_config = config["nested_validation_config"]
     outer_k_folds = nested_config["outer_k_folds"]
@@ -44,7 +47,10 @@ def run_nested_resampling(
     if loaded_state and loaded_state.outer_fold_k != -1:
         start_fold = loaded_state.outer_fold_k
 
-        if loaded_state.phase_completed:
+        if (
+            loaded_state.phase == "main_algorithm"
+            and loaded_state.phase_completed
+        ):
             logger.info(
                 f"Fold {start_fold + 1} was already completed. Resuming from Fold {start_fold + 2}."
             )
@@ -54,23 +60,37 @@ def run_nested_resampling(
                 f"Resuming nested resampling from Fold {start_fold + 1}/{outer_k_folds}."
             )
 
+    ga_config = config["genetic_algorithm_config"]
+
     for k in range(start_fold, outer_k_folds):
         tui.update_fold_status(k + 1, outer_k_folds)
         logger.info(f"--- Running Fold {k + 1}/{outer_k_folds} ---")
 
         train_idx, test_idx = fold_indices[k]
-
         current_fold_loaded_state = loaded_state if k == start_fold else None
 
-        best_individual, final_fitness, final_loss = run_optimization(
-            config=config,
-            tui=tui,
-            session_log_filename=session_log_filename,
-            loaded_state=current_fold_loaded_state,
-            outer_fold_k=k,
-            train_indices=train_idx,
-            test_indices=test_idx,
-        )
+        with create_evaluator(
+            config,
+            ga_config["calibration"]["training_epochs"],
+            ga_config["calibration"]["stop_conditions"]["early_stop_epochs"],
+            ga_config["calibration"].get("data_subset_percentage", 1.0),
+            tui,
+            0,
+            session_log_filename,
+            train_idx,
+            test_idx,
+        ) as evaluator:
+
+            best_individual, final_fitness, final_loss = run_optimization(
+                config=config,
+                tui=tui,
+                session_log_filename=session_log_filename,
+                loaded_state=current_fold_loaded_state,
+                outer_fold_k=k,
+                train_indices=train_idx,
+                test_indices=test_idx,
+                evaluator=evaluator,
+            )
 
         logger.info(f"--- Fold {k + 1} Finished ---")
         logger.info(

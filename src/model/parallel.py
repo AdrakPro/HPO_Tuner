@@ -1,17 +1,28 @@
 """
-Data structures for parallel processing communication.
+Data structures for parallel execution.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union, List
+from typing import Dict, List, Optional, Any, Union, Tuple
+import multiprocessing as mp
 
-import numpy as np
-import torch.multiprocessing as mp
+
+@dataclass
+class WorkerConfig:
+    """Configuration for a worker process."""
+
+    worker_id: int
+    device: Union[int, str]  # GPU index or "cpu"
+    task_queue: mp.Queue
+    result_queue: mp.Queue
+    session_log_filename: str
+    num_dataloader_workers: int
+    total_cpu_workers: Optional[int] = None
 
 
 @dataclass
 class Task:
-    """Represents a single unit of work: evaluating one individual."""
+    """A task to be executed by a worker."""
 
     index: int
     neural_network_config: Dict[str, Any]
@@ -20,31 +31,19 @@ class Task:
     early_stop_epochs: int
     subset_percentage: float
     pop_size: int
-    train_indices: Optional[np.ndarray]
-    test_indices: Optional[np.ndarray]
-    is_final: bool = False
+    is_final: bool
+    train_indices: Optional[List[int]]
+    test_indices: Optional[List[int]]
 
 
 @dataclass
 class Result:
-    """Represents the outcome of a completed task."""
+    """Result of a task execution."""
 
     index: int
     fitness: float
     loss: float
-    status: str  # 'SUCCESS', 'FAILURE', 'CANCELLED'
-    log_lines: List[str]
     duration_seconds: float
+    status: str  # "SUCCESS", "FAILURE", "CANCELLED"
+    log_lines: List[str | Tuple[str, str]]
     error_message: Optional[str] = None
-
-
-@dataclass
-class WorkerConfig:
-    """Static configuration passed to each worker process on startup."""
-
-    worker_id: int
-    device: Union[str, int]  # 'cpu' or GPU index (0, 1, ...)
-    task_queue: mp.Queue
-    result_queue: mp.Queue
-    session_log_filename: str
-    num_dataloader_workers: int

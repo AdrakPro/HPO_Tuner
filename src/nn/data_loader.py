@@ -6,6 +6,7 @@ Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 import gc
 import random
 import signal
+import sys
 from typing import Optional
 
 import numpy as np
@@ -14,6 +15,7 @@ import torch.multiprocessing as mp
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
+from src.logger.logger import logger
 from src.model.chromosome import AugmentationIntensity
 
 # Precomputed statistics, ensuring images are normalized consistently for CIFAR-10
@@ -45,9 +47,10 @@ def get_num_workers(num_workers_from_config: int) -> int:
 class DataLoaderManager:
     """A context manager to ensure DataLoader workers are properly shut down."""
 
-    def __init__(self, *loaders):
+    def __init__(self, *loaders, is_gpu_context: bool = False):
         self.loaders = list(loaders)
         self._original_sigint_handler = signal.getsignal(signal.SIGINT)
+        self.is_gpu_context = is_gpu_context
 
     def __enter__(self):
         # Set custom signal handler
@@ -58,12 +61,10 @@ class DataLoaderManager:
         # Restore original signal handler
         signal.signal(signal.SIGINT, self._original_sigint_handler)
 
-        # Clean up DataLoaders and their workers
-        self.loaders.clear()
-        gc.collect()
+        self._cleanup_dataloaders()
 
         # Clean up GPU memory if available
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and self.is_gpu_context:
             torch.cuda.empty_cache()
 
         return False
@@ -71,6 +72,29 @@ class DataLoaderManager:
     def _handle_sigint(self, signum, frame):
         """Handle SIGINT by initiating graceful shutdown"""
         sys.exit(1)  # This will trigger __exit__
+
+    def _cleanup_dataloaders(self):
+        """Properly cleanup DataLoader workers and resources."""
+        for loader in self.loaders:
+            try:
+                if hasattr(loader, "dataset") and hasattr(
+                    loader.dataset, "close"
+                ):
+                    loader.dataset.close()
+
+                if hasattr(loader, "_iterator"):
+                    loader._iterator = None
+
+                if hasattr(loader, "sampler") and hasattr(
+                    loader.sampler, "close"
+                ):
+                    loader.sampler.close()
+
+            except Exception as e:
+                logger.warning(f"Error cleaning up DataLoader: {e}")
+
+        self.loaders.clear()
+        gc.collect()
 
 
 def get_dataset_loaders(
@@ -117,7 +141,6 @@ def get_dataset_loaders(
             indices = random.sample(range(len(train_set)), subset_size)
             train_set = Subset(train_set, indices)
 
-    # Use dynamic worker count based on process type
     num_workers = get_num_workers(num_dataloader_workers)
     enable_persistent_workers = num_workers > 0
 
@@ -128,6 +151,8 @@ def get_dataset_loaders(
         num_workers=num_workers,
         pin_memory=is_gpu,
         persistent_workers=enable_persistent_workers,
+        prefetch_factor=(2 if num_workers > 0 else None),
+        multiprocessing_context=("spawn" if num_workers > 0 else None),
     )
 
     test_loader = DataLoader(
@@ -137,9 +162,11 @@ def get_dataset_loaders(
         num_workers=num_workers,
         pin_memory=is_gpu,
         persistent_workers=enable_persistent_workers,
+        prefetch_factor=2 if num_workers > 0 else None,
+        multiprocessing_context="spawn" if num_workers > 0 else None,
     )
 
-    return DataLoaderManager(train_loader, test_loader)
+    return DataLoaderManager(train_loader, test_loader, is_gpu_context=is_gpu)
 
 
 def get_transforms(

@@ -14,7 +14,9 @@ from src.tui.tui_configurator import run_tui_configurator
 from src.tui.tui_screen import TUI
 from src.utils.checkpoint_manager import GaState, checkpoint_manager
 from src.utils.file_helper import ensure_dir_exists
-from src.utils.resource_manager import adjust_worker_config
+from src.utils.signal_manager import (
+    signal_manager,
+)
 
 
 def main():
@@ -27,10 +29,9 @@ def main():
 
     def sigint_handler(signum, frame):
         logger.info("Main received SIGINT, shutting down gracefully...")
-        sys.exit(0)
+        signal_manager.handle_signal(signum, frame)
 
-    # Set up signal handler
-    signal.signal(signal.SIGINT, sigint_handler)
+    signal_manager.initialize()
 
     tui = TUI()
     loaded_state: GaState | None = None
@@ -72,8 +73,7 @@ def main():
                 config, tui, session_log_filename, loaded_state
             )
 
-            logger.info("Optimization complete. Deleting final checkpoint.")
-            checkpoint_manager.delete_checkpoint()
+            logger.info("Optimization complete.")
     except KeyboardInterrupt:
         logger.info("User terminated the program.")
         sys.exit(0)

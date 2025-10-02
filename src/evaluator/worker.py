@@ -8,13 +8,14 @@ import queue
 import signal
 import sys
 import time
-from typing import List, Union, Tuple
+from typing import Union
 
 import torch
 
 from src.logger.logger import logger
 from src.model.chromosome import Chromosome
 from src.model.parallel import Result, Task, WorkerConfig
+from src.nn.data_loader import get_dataset_loaders
 from src.nn.train_and_eval import train_and_eval
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
 from src.utils.thread_optimizer import (
@@ -24,7 +25,7 @@ from src.utils.thread_optimizer import (
 
 def init_device(device_id: Union[str, int]) -> torch.device:
     """
-    Initialize torch device for a worker with DGX A100 optimizations.
+    Initialize torch device for a worker.
     """
     ThreadOptimizer.enable_tf32()
 
@@ -70,12 +71,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
         os.environ["MKL_NUM_THREADS"] = "4"
         torch.set_num_threads(4)
 
-    thread_info = ThreadOptimizer.get_system_threading_info()
-
-    log_buffer: List[str | Tuple[str, str]] = [
-        f"Worker {worker_config.worker_id} thread config: {thread_info}"
-    ]
-
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
@@ -89,14 +84,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Restore signal handler after imports are complete
     signal.signal(signal.SIGINT, original_sigint_handler)
 
-    if device.type == "cuda":
-        log_buffer.append(
-            (
-                f"Worker {worker_config.worker_id} using {torch.cuda.get_device_name(device)} with {torch.cuda.get_device_properties(device).total_memory / 1024**3:.1f}GB memory",
-                "file_only",
-            )
-        )
-
     while True:
         try:
             task = worker_config.task_queue.get(timeout=1.0)
@@ -104,20 +91,26 @@ def worker_main(worker_config: WorkerConfig) -> None:
             if task is None:  # Sentinel to stop
                 break
 
-            log_buffer.append(
-                f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)"
-            )
-
-            log_buffer.append(
+            log_buffer = [
+                f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
                 (
                     f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
                     "file_only",
-                )
-            )
+                ),
+            ]
 
             try:
                 start_time = time.perf_counter()
                 chromosome = Chromosome.from_dict(task.individual_hyperparams)
+
+                if worker_config.fixed_batch_size is None:
+                    REFERENCE_BATCH = 256
+                    scaled_base_lr = chromosome.base_lr * (
+                        chromosome.batch_size / REFERENCE_BATCH
+                    )
+                    log_buffer.append(
+                        f"[Worker-{worker_config.worker_id} / {device_name}] Scaled base_lr to value {scaled_base_lr} for batch_size {chromosome.batch_size}"
+                    )
 
                 def epoch_logger(
                     epoch,
@@ -140,19 +133,30 @@ def worker_main(worker_config: WorkerConfig) -> None:
                         line += " / Early stopping triggered"
                     log_buffer.append(line)
 
-                accuracy, loss = train_and_eval(
-                    chromosome=chromosome,
-                    neural_config=task.neural_network_config,
-                    epochs=task.training_epochs,
-                    early_stop_epochs=task.early_stop_epochs,
-                    device=device,
+                if worker_config.fixed_batch_size is not None:
+                    chromosome.batch_size = worker_config.fixed_batch_size
+
+                with get_dataset_loaders(
+                    batch_size=chromosome.batch_size,
+                    aug_intensity=chromosome.aug_intensity,
+                    is_gpu=device.type == "cuda",
+                    num_dataloader_workers=worker_config.num_dataloader_workers,
                     subset_percentage=task.subset_percentage,
-                    is_final=task.is_final,
-                    epoch_callback=epoch_logger,
                     train_indices=task.train_indices,
                     test_indices=task.test_indices,
-                    num_dataloader_workers=worker_config.num_dataloader_workers,
-                )
+                ) as (train_loader, test_loader):
+
+                    accuracy, loss = train_and_eval(
+                        chromosome=chromosome,
+                        neural_config=task.neural_network_config,
+                        epochs=task.training_epochs,
+                        early_stop_epochs=task.early_stop_epochs,
+                        device=device,
+                        train_loader=train_loader,
+                        test_loader=test_loader,
+                        is_final=task.is_final,
+                        epoch_callback=epoch_logger,
+                    )
 
                 duration = time.perf_counter() - start_time
 

@@ -15,6 +15,7 @@ from src.model.chromosome import Chromosome
 from src.model.evaluator_interface import Evaluator
 from src.model.parallel import Result
 from src.nn.train_and_eval import train_and_eval
+from src.nn.data_loader import get_dataset_loaders
 
 
 class IndividualEvaluator(Evaluator):
@@ -103,18 +104,28 @@ class IndividualEvaluator(Evaluator):
                         line += " / Early stopping triggered"
                     logger.info(line)
 
-                accuracy, loss = train_and_eval(
-                    chromosome=chromosome,
-                    neural_config=self.neural_config,
-                    epochs=self.training_epochs,
-                    early_stop_epochs=self.early_stop_epochs,
-                    device=self.device,
+                with get_dataset_loaders(
+                    batch_size=chromosome.batch_size,
+                    aug_intensity=chromosome.aug_intensity,
+                    is_gpu=self.device.type == "cuda",
+                    num_dataloader_workers=0,
                     subset_percentage=self.subset_percentage,
-                    is_final=is_final,
-                    epoch_callback=epoch_logger,
                     train_indices=self.train_indices,
                     test_indices=self.test_indices,
-                )
+                ) as (train_loader, test_loader):
+
+                    accuracy, loss = train_and_eval(
+                        chromosome=chromosome,
+                        neural_config=self.neural_config,
+                        epochs=self.training_epochs,
+                        early_stop_epochs=self.early_stop_epochs,
+                        device=self.device,
+                        train_loader=train_loader,
+                        test_loader=test_loader,
+                        is_final=is_final,
+                        epoch_callback=epoch_logger,
+                    )
+
                 status = "SUCCESS"
                 error_msg = None
 
@@ -148,7 +159,7 @@ class IndividualEvaluator(Evaluator):
                     accuracy
                 )
                 if should_stop:
-                    logger.warning(reason)
+                    logger.info(reason)
                     break
 
         if len(results) < pop_size:

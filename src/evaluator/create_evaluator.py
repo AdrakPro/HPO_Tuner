@@ -5,7 +5,6 @@ Factory function for creating the appropriate population evaluator.
 from typing import Dict, Optional
 
 import numpy as np
-from rich.progress import TaskID
 
 from src.evaluator.individual_evaluator import IndividualEvaluator
 from src.evaluator.parallel_evaluator import ParallelEvaluator
@@ -26,10 +25,10 @@ def create_evaluator(
     early_stop_epochs: int,
     subset_percentage: float,
     tui: TUI,
-    task_id: TaskID,
     session_log_filename: str,
     train_indices: Optional[np.ndarray] = None,
     test_indices: Optional[np.ndarray] = None,
+    fixed_batch_size: Optional[int] = None,
 ) -> Evaluator:
     """
     Selects and creates the appropriate evaluator (sequential or parallel)
@@ -45,7 +44,6 @@ def create_evaluator(
             early_stop_epochs=early_stop_epochs,
             subset_percentage=subset_percentage,
             progress=tui.progress,
-            task_id=task_id,
             train_indices=train_indices,
             test_indices=test_indices,
         )
@@ -63,13 +61,13 @@ def create_evaluator(
         logger.error(
             f"Unknown evaluation mode: {eval_mode}. Defaulting to sequential."
         )
+        # Todo: fix sequential evaluator, setting fixed batch size, progress bar advancing
         return IndividualEvaluator(
             neural_config=neural_config,
             training_epochs=training_epochs,
             early_stop_epochs=early_stop_epochs,
             subset_percentage=subset_percentage,
             progress=tui.progress,
-            task_id=task_id,
             train_indices=train_indices,
             test_indices=test_indices,
         )
@@ -81,8 +79,8 @@ def create_evaluator(
         subset_percentage=subset_percentage,
         strategy=strategy,
         progress=tui.progress,
-        task_id=task_id,
         session_log_filename=session_log_filename,
         train_indices=train_indices,
         test_indices=test_indices,
+        fixed_batch_size=fixed_batch_size,
     )

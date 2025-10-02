@@ -6,7 +6,7 @@ distributing the evaluation workload (e.g., CPU only, GPU only, Hybrid).
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.multiprocessing as mp
@@ -30,6 +30,7 @@ class SchedulingStrategy(ABC):
         result_queue: mp.Queue,
         execution_config: Dict,
         session_log_filename: str,
+        fixed_batch_size: Optional[int] = None,
     ) -> List[mp.Process]:
         """
         The core method for a strategy. It must launch the necessary
@@ -50,6 +51,7 @@ class SchedulingStrategy(ABC):
         num_cpu_workers: int = 0,
         dl_workers_per_gpu: int = 1,
         dl_workers_per_cpu: int = 1,
+        fixed_batch_size: Optional[int] = None,
     ) -> List[mp.Process]:
         """Helper to spawn and start worker processes."""
         workers = []
@@ -67,7 +69,9 @@ class SchedulingStrategy(ABC):
                 result_queue=result_queue,
                 session_log_filename=session_log_filename,
                 num_dataloader_workers=dl_workers_per_gpu,
+                fixed_batch_size=fixed_batch_size,
             )
+
             p = ctx.Process(target=worker_main, args=(w_config,))
             p.start()
             workers.append(p)
@@ -81,6 +85,7 @@ class SchedulingStrategy(ABC):
                 result_queue=result_queue,
                 session_log_filename=session_log_filename,
                 num_dataloader_workers=dl_workers_per_cpu,
+                fixed_batch_size=fixed_batch_size,
             )
             p = ctx.Process(target=worker_main, args=(w_config,))
             p.start()
@@ -107,6 +112,7 @@ class CPUOnlyStrategy(SchedulingStrategy):
             num_cpu_workers=num_cpu_workers,
             session_log_filename=kwargs["session_log_filename"],
             dl_workers_per_cpu=dl_per_cpu,
+            fixed_batch_size=kwargs["fixed_batch_size"],
         )
 
 
@@ -142,6 +148,7 @@ class GPUOnlyStrategy(SchedulingStrategy):
             num_gpu_workers=num_gpu_workers,
             session_log_filename=kwargs["session_log_filename"],
             dl_workers_per_gpu=dl_per_gpu,
+            fixed_batch_size=kwargs["fixed_batch_size"],
         )
 
 

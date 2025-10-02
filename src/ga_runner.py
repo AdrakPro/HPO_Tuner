@@ -1,4 +1,6 @@
+import random
 import time
+from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -13,6 +15,7 @@ from src.logger.logger import logger
 from src.tui.tui_screen import TUI
 from src.utils.checkpoint_manager import GaState, checkpoint_manager
 from src.utils.seed import seed_everything
+from src.utils.performance_tracker import performance_tracker, PhaseType
 
 CAL_PHASE = "calibration"
 MAIN_PHASE = "main_algorithm"
@@ -33,6 +36,7 @@ def run_ga_phase(
     Runs a complete phase (calibration or main) of the genetic algorithm,
     respecting the defined stop conditions.
     """
+
     phase_config = config["genetic_algorithm_config"][phase_name]
     stop_conditions = StopConditions(phase_config["stop_conditions"])
     generations = phase_config["generations"]
@@ -48,9 +52,13 @@ def run_ga_phase(
         f"Generations: {generations}, Population: {len(starting_population)}"
     )
 
+    phase_type = (
+        PhaseType.CALIBRATION if phase_name == "calibration" else PhaseType.MAIN
+    )
+
     population = starting_population
     starting_pop_size = len(population)
-    total_evaluations = (generations * starting_pop_size) + starting_pop_size
+    total_evaluations = generations * starting_pop_size
     completed_evaluations = starting_pop_size * (start_gen - 1)
 
     phase_task_id = tui.progress.add_task(
@@ -58,6 +66,8 @@ def run_ga_phase(
         total=total_evaluations,
         completed=completed_evaluations,
     )
+
+    evaluator.set_task_id(phase_task_id)
 
     gen = start_gen - 1
 
@@ -71,29 +81,47 @@ def run_ga_phase(
             )
 
         for gen in range(start_gen, generations + 1):
+            performance_tracker.start_generation(gen, phase_type)
+
             tui.update()
+
             logger.info(
                 f"--- {phase_name.upper()} - Generation {gen}/{generations} ---"
             )
 
+            seq_prep_start = time.perf_counter()
             if enable_progressive_epochs:
                 progress = gen / generations
                 if progress <= 0.3:
-                    epoch_multiplier = 0.2
+                    epoch_multiplier = 0.5
                 elif progress <= 0.7:
-                    epoch_multiplier = 0.6
+                    epoch_multiplier = 0.75
                 else:
                     epoch_multiplier = 1.0
-
                 training_epochs = int(round(initial_epochs * epoch_multiplier))
 
             evaluator.set_training_epochs(training_epochs)
+            seq_prep_time = time.perf_counter() - seq_prep_start
+            performance_tracker.record_sequential_time(
+                seq_prep_time,
+                "generation_preparation",
+                {
+                    "training_epochs": training_epochs,
+                    "epoch_multiplier": (
+                        epoch_multiplier if enable_progressive_epochs else 1.0
+                    ),
+                },
+            )
+
+            performance_tracker.start_parallel_section()
 
             evaluation_start_time = time.perf_counter()
 
             results = evaluator.evaluate_population(population, stop_conditions)
 
             evaluation_time = time.perf_counter() - evaluation_start_time
+
+            seq_process_start = time.perf_counter()
 
             # Safe check if resources are cleanuped
             fitness_scores = [
@@ -119,7 +147,16 @@ def run_ga_phase(
                 0.0, total_available_time - total_worker_time
             )
 
-            logger.info(f" --- Generation ({gen}) report:  ---")
+            seq_process_time = time.perf_counter() - seq_process_start
+            performance_tracker.record_sequential_time(
+                seq_process_time,
+                "result_processing",
+                {"population_size": len(population)},
+            )
+
+            logger.info("=" * 40)
+            logger.info(f"GENERATION {gen} REPORT")
+            logger.info("=" * 40)
             logger.info(f"Wall-Clock Time: {evaluation_time:.2f}s")
             logger.info(f"Worker Utilization: {worker_utilization:.2f}%")
             logger.info(f"Total Worker Busy Time: {total_worker_time:.2f}s")
@@ -155,34 +192,74 @@ def run_ga_phase(
                 )
                 checkpoint_manager.save_checkpoint(checkpoint_state)
 
+            stop_check_start = time.perf_counter()
             should_stop, reason = stop_conditions.should_stop_algorithm(
                 gen, best_fitness
+            )
+            stop_check_time = time.perf_counter() - stop_check_start
+            performance_tracker.record_sequential_time(
+                stop_check_time, "stop_condition_check"
             )
 
             if should_stop:
                 logger.warning(
                     f"Stopping GA for phase '{phase_name}': {reason}"
                 )
+                sort_start = time.perf_counter()
                 sorted_indices = sorted(
                     range(len(fitness_scores)),
                     key=fitness_scores.__getitem__,
                     reverse=True,
                 )
                 population = [population[i] for i in sorted_indices]
+                sort_time = time.perf_counter() - sort_start
+                performance_tracker.record_sequential_time(
+                    sort_time, "population_sorting"
+                )
 
+            genetic_start = time.perf_counter()
             ga.set_adaptive_mutation(mutation_decay_rate, gen)
             population = ga.run_generation(population, fitness_scores)
+            genetic_time = time.perf_counter() - genetic_start
+            performance_tracker.record_sequential_time(
+                genetic_time,
+                "genetic_operations",
+                {"mutation_decay_rate": mutation_decay_rate, "generation": gen},
+            )
 
+            performance_tracker.end_generation(
+                num_workers=num_workers,
+                best_fitness=best_fitness,
+                worker_utilization=worker_utilization,
+                population_size=len(population),
+            )
+
+            performance_tracker.print_generation_report(gen)
+
+        # FINAL EVALUATION SECTION
         logger.info("Starting final evaluation for the best population...")
+
         evaluator.set_training_epochs(initial_epochs)
         is_final = phase_name == MAIN_PHASE
 
+        performance_tracker.start_generation(gen + 1, phase_type)
+
+        performance_tracker.start_parallel_section()
+
         # Re-evaluate the final population with full epochs to get a final, fair ranking
+        final_start_time = time.perf_counter()
         final_results = evaluator.evaluate_population(
             population, stop_conditions=None, is_final=is_final
         )
-        final_fitness_scores = [r.fitness for r in final_results]
-        final_loss_scores = [r.loss for r in final_results]
+        final_evaluation_time = time.perf_counter() - final_start_time
+
+        final_process_start = time.perf_counter()
+        final_fitness_scores = [
+            r.fitness for r in final_results if r.fitness is not None
+        ]
+        final_loss_scores = [
+            r.loss for r in final_results if r.loss is not None
+        ]
 
         sorted_indices = sorted(
             range(len(final_fitness_scores)),
@@ -194,6 +271,32 @@ def run_ga_phase(
 
         best_fitness = sorted_final_fitness[0]
         best_loss = final_loss_scores[sorted_indices[0]]
+        final_process_time = time.perf_counter() - final_process_start
+        performance_tracker.record_sequential_time(
+            final_process_time, "final_processing"
+        )
+
+        final_durations = [
+            r.duration_seconds
+            for r in final_results
+            if r.duration_seconds is not None
+        ]
+        final_total_worker_time = sum(final_durations) if final_durations else 0
+        final_total_available_time = final_evaluation_time * num_workers
+        final_worker_utilization = (
+            (final_total_worker_time / final_total_available_time) * 100
+            if final_total_available_time > 0.0
+            else 0.0
+        )
+
+        performance_tracker.end_generation(
+            num_workers=num_workers,
+            best_fitness=best_fitness,
+            worker_utilization=final_worker_utilization,
+            population_size=len(population),
+        )
+
+        performance_tracker.print_generation_report(gen)
 
     except KeyboardInterrupt:
         logger.warning(f"User interrupted during {phase_name}. Cleaning up...")
@@ -254,6 +357,12 @@ def run_optimization(
             calibrated_population = loaded_state.population
 
     close_evaluator = False
+
+    if not is_calibration_complete and ga_config[CAL_PHASE]["enabled"]:
+        fixed_batch_size = 64
+    else:
+        fixed_batch_size = None
+
     if evaluator is None:
         evaluator = create_evaluator(
             config,
@@ -261,10 +370,10 @@ def run_optimization(
             ga_config[CAL_PHASE]["stop_conditions"]["early_stop_epochs"],
             ga_config[CAL_PHASE].get("data_subset_percentage", 1.0),
             tui,
-            0,
             session_log_filename,
             train_indices,
             test_indices,
+            fixed_batch_size,
         ).__enter__()
         close_evaluator = True
 
@@ -309,10 +418,19 @@ def run_optimization(
 
         if loaded_state and loaded_state.phase == MAIN_PHASE:
             logger.info(
-                f"Resuming main phase from generation {loaded_state.generation}."
+                f"Resuming main phase from generation {loaded_state.generation + 1}."
             )
             main_starting_population = loaded_state.population
-            start_gen_main = loaded_state.generation
+            # TODO What if i am resuming for the last one, would generation exceeded?
+            if (
+                loaded_state.generation + 1
+                <= loaded_state.config["genetic_algorithm_config"][
+                    "main_algorithm"
+                ]["generations"]
+            ):
+                start_gen_main = loaded_state.generation + 1
+            else:
+                start_gen_main = loaded_state.generation
             fitness_scores_main = loaded_state.fitness_scores
         else:
             main_pop_size = ga_config[MAIN_PHASE]["population_size"]
@@ -322,23 +440,35 @@ def run_optimization(
                 logger.info(
                     "Seeding main algorithm with population from calibration phase."
                 )
-                num_elites = int(main_pop_size * 0.9)
-                num_random = main_pop_size - num_elites
+                num_elites = int(main_pop_size * 0.4)
+                num_mutated = int(main_pop_size * 0.3)
+                num_random = main_pop_size - num_mutated - num_elites
+
                 elites = calibrated_population[:num_elites]
-                main_starting_population.extend(elites)
+                main_starting_population.extend(deepcopy(elites))
 
                 logger.info(
                     f"Transferring top {len(elites)} individuals from calibration."
                 )
 
+                mutated_offspring = []
+                for _ in range(num_mutated):
+                    parent = random.choice(elites)
+                    child = ga.mutate(deepcopy(parent))
+                    mutated_offspring.append(child)
+                main_starting_population.extend(mutated_offspring)
+
+                logger.info(
+                    f"Adding {num_mutated} mutated offspring from elites."
+                )
+
                 if num_random > 0:
-                    logger.info(
-                        f"Adding {num_random} new random individuals for diversity."
+                    random_individuals = ga.initial_population(
+                        num_random, strat_bins=5, print_warning=False
                     )
-                    main_starting_population.extend(
-                        ga.initial_population(
-                            num_random, main_strat_bins, print_warning=False
-                        )
+                    main_starting_population.extend(random_individuals)
+                    logger.info(
+                        f"Adding {num_random} fresh random individuals for diversity."
                     )
             else:
                 logger.info(
@@ -365,5 +495,6 @@ def run_optimization(
 
     fold_info = f" for Fold {outer_fold_k + 1}" if outer_fold_k != -1 else ""
     logger.info(f"Optimization{fold_info} finished.")
+    performance_tracker.print_overall_report()
 
     return final_population[0], best_fitness, best_loss

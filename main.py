@@ -1,5 +1,4 @@
 import os
-import signal
 import sys
 import warnings
 from datetime import UTC, datetime
@@ -59,9 +58,6 @@ def main():
 
             logger.add_file_sink(session_log_filename)
         logger.add_tui_sink(tui.get_loguru_sink())
-
-        # if not loaded_state:
-        #     config = adjust_worker_config(config)
 
         tui.build_config_panel(config)
 

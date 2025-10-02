@@ -44,7 +44,7 @@ class StopConditions:
         if individual_fitness >= self.fitness_goal:
             return (
                 True,
-                f"Fitness goal of {self.fitness_goal} reached.\n Stopping evaluation for current generation and proceeding to the next.",
+                f"Fitness goal of {self.fitness_goal} reached. Stopping evaluation for current generation and proceeding to the next.",
             )
         return False, ""
 

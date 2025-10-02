@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import sys
 import numpy as np
@@ -134,13 +134,11 @@ def train_and_eval(
     epochs: int,
     early_stop_epochs: int,
     device: torch.device,
-    subset_percentage: float,
-    num_dataloader_workers: int,
-    train_indices: Optional[np.ndarray] = None,
-    test_indices: Optional[np.ndarray] = None,
+    train_loader: DataLoader,
+    test_loader: DataLoader,
     is_final: bool = False,
     epoch_callback=None,
-) -> tuple[float, float]:
+) -> Tuple[float, float]:
     """
     Train and evaluate CNN.
 
@@ -150,7 +148,8 @@ def train_and_eval(
         epochs: Max number of training epochs.
         early_stop_epochs: Number of epochs to wait for improvement.
         device: torch device (CPU/GPU).
-        subset_percentage: Use only a subset of the dataset.
+        train_loader: Train PyTorch's data loader
+        test_loader: Test PyTorch's data loader
         is_final: Save the model if True.
         epoch_callback: Optional callback per epoch.
 
@@ -160,87 +159,78 @@ def train_and_eval(
     is_gpu = device.type == "cuda"
 
     try:
-        with get_dataset_loaders(
-            chromosome.batch_size,
-            chromosome.aug_intensity,
-            is_gpu,
-            num_dataloader_workers,
-            subset_percentage,
-            train_indices,
-            test_indices,
-        ) as loaders:
-            train_loader, test_loader = loaders
-            model: nn.Module = get_network(chromosome, neural_config).to(device)
-            criterion: nn.Module = nn.CrossEntropyLoss()
-            optimizer, scheduler = get_optimizer_and_scheduler(
-                model, chromosome, train_loader, epochs
+        model: nn.Module = get_network(chromosome, neural_config).to(device)
+        criterion: nn.Module = nn.CrossEntropyLoss()
+        optimizer, scheduler = get_optimizer_and_scheduler(
+            model, chromosome, train_loader, epochs
+        )
+        scaler = torch.amp.GradScaler() if is_gpu else None
+
+        final_test_acc = 0.0
+        final_test_loss = 0.0
+        best_acc_so_far = 0.0
+        epochs_without_improvement = 0
+
+        for epoch in range(epochs):
+            train_loss, train_acc = train_epoch(
+                model, train_loader, criterion, optimizer, device, scaler
             )
-            scaler = torch.amp.GradScaler() if is_gpu else None
+            test_loss, test_acc = evaluate(
+                model, test_loader, criterion, device
+            )
 
-            final_test_acc = 0.0
-            final_test_loss = 0.0
-            best_acc_so_far = 0.0
-            epochs_without_improvement = 0
+            if scheduler:
+                scheduler.step()
 
-            for epoch in range(epochs):
-                train_loss, train_acc = train_epoch(
-                    model, train_loader, criterion, optimizer, device, scaler
+            final_test_acc = test_acc
+            final_test_loss = test_loss
+
+            if epoch_callback is not None:
+                epoch_callback(
+                    epoch + 1, train_acc, train_loss, test_acc, test_loss
                 )
-                test_loss, test_acc = evaluate(
-                    model, test_loader, criterion, device
+            else:
+                logger.info(
+                    f"  Epoch {epoch + 1}/{epochs} | "
+                    f"Train Acc: {train_acc:.4f}, Train Loss: {train_loss:.4f} | "
+                    f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
                 )
 
-                if scheduler:
-                    scheduler.step()
+            if test_acc > best_acc_so_far:
+                best_acc_so_far = test_acc
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
 
-                final_test_acc = test_acc
-                final_test_loss = test_loss
-
-                # Send epoch metrics to callback if provided
+            if epochs_without_improvement >= early_stop_epochs:
                 if epoch_callback is not None:
                     epoch_callback(
-                        epoch + 1, train_acc, train_loss, test_acc, test_loss
+                        epoch + 1,
+                        train_acc,
+                        train_loss,
+                        test_acc,
+                        test_loss,
+                        early_stop=True,
                     )
                 else:
                     logger.info(
-                        f"  Epoch {epoch + 1}/{epochs} | Train Acc: {train_acc:.4f}, Train Loss: {train_loss:.4f} | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
+                        f"  Stopping early after epoch {epoch + 1} "
+                        f"due to no improvement for {early_stop_epochs} epochs."
                     )
+                break
 
-                # Early stopping logic
-                if test_acc > best_acc_so_far:
-                    best_acc_so_far = test_acc
-                    epochs_without_improvement = 0
+        if is_final:
+            saver = ModelSaver("model")
+            callback_msg = saver.save(model)
+            if callback_msg:
+                if epoch_callback is not None:
+                    epoch_callback(
+                        None, None, None, None, None, final_msg=callback_msg
+                    )
                 else:
-                    epochs_without_improvement += 1
+                    logger.info(callback_msg)
 
-                if epochs_without_improvement >= early_stop_epochs:
-                    if epoch_callback is not None:
-                        epoch_callback(
-                            epoch + 1,
-                            train_acc,
-                            train_loss,
-                            test_acc,
-                            test_loss,
-                            early_stop=True,
-                        )
-                    else:
-                        logger.info(
-                            f"  Stopping individual early after epoch {epoch + 1} due to no improvement for {early_stop_epochs} epochs."
-                        )
-                    break
-
-            if is_final:
-                saver = ModelSaver("model")
-                callback_msg = saver.save(model)
-                if callback_msg:
-                    if epoch_callback is not None:
-                        epoch_callback(
-                            None, None, None, None, None, final_msg=callback_msg
-                        )
-                    else:
-                        logger.info(callback_msg)
-
-            return final_test_acc, final_test_loss
+        return final_test_acc, final_test_loss
 
     except (CudaOutOfMemoryError, NumericalInstabilityError):
         raise
@@ -249,12 +239,11 @@ def train_and_eval(
             "killed" in str(e) or "exited unexpectedly" in str(e)
         ):
             logger.error(
-                f"DataLoader worker failed. This is often due to insufficient shared memory."
+                "DataLoader worker failed. This is often due to insufficient shared memory."
             )
             logger.error(
                 f"An unexpected runtime error occurred in train_and_eval: {e}"
             )
-
             raise
     except Exception as e:
         logger.error(f"An unexpected error occurred in train_and_eval: {e}")

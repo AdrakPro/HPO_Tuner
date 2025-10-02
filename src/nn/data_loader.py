@@ -63,10 +63,6 @@ class DataLoaderManager:
 
         self._cleanup_dataloaders()
 
-        # Clean up GPU memory if available
-        if torch.cuda.is_available() and self.is_gpu_context:
-            torch.cuda.empty_cache()
-
         return False
 
     def _handle_sigint(self, signum, frame):

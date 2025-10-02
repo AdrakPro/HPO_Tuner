@@ -18,6 +18,7 @@ class WorkerConfig:
     session_log_filename: str
     num_dataloader_workers: int
     total_cpu_workers: Optional[int] = None
+    fixed_batch_size: Optional[int] = None
 
 
 @dataclass

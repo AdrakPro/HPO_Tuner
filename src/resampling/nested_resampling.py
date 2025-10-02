@@ -69,16 +69,18 @@ def run_nested_resampling(
         train_idx, test_idx = fold_indices[k]
         current_fold_loaded_state = loaded_state if k == start_fold else None
 
+        FIXED_BATCH_SIZE = 64
+
         with create_evaluator(
             config,
             ga_config["calibration"]["training_epochs"],
             ga_config["calibration"]["stop_conditions"]["early_stop_epochs"],
             ga_config["calibration"].get("data_subset_percentage", 1.0),
             tui,
-            0,
             session_log_filename,
-            train_idx,
-            test_idx,
+            train_indices=train_idx,
+            test_indices=test_idx,
+            fixed_batch_size=FIXED_BATCH_SIZE,
         ) as evaluator:
 
             best_individual, final_fitness, final_loss = run_optimization(

@@ -6,6 +6,7 @@ Allows user-defined number of convolutional blocks with global config for paddin
 from enum import Enum
 from typing import Any, Callable, Dict, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as functional
@@ -135,40 +136,52 @@ def get_optimizer_and_scheduler(
 ) -> Tuple[optim.Optimizer, LRScheduler | None]:
     """
     Get optimizer and scheduler based on chromosome configuration.
+
+    Handles:
+      - Batch size scaling of learning rate if batch_size > 256
+      - Adaptive warmup for log-scaled base_lr
+      - Support for different optimizer schedules (SGD, AdamW, OneCycle, Cosine, Exponential)
     """
     sgd_momentum = 0.9
     exp_decay = 0.95
-    base_lr = chromosome.base_lr
     weight_decay = chromosome.weight_decay
     warmup_epochs = 3
 
     schedule_type = chromosome.optimizer_schedule
 
-    # Optimizer Creation
+    # Scale base_lr by batch size only if batch_size > 256
+    REFERENCE_BATCH = 256
+
+    if chromosome.batch_size > REFERENCE_BATCH:
+        scaled_base_lr = chromosome.base_lr * (
+            chromosome.batch_size / REFERENCE_BATCH
+        )
+    else:
+        scaled_base_lr = chromosome.base_lr
+
+    # Create optimizer
     if schedule_type.is_adamw:
         optimizer = optim.AdamW(
-            model.parameters(), lr=base_lr, weight_decay=weight_decay
+            model.parameters(), lr=scaled_base_lr, weight_decay=weight_decay
         )
     else:
         optimizer = optim.SGD(
             model.parameters(),
-            lr=base_lr,
+            lr=scaled_base_lr,
             momentum=sgd_momentum,
             weight_decay=weight_decay,
         )
 
-    # Scheduler Creation
-    # OneCycleLR includes its own warmup, so it's handled separately
+    # OneCycleLR (handles its own warmup)
     if schedule_type.is_onecycle:
         scheduler = OneCycleLR(
             optimizer,
-            max_lr=base_lr,
+            max_lr=scaled_base_lr,
             steps_per_epoch=len(train_loader),
             epochs=epochs,
         )
         return optimizer, scheduler
 
-    # For other schedulers, create the main scheduler first
     if schedule_type.is_cosine:
         main_scheduler = CosineAnnealingLR(
             optimizer, T_max=epochs - warmup_epochs
@@ -176,23 +189,24 @@ def get_optimizer_and_scheduler(
     else:
         main_scheduler = ExponentialLR(optimizer, gamma=exp_decay)
 
-    # Apply Warmup if needed
-    # A warmup is generally not needed if the base learning rate is already very small.
-    start_warmup_lr_threshold = 0.003
-    if base_lr < start_warmup_lr_threshold:
-        return optimizer, main_scheduler
+    # Adaptive warmup for batch-size-scaled LR
+    if chromosome.batch_size > REFERENCE_BATCH:
+        min_start_lr = 1e-5
+        start_factor = max(min_start_lr / scaled_base_lr, 0.01)
+        warmup_scheduler = LinearLR(
+            optimizer, start_factor=start_factor, total_iters=warmup_epochs
+        )
 
-    warmup_scheduler = LinearLR(
-        optimizer, start_factor=0.1, total_iters=warmup_epochs
-    )
-
-    # Chain the warmup and main schedulers.
-    # TODO: Awaiting fix for SequentialLR with some schedulers:
-    # https://github.com/pytorch/pytorch/issues/76113
-    scheduler = SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, main_scheduler],
-        milestones=[warmup_epochs],
-    )
+        # Chain the warmup and main schedulers.
+        # TODO: Awaiting fix for SequentialLR with some schedulers:
+        # https://github.com/pytorch/pytorch/issues/76113
+        scheduler = SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, main_scheduler],
+            milestones=[warmup_epochs],
+        )
+    else:
+        # No warmup, just main scheduler
+        scheduler = main_scheduler
 
     return optimizer, scheduler

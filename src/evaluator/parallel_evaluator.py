@@ -37,10 +37,10 @@ class ParallelEvaluator(Evaluator):
         subset_percentage: float,
         strategy: SchedulingStrategy,
         progress: Progress,
-        task_id: TaskID,
         session_log_filename: str,
         train_indices: Optional[np.ndarray],
         test_indices: Optional[np.ndarray],
+        fixed_batch_size: Optional[int] = None,
     ):
         self.training_epochs = training_epochs
         self.early_stop_epochs = early_stop_epochs
@@ -57,7 +57,7 @@ class ParallelEvaluator(Evaluator):
         self._cleaned_up = False
 
         self.progress = progress
-        self.task_id = task_id
+        self.task_id = None
 
         ctx = mp.get_context("spawn")
         self.task_queue: mp.Queue = ctx.Queue(maxsize=1000)
@@ -70,6 +70,7 @@ class ParallelEvaluator(Evaluator):
             result_queue=self.result_queue,
             execution_config=self.execution_config,
             session_log_filename=session_log_filename,
+            fixed_batch_size=fixed_batch_size,
         )
 
         if not self._workers:
@@ -206,7 +207,8 @@ class ParallelEvaluator(Evaluator):
         if result.index in self._pending_tasks:
             del self._pending_tasks[result.index]
 
-        self.progress.update(self.task_id, advance=1)
+        if self.task_id is not None:
+            self.progress.update(self.task_id, advance=1)
 
         for entry in result.log_lines:
             if isinstance(entry, tuple) and entry[1] == "file_only":
@@ -220,8 +222,7 @@ class ParallelEvaluator(Evaluator):
             )
             if should_stop:
                 self._clear_pending_tasks()
-                logger.warning(reason)
-                self._shutting_down = True  # Signal to stop evaluation loops
+                logger.info(reason)
 
     def _is_any_worker_alive(self) -> bool:
         return any(p.is_alive() for p in self._workers)
@@ -366,3 +367,6 @@ class ParallelEvaluator(Evaluator):
     @property
     def num_workers(self) -> int:
         return len(self._workers)
+
+    def set_task_id(self, task_id: TaskID):
+        self.task_id = task_id

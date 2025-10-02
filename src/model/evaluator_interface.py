@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List
 
+from rich.progress import TaskID
+
 from src.genetic.stop_conditions import StopConditions
 from src.model.parallel import Result
 
@@ -39,6 +41,11 @@ class Evaluator(ABC):
     @abstractmethod
     def set_training_epochs(self, epochs: int) -> None:
         """Updates the number of training epochs for subsequent evaluations."""
+        pass
+
+    @abstractmethod
+    def set_task_id(self, task_id: TaskID) -> None:
+        """Updates the progress bar task id for subsequent evaluations."""
         pass
 
     @abstractmethod

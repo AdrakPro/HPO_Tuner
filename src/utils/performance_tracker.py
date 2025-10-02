@@ -57,7 +57,7 @@ class PerformanceTracker:
     Tracks performance and calculates Amdahl/Gustafson laws per generation.
     """
 
-    def __init__(self, gpu_speedup_factor: float = 16.0):
+    def __init__(self, gpu_speedup_factor: float = 1.0):
         self.gpu_speedup_factor = gpu_speedup_factor
         self.generation_performances: List[GenerationPerformance] = []
         self.sequential_measurements: List[SequentialMeasurement] = []

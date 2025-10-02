@@ -142,7 +142,7 @@ class ParallelEvaluator(Evaluator):
                     results_for_generation.append(result)
 
                     if (
-                        stop_conditions.fitness_goal is not None
+                        stop_conditions is not None
                         and result.status == "SUCCESS"
                         and result.fitness >= stop_conditions.fitness_goal
                     ):

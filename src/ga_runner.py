@@ -240,67 +240,88 @@ def run_ga_phase(
 
             performance_tracker.print_generation_report(gen)
 
-        # FINAL EVALUATION SECTION
-        logger.info("Starting final evaluation for the best population...")
+        if phase_name == CAL_PHASE:
+            logger.info("Starting final evaluation with full data and long epochs for the best population...")
 
-        evaluator.set_training_epochs(initial_epochs)
-        is_final = phase_name == MAIN_PHASE
+            evaluator.set_training_epochs(
+                config["genetic_algorithm_config"][MAIN_PHASE]["training_epochs"]
+            )
+            evaluator.set_subset_percentage(1.0)
 
-        performance_tracker.start_generation(gen + 1, phase_type)
+            is_final = True
 
-        performance_tracker.start_parallel_section()
+            performance_tracker.start_generation(gen + 1, phase_type)
+            performance_tracker.start_parallel_section()
 
-        # Re-evaluate the final population with full epochs to get a final, fair ranking
-        final_start_time = time.perf_counter()
-        final_results = evaluator.evaluate_population(
-            population, stop_conditions=None, is_final=is_final
-        )
-        final_evaluation_time = time.perf_counter() - final_start_time
+            final_start_time = time.perf_counter()
+            final_results = evaluator.evaluate_population(
+                population, stop_conditions=None, is_final=is_final
+            )
+            final_evaluation_time = time.perf_counter() - final_start_time
 
-        final_process_start = time.perf_counter()
-        final_fitness_scores = [
-            r.fitness for r in final_results if r.fitness is not None
-        ]
-        final_loss_scores = [
-            r.loss for r in final_results if r.loss is not None
-        ]
+            final_process_start = time.perf_counter()
+            final_fitness_scores = [
+                r.fitness for r in final_results if r.fitness is not None
+            ]
+            final_loss_scores = [
+                r.loss for r in final_results if r.loss is not None
+            ]
 
-        sorted_indices = sorted(
-            range(len(final_fitness_scores)),
-            key=final_fitness_scores.__getitem__,
-            reverse=True,
-        )
-        sorted_population = [population[i] for i in sorted_indices]
-        sorted_final_fitness = [final_fitness_scores[i] for i in sorted_indices]
+            sorted_indices = sorted(
+                range(len(final_fitness_scores)),
+                key=final_fitness_scores.__getitem__,
+                reverse=True,
+            )
+            sorted_population = [population[i] for i in sorted_indices]
+            sorted_final_fitness = [
+                final_fitness_scores[i] for i in sorted_indices
+            ]
 
-        best_fitness = sorted_final_fitness[0]
-        best_loss = final_loss_scores[sorted_indices[0]]
-        final_process_time = time.perf_counter() - final_process_start
-        performance_tracker.record_sequential_time(
-            final_process_time, "final_processing"
-        )
+            best_fitness = sorted_final_fitness[0]
+            best_loss = final_loss_scores[sorted_indices[0]]
+            final_process_time = time.perf_counter() - final_process_start
+            performance_tracker.record_sequential_time(
+                final_process_time, "final_processing"
+            )
 
-        final_durations = [
-            r.duration_seconds
-            for r in final_results
-            if r.duration_seconds is not None
-        ]
-        final_total_worker_time = sum(final_durations) if final_durations else 0
-        final_total_available_time = final_evaluation_time * num_workers
-        final_worker_utilization = (
-            (final_total_worker_time / final_total_available_time) * 100
-            if final_total_available_time > 0.0
-            else 0.0
-        )
+            final_durations = [
+                r.duration_seconds
+                for r in final_results
+                if r.duration_seconds is not None
+            ]
+            final_total_worker_time = (
+                sum(final_durations) if final_durations else 0
+            )
+            final_total_available_time = final_evaluation_time * num_workers
+            final_worker_utilization = (
+                (final_total_worker_time / final_total_available_time) * 100
+                if final_total_available_time > 0.0
+                else 0.0
+            )
 
-        performance_tracker.end_generation(
-            num_workers=num_workers,
-            best_fitness=best_fitness,
-            worker_utilization=final_worker_utilization,
-            population_size=len(population),
-        )
+            performance_tracker.end_generation(
+                num_workers=num_workers,
+                best_fitness=best_fitness,
+                worker_utilization=final_worker_utilization,
+                population_size=len(population),
+            )
 
-        performance_tracker.print_generation_report(gen)
+            performance_tracker.print_generation_report(gen)
+
+            phase_completed = True
+            checkpoint_state = GaState(
+                gen,
+                sorted_population,
+                sorted_final_fitness,
+                phase_name,
+                config,
+                session_log_filename,
+                phase_completed,
+                outer_fold_k,
+            )
+            checkpoint_manager.save_checkpoint(checkpoint_state)
+
+            return sorted_population, best_fitness, best_loss
 
     except KeyboardInterrupt:
         logger.warning(f"User interrupted during {phase_name}. Cleaning up...")
@@ -314,7 +335,7 @@ def run_ga_phase(
     checkpoint_state = GaState(
         gen,
         population,
-        sorted_final_fitness,
+        fitness_scores,
         phase_name,
         config,
         session_log_filename,
@@ -323,7 +344,7 @@ def run_ga_phase(
     )
     checkpoint_manager.save_checkpoint(checkpoint_state)
 
-    return sorted_population, best_fitness, best_loss
+    return population, best_fitness, best_loss
 
 
 def run_optimization(

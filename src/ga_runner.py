@@ -42,7 +42,7 @@ def run_ga_phase(
     generations = phase_config["generations"]
     initial_epochs = phase_config["training_epochs"]
     mutation_decay_rate = phase_config["mutation_decay_rate"]
-    minimum_viable_epochs = 20
+    MINIMUM_PROGRESSIVE_EPOCHS = 20
     checkpoint_interval_per_generation = config["checkpoint_config"][
         "interval_per_gen"
     ]
@@ -73,11 +73,11 @@ def run_ga_phase(
 
     try:
         training_epochs = initial_epochs
-        enable_progressive_epochs = initial_epochs >= minimum_viable_epochs
+        enable_progressive_epochs = phase_name == MAIN_PHASE and initial_epochs >= MINIMUM_PROGRESSIVE_EPOCHS
 
         if not enable_progressive_epochs:
             logger.warning(
-                f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({minimum_viable_epochs})."
+                f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({MINIMUM_PROGRESSIVE_EPOCHS})."
             )
 
         for gen in range(start_gen, generations + 1):
@@ -98,6 +98,7 @@ def run_ga_phase(
                     epoch_multiplier = 0.75
                 else:
                     epoch_multiplier = 1.0
+
                 training_epochs = int(round(initial_epochs * epoch_multiplier))
 
             evaluator.set_training_epochs(training_epochs)

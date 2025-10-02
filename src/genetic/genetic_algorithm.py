@@ -77,7 +77,9 @@ class GeneticAlgorithm:
         for gene, info in self.chromosome_space.items():
             if info["type"] == DataType.CONTINUOUS:
                 if random.random() < self.mutation_prob_continuous:
-                    sigma = self.mutation_sigma_continuous
+                    log_min, log_max = math.log10(info["min"]), math.log10(info["max"])
+                    range_size = log_max - log_min
+                    sigma = self.mutation_sigma_continuous * range_size
 
                     if info.get("scale") == "log":
                         log_val = math.log10(chromosome[gene])
@@ -85,6 +87,7 @@ class GeneticAlgorithm:
                         mutated = 10**mutated_log
                     else:
                         mutated = chromosome[gene] + random.gauss(0, sigma)
+
                     chromosome[gene] = float(
                         max(min(mutated, info["max"]), info["min"])
                     )
@@ -245,11 +248,9 @@ class GeneticAlgorithm:
                     stratified_individuals.append(individual)
 
         # Add stratified individuals, avoiding duplicates
+        population.extend(stratified_individuals)
         existing_population = {str(ind): ind for ind in population}
-        for ind in stratified_individuals:
-            if str(ind) not in existing_population:
-                population.append(ind)
-                existing_population[str(ind)] = ind
+        population = list(existing_population.values())
 
         # Fill up to pop_size with random individuals, avoiding duplicates
         while len(population) < pop_size:
@@ -257,6 +258,9 @@ class GeneticAlgorithm:
             if str(individual) not in existing_population:
                 population.append(individual)
                 existing_population[str(individual)] = individual
+
+        # Shuffle to avoid systematic bias before truncating
+        random.shuffle(population)
 
         return population[:pop_size]
 

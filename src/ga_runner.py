@@ -73,7 +73,10 @@ def run_ga_phase(
 
     try:
         training_epochs = initial_epochs
-        enable_progressive_epochs = phase_name == MAIN_PHASE and initial_epochs >= MINIMUM_PROGRESSIVE_EPOCHS
+        enable_progressive_epochs = (
+            phase_name == MAIN_PHASE
+            and initial_epochs >= MINIMUM_PROGRESSIVE_EPOCHS
+        )
 
         if not enable_progressive_epochs:
             logger.warning(

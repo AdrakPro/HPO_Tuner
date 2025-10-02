@@ -77,7 +77,9 @@ class GeneticAlgorithm:
         for gene, info in self.chromosome_space.items():
             if info["type"] == DataType.CONTINUOUS:
                 if random.random() < self.mutation_prob_continuous:
-                    log_min, log_max = math.log10(info["min"]), math.log10(info["max"])
+                    log_min, log_max = math.log10(info["min"]), math.log10(
+                        info["max"]
+                    )
                     range_size = log_max - log_min
                     sigma = self.mutation_sigma_continuous * range_size
 

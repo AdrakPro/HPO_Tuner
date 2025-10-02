@@ -20,7 +20,6 @@ class StopConditions:
             config: A dictionary containing stop condition parameters, e.g.,
                     'max_generations', 'early_stop_generations', 'fitness_goal', 'time_limit_minutes'.
         """
-        # self.max_generations: int = config["max_generations"]
         self.early_stop_generations: int = config["early_stop_generations"]
         self.fitness_goal: float = config["fitness_goal"]
         self.time_limit_minutes: float | None = config["time_limit_minutes"]

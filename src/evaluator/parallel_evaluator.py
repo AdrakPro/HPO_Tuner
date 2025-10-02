@@ -59,6 +59,9 @@ class ParallelEvaluator(Evaluator):
         self.progress = progress
         self.task_id = None
 
+        self._fitness_goal_met = False
+        self._goal_achiever_index = None
+
         ctx = mp.get_context("spawn")
         self.task_queue: mp.Queue = ctx.Queue(maxsize=1000)
         self.result_queue: mp.Queue = ctx.Queue(maxsize=1000)
@@ -104,6 +107,9 @@ class ParallelEvaluator(Evaluator):
     ) -> List[Result]:
         self._current_pop_size = len(population)
 
+        self._fitness_goal_met = False
+        self._goal_achiever_index = None
+
         if self._shutting_down:
             logger.warning("Evaluator is shutting down, skipping evaluation")
             return self._generate_placeholder_results(
@@ -119,24 +125,42 @@ class ParallelEvaluator(Evaluator):
         results_for_generation: List[Result] = []
 
         try:
-            # 2. Main loop: process until we have enough results for the next generation
+            # Main loop: process until we have enough results for the next generation
             while (
                 len(results_for_generation) < pop_size
                 and not self._shutting_down
+                and not self._fitness_goal_met
             ):
-                self._collect_finished_tasks()
+                self._collect_finished_tasks(stop_conditions)
 
                 while (
                     self._completed_results
                     and len(results_for_generation) < pop_size
+                    and not self._fitness_goal_met
                 ):
-                    results_for_generation.append(
-                        self._completed_results.popleft()
-                    )
+                    result = self._completed_results.popleft()
+                    results_for_generation.append(result)
+
+                    if (
+                        stop_conditions.fitness_goal is not None
+                        and result.status == "SUCCESS"
+                        and result.fitness >= stop_conditions.fitness_goal
+                    ):
+                        self._fitness_goal_met = True
+                        self._goal_achiever_index = result.index
+                        break
+
+                if self._fitness_goal_met:
+                    self._clear_pending_tasks()
+                    break
 
                 self._submit_new_tasks(is_final)
 
-                if len(results_for_generation) < pop_size:
+                if (
+                    len(results_for_generation) < pop_size
+                    and not self._fitness_goal_met
+                    and not self._shutting_down
+                ):
                     try:
                         result: Result = self.result_queue.get(timeout=1.0)
                         self._process_result(result, stop_conditions)
@@ -157,6 +181,26 @@ class ParallelEvaluator(Evaluator):
             self._shutting_down = True
             raise
 
+        if self._fitness_goal_met:
+            evaluated_indices = {r.index for r in results_for_generation}
+            for i in range(pop_size):
+                if i not in evaluated_indices:
+                    placeholder = Result(
+                        index=i,
+                        fitness=0.0,
+                        loss=float("inf"),
+                        status="SKIPPED",
+                        log_lines=[
+                            f"Individual {i} skipped - fitness goal achieved by individual {self._goal_achiever_index}"
+                        ],
+                        duration_seconds=0,
+                        error_message=f"Skipped due to fitness goal {stop_conditions.fitness_goal} being met",
+                    )
+                    results_for_generation.append(placeholder)
+
+            # Sort by index to maintain order
+            results_for_generation.sort(key=lambda x: x.index)
+
         while len(results_for_generation) < pop_size:
             results_for_generation.extend(
                 self._generate_placeholder_results(
@@ -171,10 +215,11 @@ class ParallelEvaluator(Evaluator):
         while (
             self._population_to_evaluate
             and len(self._pending_tasks) < self.num_workers
+            and not self._fitness_goal_met
         ):
             per_gen_index, ind = self._population_to_evaluate.popleft()
             task = Task(
-                index=per_gen_index,  # Use per-generation index
+                index=per_gen_index,
                 neural_network_config=self.neural_network_config,
                 individual_hyperparams=ind,
                 training_epochs=self.training_epochs,
@@ -193,10 +238,20 @@ class ParallelEvaluator(Evaluator):
     ):
         """Non-blocking draining the result queue."""
         try:
-            while True:
+            while True and not self._fitness_goal_met:
                 result: Result = self.result_queue.get_nowait()
                 self._process_result(result, stop_conditions)
                 self._completed_results.append(result)
+
+                if (
+                    stop_conditions is not None
+                    and result.status == "SUCCESS"
+                    and result.fitness >= stop_conditions.fitness_goal
+                ):
+                    self._fitness_goal_met = True
+                    self._goal_achiever_index = result.index
+                    self._clear_pending_tasks()
+                    break
         except queue.Empty:
             pass
 

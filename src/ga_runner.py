@@ -22,20 +22,25 @@ MAIN_PHASE = "main_algorithm"
 
 
 def run_ga_phase(
-    phase_name: str,
-    config: Dict[str, Any],
-    ga: GeneticAlgorithm,
-    starting_population: List[Dict],
-    tui: TUI,
-    session_log_filename: str,
-    start_gen: int,
-    outer_fold_k: int,
-    evaluator=None,
+        phase_name: str,
+        config: Dict[str, Any],
+        ga: GeneticAlgorithm,
+        starting_population: List[Dict],
+        tui: TUI,
+        session_log_filename: str,
+        start_gen: int,
+        outer_fold_k: int,
+        evaluator=None,
 ) -> Tuple[List[Dict], float, float]:
     """
     Runs a complete phase (calibration or main) of the genetic algorithm,
     respecting the defined stop conditions.
     """
+
+    best_fitness = -float('inf')
+    best_loss = float('inf')
+    fitness_scores = []
+    num_workers = 1
 
     phase_config = config["genetic_algorithm_config"][phase_name]
     stop_conditions = StopConditions(phase_config["stop_conditions"])
@@ -77,6 +82,7 @@ def run_ga_phase(
             phase_name == MAIN_PHASE
             and initial_epochs >= MINIMUM_PROGRESSIVE_EPOCHS
         )
+        epoch_multiplier = 1.0
 
         if not enable_progressive_epochs:
             logger.warning(
@@ -138,7 +144,7 @@ def run_ga_phase(
                 if r.duration_seconds is not None
             ]
 
-            total_worker_time = sum(durations)
+            total_worker_time = sum(durations) if durations else 0.0
             num_workers = evaluator.num_workers
 
             total_available_time = evaluation_time * num_workers
@@ -168,19 +174,22 @@ def run_ga_phase(
                 f"Total Worker Idle Time (Overhead): {true_overhead_seconds:.2f}s"
             )
 
-            best_idx = max(
-                range(len(fitness_scores)), key=fitness_scores.__getitem__
-            )
-            best_fitness = fitness_scores[best_idx]
-            best_loss = loss_scores[best_idx]
+            if fitness_scores and loss_scores:
+                best_idx = max(
+                    range(len(fitness_scores)), key=fitness_scores.__getitem__
+                )
+                best_fitness = fitness_scores[best_idx]
+                best_loss = loss_scores[best_idx]
 
-            logger.info(
-                f"Best Fitness: {best_fitness:.4f} | Loss: {best_loss:.4f}"
-            )
+                logger.info(
+                    f"Best Fitness: {best_fitness:.4f} | Loss: {best_loss:.4f}"
+                )
+            else:
+                logger.warning("No valid fitness scores available")
 
             if (
-                checkpoint_interval_per_generation != 0
-                and gen % checkpoint_interval_per_generation == 0
+                    checkpoint_interval_per_generation != 0
+                    and gen % checkpoint_interval_per_generation == 0
             ):
                 phase_completed = False
 
@@ -267,18 +276,23 @@ def run_ga_phase(
                 r.loss for r in final_results if r.loss is not None
             ]
 
-            sorted_indices = sorted(
-                range(len(final_fitness_scores)),
-                key=final_fitness_scores.__getitem__,
-                reverse=True,
-            )
-            sorted_population = [population[i] for i in sorted_indices]
-            sorted_final_fitness = [
-                final_fitness_scores[i] for i in sorted_indices
-            ]
+            if final_fitness_scores and final_loss_scores:
+                sorted_indices = sorted(
+                    range(len(final_fitness_scores)),
+                    key=final_fitness_scores.__getitem__,
+                    reverse=True,
+                )
+                sorted_population = [population[i] for i in sorted_indices]
+                sorted_final_fitness = [
+                    final_fitness_scores[i] for i in sorted_indices
+                ]
 
-            best_fitness = sorted_final_fitness[0]
-            best_loss = final_loss_scores[sorted_indices[0]]
+                best_fitness = sorted_final_fitness[0]
+                best_loss = final_loss_scores[sorted_indices[0]]
+            else:
+                logger.warning("No valid final fitness scores available")
+                sorted_population = population
+
             final_process_time = time.perf_counter() - final_process_start
             performance_tracker.record_sequential_time(
                 final_process_time, "final_processing"
@@ -312,7 +326,7 @@ def run_ga_phase(
             checkpoint_state = GaState(
                 gen,
                 sorted_population,
-                sorted_final_fitness,
+                sorted_final_fitness if 'sorted_final_fitness' in locals() else [],
                 phase_name,
                 config,
                 session_log_filename,
@@ -325,6 +339,9 @@ def run_ga_phase(
 
     except KeyboardInterrupt:
         logger.warning(f"User interrupted during {phase_name}. Cleaning up...")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in {phase_name}: {e}")
         raise
     finally:
         tui.progress.remove_task(phase_task_id)

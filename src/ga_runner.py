@@ -63,7 +63,13 @@ def run_ga_phase(
 
     population = starting_population
     starting_pop_size = len(population)
+
     total_evaluations = generations * starting_pop_size
+
+    # Count final evaluation
+    if phase_name == CAL_PHASE:
+        total_evaluations += starting_pop_size
+
     completed_evaluations = starting_pop_size * (start_gen - 1)
 
     phase_task_id = tui.progress.add_task(

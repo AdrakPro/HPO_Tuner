@@ -22,23 +22,23 @@ MAIN_PHASE = "main_algorithm"
 
 
 def run_ga_phase(
-        phase_name: str,
-        config: Dict[str, Any],
-        ga: GeneticAlgorithm,
-        starting_population: List[Dict],
-        tui: TUI,
-        session_log_filename: str,
-        start_gen: int,
-        outer_fold_k: int,
-        evaluator=None,
-) -> Tuple[List[Dict], float, float]:
+    phase_name: str,
+    config: Dict[str, Any],
+    ga: GeneticAlgorithm,
+    starting_population: List[Dict],
+    tui: TUI,
+    session_log_filename: str,
+    start_gen: int,
+    outer_fold_k: int,
+    evaluator=None,
+) -> Tuple[List[Dict], float, float, bool]:
     """
     Runs a complete phase (calibration or main) of the genetic algorithm,
     respecting the defined stop conditions.
     """
 
-    best_fitness = -float('inf')
-    best_loss = float('inf')
+    best_fitness = -float("inf")
+    best_loss = float("inf")
     fitness_scores = []
     num_workers = 1
 
@@ -84,6 +84,7 @@ def run_ga_phase(
 
     try:
         training_epochs = initial_epochs
+        should_stop = False
         enable_progressive_epochs = (
             phase_name == MAIN_PHASE
             and initial_epochs >= MINIMUM_PROGRESSIVE_EPOCHS
@@ -194,8 +195,8 @@ def run_ga_phase(
                 logger.warning("No valid fitness scores available")
 
             if (
-                    checkpoint_interval_per_generation != 0
-                    and gen % checkpoint_interval_per_generation == 0
+                checkpoint_interval_per_generation != 0
+                and gen % checkpoint_interval_per_generation == 0
             ):
                 phase_completed = False
 
@@ -236,6 +237,20 @@ def run_ga_phase(
                     sort_time, "population_sorting"
                 )
 
+                phase_completed = False
+                checkpoint_state = GaState(
+                    gen,
+                    population,
+                    fitness_scores,
+                    phase_name,
+                    config,
+                    session_log_filename,
+                    phase_completed,
+                    outer_fold_k,
+                )
+                checkpoint_manager.save_checkpoint(checkpoint_state)
+                break
+
             genetic_start = time.perf_counter()
             ga.set_adaptive_mutation(mutation_decay_rate, gen)
             population = ga.run_generation(population, fitness_scores)
@@ -256,10 +271,14 @@ def run_ga_phase(
             performance_tracker.print_generation_report(gen)
 
         if phase_name == CAL_PHASE:
-            logger.info("Starting final evaluation with full data and long epochs for the best population...")
+            logger.info(
+                "Starting final evaluation with full data and long epochs for the best population..."
+            )
 
             evaluator.set_training_epochs(
-                config["genetic_algorithm_config"][MAIN_PHASE]["training_epochs"]
+                config["genetic_algorithm_config"][MAIN_PHASE][
+                    "training_epochs"
+                ]
             )
             evaluator.set_subset_percentage(1.0)
 
@@ -328,20 +347,25 @@ def run_ga_phase(
 
             performance_tracker.print_generation_report(gen)
 
-            phase_completed = True
-            checkpoint_state = GaState(
-                gen,
-                sorted_population,
-                sorted_final_fitness if 'sorted_final_fitness' in locals() else [],
-                phase_name,
-                config,
-                session_log_filename,
-                phase_completed,
-                outer_fold_k,
-            )
-            checkpoint_manager.save_checkpoint(checkpoint_state)
+            if not should_stop:
+                phase_completed = True
+                checkpoint_state = GaState(
+                    gen,
+                    sorted_population,
+                    (
+                        sorted_final_fitness
+                        if "sorted_final_fitness" in locals()
+                        else []
+                    ),
+                    phase_name,
+                    config,
+                    session_log_filename,
+                    phase_completed,
+                    outer_fold_k,
+                )
+                checkpoint_manager.save_checkpoint(checkpoint_state)
 
-            return sorted_population, best_fitness, best_loss
+            return sorted_population, best_fitness, best_loss, should_stop
 
     except KeyboardInterrupt:
         logger.warning(f"User interrupted during {phase_name}. Cleaning up...")
@@ -445,7 +469,7 @@ def run_optimization(
                     initial_pop_size, cal_strat_bins
                 )
 
-            calibrated_population, best_fitness, best_loss = run_ga_phase(
+            calibrated_population, best_fitness, best_loss, _ = run_ga_phase(
                 CAL_PHASE,
                 config,
                 ga,
@@ -526,7 +550,7 @@ def run_optimization(
                     main_pop_size, main_strat_bins
                 )
 
-        final_population, best_fitness, best_loss = run_ga_phase(
+        final_population, best_fitness, best_loss, should_stop = run_ga_phase(
             MAIN_PHASE,
             config,
             ga,
@@ -537,6 +561,13 @@ def run_optimization(
             outer_fold_k,
             evaluator,
         )
+
+        if should_stop and outer_fold_k != -1:
+            return (
+                final_population[0] if final_population else {},
+                best_fitness,
+                best_loss,
+            )
     finally:
         if close_evaluator:
             evaluator.__exit__(None, None, None)

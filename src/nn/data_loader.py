@@ -7,7 +7,7 @@ import gc
 import random
 import signal
 import sys
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import torch.cuda
@@ -36,11 +36,11 @@ def get_num_workers(num_workers_from_config: int) -> int:
     If the current process is daemonic, return 0.
     Otherwise, return the number provided from the (adjusted) config.
     """
-    try:
-        if mp.current_process().daemon:
-            return 0
-    except:
-        return 0
+    # try:
+    #     if mp.current_process().daemon:
+    #         return 0
+    # except:
+    #     return 0
     return num_workers_from_config
 
 
@@ -138,6 +138,7 @@ def get_dataset_loaders(
             train_set = Subset(train_set, indices)
 
     num_workers = get_num_workers(num_dataloader_workers)
+    logger.error(num_workers)
     enable_persistent_workers = num_workers > 0
 
     train_loader = DataLoader(
@@ -147,7 +148,7 @@ def get_dataset_loaders(
         num_workers=num_workers,
         pin_memory=is_gpu,
         persistent_workers=enable_persistent_workers,
-        prefetch_factor=(2 if num_workers > 0 else None),
+        prefetch_factor=(4 if num_workers > 0 else None),
         multiprocessing_context=("spawn" if num_workers > 0 else None),
     )
 
@@ -158,7 +159,7 @@ def get_dataset_loaders(
         num_workers=num_workers,
         pin_memory=is_gpu,
         persistent_workers=enable_persistent_workers,
-        prefetch_factor=2 if num_workers > 0 else None,
+        prefetch_factor=4 if num_workers > 0 else None,
         multiprocessing_context="spawn" if num_workers > 0 else None,
     )
 
@@ -206,8 +207,16 @@ def get_transforms(
             [
                 transforms.RandomCrop(IMG_SIZE, padding=CROP_PADDING),
                 transforms.RandomHorizontalFlip(),
-                transforms.ColorJitter(
-                    brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
+                transforms.RandomApply(
+                    [
+                        transforms.ColorJitter(
+                            brightness=0.2,
+                            contrast=0.2,
+                            saturation=0.2,
+                            hue=0.1,
+                        )
+                    ],
+                    p=0.5,
                 ),
                 transforms.ToTensor(),
                 transforms.Normalize(MEANS, STDS),
@@ -223,3 +232,28 @@ def get_transforms(
         ]
     )
     return train_transform, test_transform
+
+
+def update_train_augmentation(
+    train_loader: torch.utils.data.DataLoader,
+    aug_intensity: Union[AugmentationIntensity, str],
+) -> None:
+    """
+    Dynamically updates the train dataset's augmentation transforms.
+
+    Args:
+        train_loader: The DataLoader object for training data.
+        aug_intensity: The new augmentation intensity (MEDIUM, STRONG, etc.).
+    """
+    if isinstance(aug_intensity, str):
+        aug_intensity = AugmentationIntensity[aug_intensity.upper()]
+
+    new_train_transform, _ = get_transforms(aug_intensity)
+
+    train_dataset = train_loader.dataset
+
+    if isinstance(train_dataset, torch.utils.data.Subset):
+        # Subset wraps the original dataset
+        train_dataset.dataset.transform = new_train_transform
+    else:
+        train_dataset.transform = new_train_transform

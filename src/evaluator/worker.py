@@ -13,8 +13,8 @@ from typing import Union
 import torch
 
 from src.logger.logger import logger
-from src.model.chromosome import Chromosome
-from src.model.parallel import Result, Task, WorkerConfig
+from src.model.chromosome import Chromosome, OptimizerSchedule
+from src.model.parallel import Result, WorkerConfig
 from src.nn.data_loader import get_dataset_loaders
 from src.nn.train_and_eval import train_and_eval
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
@@ -30,18 +30,17 @@ def init_device(device_id: Union[str, int]) -> torch.device:
     ThreadOptimizer.enable_tf32()
 
     if isinstance(device_id, int):
-        # Set CUDA device after process spawn
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
         if not torch.cuda.is_available():
             logger.error(f"CUDA not available for GPU worker {device_id}.")
             return torch.device("cpu")
         else:
+            torch.cuda.set_device(device_id)
             device_props = torch.cuda.get_device_properties(device_id)
             logger.info(
                 f"GPU Worker {device_id}: {device_props.name}, "
                 f"{device_props.total_memory / 1024**3:.1f} GB"
             )
-            return torch.device("cuda")
+            return torch.device(f"cuda:{device_id}")
     else:
         return torch.device("cpu")
 
@@ -103,13 +102,30 @@ def worker_main(worker_config: WorkerConfig) -> None:
                 start_time = time.perf_counter()
                 chromosome = Chromosome.from_dict(task.individual_hyperparams)
 
-                if worker_config.fixed_batch_size is None:
-                    REFERENCE_BATCH = 256
-                    scaled_base_lr = chromosome.base_lr * (
-                        chromosome.batch_size / REFERENCE_BATCH
-                    )
+                # Scaling LR based on optimizer
+                REFERENCE_BATCH = 256
+
+                if REFERENCE_BATCH < chromosome.batch_size:
+                    if chromosome.optimizer_schedule in [
+                        OptimizerSchedule.ADAMW_COSINE,
+                        OptimizerSchedule.ADAMW_ONECYCLE,
+                        OptimizerSchedule.ADAMW_EXPONENTIAL,
+                    ]:
+                        chromosome.base_lr = (
+                            chromosome.base_lr
+                            * (chromosome.batch_size / REFERENCE_BATCH) ** 0.5
+                        )
+                    elif chromosome.optimizer_schedule in [
+                        OptimizerSchedule.SGD_COSINE,
+                        OptimizerSchedule.SGD_ONECYCLE,
+                        OptimizerSchedule.SGD_EXPONENTIAL,
+                    ]:
+                        chromosome.base_lr = chromosome.base_lr * (
+                            chromosome.batch_size / REFERENCE_BATCH
+                        )
+
                     log_buffer.append(
-                        f"[Worker-{worker_config.worker_id} / {device_name}] Scaled base_lr to value {scaled_base_lr} for batch_size {chromosome.batch_size}"
+                        f"[Worker-{worker_config.worker_id} / {device_name}] Scaled base_lr to value {chromosome.base_lr} for batch_size {chromosome.batch_size}"
                     )
 
                 def epoch_logger(

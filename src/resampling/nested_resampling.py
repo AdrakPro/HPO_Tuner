@@ -102,8 +102,8 @@ def run_nested_resampling(
         logger.info(f"Best Hyperparameters for Fold {k + 1}: {best_individual}")
         all_fold_scores.append(final_fitness)
 
-        if k < outer_k_folds - 1:
-            checkpoint_manager.delete_checkpoint()
+        # if k < outer_k_folds - 1:
+        #     checkpoint_manager.delete_checkpoint()
 
     logger.info("--- Nested Resampling Finished ---")
 

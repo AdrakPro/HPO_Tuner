@@ -391,7 +391,7 @@ def run_ga_phase(
     )
     checkpoint_manager.save_checkpoint(checkpoint_state)
 
-    return population, best_fitness, best_loss
+    return population, best_fitness, best_loss, should_stop
 
 
 def run_optimization(

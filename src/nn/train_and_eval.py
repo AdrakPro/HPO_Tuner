@@ -21,7 +21,6 @@ def train_epoch(
     optimizer: optim.Optimizer,
     device: torch.device,
     scaler: GradScaler = None,
-    scheduler = None,
 ) -> tuple[float, float]:
     """
     Train the model for one epoch.
@@ -51,7 +50,7 @@ def train_epoch(
 
         # Forward pass
         if scaler is not None:
-            with torch.amp.autocast(device_type=device.type):
+            with autocast(device_type=device.type):
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
         else:
@@ -62,27 +61,36 @@ def train_epoch(
         if not torch.isfinite(loss):
             nan_batches += 1
             if nan_batches > 5:
-                raise NumericalInstabilityError("NaN loss detected multiple times.")
+                raise NumericalInstabilityError(
+                    "NaN loss detected multiple times."
+                )
             continue
 
         # Backward
         if scaler is not None:
             scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)  # important for gradient clipping
         else:
             loss.backward()
 
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-        # NaN gradients check
-        has_nan_grad = any(param.grad is not None and torch.isnan(param.grad).any() for param in model.parameters())
+        # NaN gradients check before unscaling
+        has_nan_grad = any(
+            param.grad is not None and torch.isnan(param.grad).any()
+            for param in model.parameters()
+        )
         if has_nan_grad:
             nan_batches += 1
             if nan_batches > 5:
-                raise NumericalInstabilityError("NaN gradients detected multiple times.")
+                raise NumericalInstabilityError(
+                    "NaN gradients detected multiple times."
+                )
             optimizer.zero_grad()
             continue
+
+        if scaler is not None:
+            scaler.unscale_(optimizer)
+
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         # Step optimizer
         if scaler is not None:
@@ -90,10 +98,6 @@ def train_epoch(
             scaler.update()
         else:
             optimizer.step()
-
-        # Scheduler step per batch if OneCycleLR
-        if isinstance(scheduler, torch.optim.lr_scheduler.OneCycleLR):
-            scheduler.step()
 
         # Metrics
         running_loss += loss.item() * inputs.size(0)
@@ -104,6 +108,7 @@ def train_epoch(
     epoch_loss = running_loss / total if total > 0 else float("inf")
     epoch_acc = correct / total if total > 0 else 0.0
     return epoch_loss, epoch_acc
+
 
 def evaluate(
     model: nn.Module,
@@ -192,12 +197,16 @@ def train_and_eval(
                 epoch == switch_epoch
                 and chromosome.aug_intensity == AugmentationIntensity.STRONG
             ):
-                update_train_augmentation(train_loader, AugmentationIntensity.STRONG)
+                update_train_augmentation(
+                    train_loader, AugmentationIntensity.STRONG
+                )
 
             train_loss, train_acc = train_epoch(
-                model, train_loader, criterion, optimizer, device, scaler, scheduler
+                model, train_loader, criterion, optimizer, device, scaler
             )
-            test_loss, test_acc = evaluate(model, test_loader, criterion, device)
+            test_loss, test_acc = evaluate(
+                model, test_loader, criterion, device
+            )
 
             if scheduler:
                 scheduler.step()
@@ -206,7 +215,9 @@ def train_and_eval(
             final_test_loss = test_loss
 
             if epoch_callback is not None:
-                epoch_callback(epoch + 1, train_acc, train_loss, test_acc, test_loss)
+                epoch_callback(
+                    epoch + 1, train_acc, train_loss, test_acc, test_loss
+                )
             else:
                 logger.info(
                     f"  Epoch {epoch + 1}/{epochs} | "
@@ -242,7 +253,9 @@ def train_and_eval(
             callback_msg = saver.save(model)
             if callback_msg:
                 if epoch_callback is not None:
-                    epoch_callback(None, None, None, None, None, final_msg=callback_msg)
+                    epoch_callback(
+                        None, None, None, None, None, final_msg=callback_msg
+                    )
                 else:
                     logger.info(callback_msg)
 
@@ -257,8 +270,10 @@ def train_and_eval(
             logger.error(
                 "DataLoader worker failed. This is often due to insufficient shared memory."
             )
-            logger.error(f"An unexpected runtime error occurred in train_and_eval: {e}")
-            raise
+        logger.error(
+            f"An unexpected runtime error occurred in train_and_eval: {e}"
+        )
+        raise
     except Exception as e:
         logger.error(f"An unexpected error occurred in train_and_eval: {e}")
         raise

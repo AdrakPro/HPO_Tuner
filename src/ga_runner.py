@@ -461,7 +461,6 @@ def run_optimization(
                 start_gen_cal = loaded_state.generation + 1
                 fitness_scores_cal = loaded_state.fitness_scores
             else:
-                logger.info("Starting new calibration phase.")
                 initial_pop_size = ga_config[CAL_PHASE]["population_size"]
                 cal_strat_bins = ga_config[CAL_PHASE]["stratification_bins"]
                 initial_population_cal = ga.initial_population(

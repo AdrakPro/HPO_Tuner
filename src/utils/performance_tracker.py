@@ -227,7 +227,6 @@ class PerformanceTracker:
         logger.info(
             f"Effective Workers (GPU-adjusted): {perf.num_workers * self.gpu_speedup_factor:.1f}"
         )
-        logger.info(f"Worker Utilization: {perf.worker_utilization:.1f}%")
 
         logger.info("--- SCALABILITY LAWS ---")
         logger.info(

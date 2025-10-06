@@ -4,9 +4,8 @@ Allows user-defined number of convolutional blocks with global config for paddin
 """
 
 from enum import Enum
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Tuple, Literal
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as functional
@@ -105,6 +104,63 @@ class CNN(nn.Module):
         self.fc2 = nn.Linear(chromosome.fc1_units, output_classes)
         self.dropout = nn.Dropout(chromosome.dropout_rate)
 
+        # Weight initialization to prevent gradient explosion and improve training stability
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """
+        Initialize weights using Kaiming initialization based on the network's activation.
+        """
+        # Map functional activation to PyTorch literal strings
+        activation_to_nonlinearity: dict[
+            Callable,
+            Literal[
+                "linear",
+                "conv1d",
+                "conv2d",
+                "conv3d",
+                "conv_transpose1d",
+                "conv_transpose2d",
+                "conv_transpose3d",
+                "sigmoid",
+                "tanh",
+                "relu",
+                "leaky_relu",
+                "selu",
+            ],
+        ] = {
+            torch.relu: "relu",
+            torch.nn.functional.relu: "relu",
+            torch.nn.functional.leaky_relu: "leaky_relu",
+            torch.nn.functional.gelu: "relu",  # GELU usually uses relu init
+        }
+
+        nonlinearity: Literal[
+            "linear",
+            "conv1d",
+            "conv2d",
+            "conv3d",
+            "conv_transpose1d",
+            "conv_transpose2d",
+            "conv_transpose3d",
+            "sigmoid",
+            "tanh",
+            "relu",
+            "leaky_relu",
+            "selu",
+        ] = activation_to_nonlinearity.get(self.activation, "relu")
+
+        for m in self.modules():
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.kaiming_normal_(
+                    m.weight, mode="fan_out", nonlinearity=nonlinearity
+                )
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass.
@@ -138,36 +194,30 @@ def get_optimizer_and_scheduler(
     Get optimizer and scheduler based on chromosome configuration.
 
     Handles:
-      - Batch size scaling of learning rate if batch_size > 256
-      - Adaptive warmup for log-scaled base_lr
+      - Adaptive warmup for scaled learning rates
       - Support for different optimizer schedules (SGD, AdamW, OneCycle, Cosine, Exponential)
+
+    Note: base_lr in chromosome should already be scaled and capped in worker.py
     """
     sgd_momentum = 0.9
     exp_decay = 0.95
     weight_decay = chromosome.weight_decay
-    warmup_epochs = 3
+    base_lr = chromosome.base_lr  # Already scaled and capped in worker.py
+    warmup_epochs = max(1, int(0.1 * epochs))
 
     schedule_type = chromosome.optimizer_schedule
 
-    # Scale base_lr by batch size only if batch_size > 256
     REFERENCE_BATCH = 256
-
-    if chromosome.batch_size > REFERENCE_BATCH:
-        scaled_base_lr = chromosome.base_lr * (
-            chromosome.batch_size / REFERENCE_BATCH
-        )
-    else:
-        scaled_base_lr = chromosome.base_lr
 
     # Create optimizer
     if schedule_type.is_adamw:
         optimizer = optim.AdamW(
-            model.parameters(), lr=scaled_base_lr, weight_decay=weight_decay
+            model.parameters(), lr=base_lr, weight_decay=weight_decay
         )
     else:
         optimizer = optim.SGD(
             model.parameters(),
-            lr=scaled_base_lr,
+            lr=base_lr,
             momentum=sgd_momentum,
             weight_decay=weight_decay,
         )
@@ -176,12 +226,13 @@ def get_optimizer_and_scheduler(
     if schedule_type.is_onecycle:
         scheduler = OneCycleLR(
             optimizer,
-            max_lr=scaled_base_lr,
+            max_lr=base_lr,
             steps_per_epoch=len(train_loader),
             epochs=epochs,
         )
         return optimizer, scheduler
 
+    # Setup main scheduler
     if schedule_type.is_cosine:
         main_scheduler = CosineAnnealingLR(
             optimizer, T_max=epochs - warmup_epochs
@@ -189,24 +240,21 @@ def get_optimizer_and_scheduler(
     else:
         main_scheduler = ExponentialLR(optimizer, gamma=exp_decay)
 
-    # Adaptive warmup for batch-size-scaled LR
+    # Add warmup for large batch sizes
     if chromosome.batch_size > REFERENCE_BATCH:
-        min_start_lr = 1e-5
-        start_factor = max(min_start_lr / scaled_base_lr, 0.01)
         warmup_scheduler = LinearLR(
-            optimizer, start_factor=start_factor, total_iters=warmup_epochs
+            optimizer,
+            start_factor=0.01,  # Start at 1% of base_lr (already scaled/capped)
+            total_iters=warmup_epochs,
         )
 
-        # Chain the warmup and main schedulers.
-        # TODO: Awaiting fix for SequentialLR with some schedulers:
-        # https://github.com/pytorch/pytorch/issues/76113
         scheduler = SequentialLR(
             optimizer,
             schedulers=[warmup_scheduler, main_scheduler],
             milestones=[warmup_epochs],
         )
     else:
-        # No warmup, just main scheduler
+        # No warmup needed for small batches
         scheduler = main_scheduler
 
     return optimizer, scheduler

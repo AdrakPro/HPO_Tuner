@@ -21,6 +21,7 @@ def train_epoch(
     optimizer: optim.Optimizer,
     device: torch.device,
     scaler: GradScaler = None,
+    scheduler = None,
 ) -> tuple[float, float]:
     """
     Train the model for one epoch.
@@ -41,53 +42,68 @@ def train_epoch(
         CudaOutOfMemoryError: If a CUDA OOM error is detected.
     """
     model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
+    running_loss, correct, total = 0.0, 0, 0
+    nan_batches = 0
 
     for inputs, targets in loader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        try:
-            # Mixed Precision Support
-            if scaler is not None:
-                with autocast(device.type):
-                    outputs = model(inputs)
-                    loss = criterion(outputs, targets)
-                    if not torch.isfinite(loss):
-                        raise NumericalInstabilityError(
-                            f"Loss is not finite: {loss.item()}"
-                        )
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
+
+        # Forward pass
+        if scaler is not None:
+            with torch.amp.autocast(device_type=device.type):
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
-                if not torch.isfinite(loss):
-                    raise NumericalInstabilityError(
-                        f"Loss is not finite: {loss.item()}"
-                    )
-                loss.backward()
-                optimizer.step()
+        else:
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
 
-            running_loss += loss.item() * inputs.size(0)
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
+        # NaN loss check
+        if not torch.isfinite(loss):
+            nan_batches += 1
+            if nan_batches > 5:
+                raise NumericalInstabilityError("NaN loss detected multiple times.")
+            continue
 
-        except RuntimeError as e:
-            if "CUDA out of memory" in str(e):
-                raise CudaOutOfMemoryError(
-                    "Caught CUDA OOM error during training."
-                ) from e
-            # Re-raise other runtime errors
-            raise e
+        # Backward
+        if scaler is not None:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)  # important for gradient clipping
+        else:
+            loss.backward()
 
-    avg_loss = running_loss / total
-    accuracy = correct / total
-    return avg_loss, accuracy
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
+        # NaN gradients check
+        has_nan_grad = any(param.grad is not None and torch.isnan(param.grad).any() for param in model.parameters())
+        if has_nan_grad:
+            nan_batches += 1
+            if nan_batches > 5:
+                raise NumericalInstabilityError("NaN gradients detected multiple times.")
+            optimizer.zero_grad()
+            continue
+
+        # Step optimizer
+        if scaler is not None:
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            optimizer.step()
+
+        # Scheduler step per batch if OneCycleLR
+        if isinstance(scheduler, torch.optim.lr_scheduler.OneCycleLR):
+            scheduler.step()
+
+        # Metrics
+        running_loss += loss.item() * inputs.size(0)
+        _, predicted = outputs.max(1)
+        total += targets.size(0)
+        correct += predicted.eq(targets).sum().item()
+
+    epoch_loss = running_loss / total if total > 0 else float("inf")
+    epoch_acc = correct / total if total > 0 else 0.0
+    return epoch_loss, epoch_acc
 
 def evaluate(
     model: nn.Module,
@@ -154,7 +170,6 @@ def train_and_eval(
     Returns:
         Tuple of (final_test_accuracy, final_test_loss).
     """
-    is_gpu = device.type == "cuda"
 
     try:
         model: nn.Module = get_network(chromosome, neural_config).to(device)
@@ -162,7 +177,7 @@ def train_and_eval(
         optimizer, scheduler = get_optimizer_and_scheduler(
             model, chromosome, train_loader, epochs
         )
-        scaler = torch.amp.GradScaler() if is_gpu else None
+        scaler = torch.amp.GradScaler() if device.type == "cuda" else None
 
         final_test_acc = 0.0
         final_test_loss = 0.0
@@ -177,16 +192,12 @@ def train_and_eval(
                 epoch == switch_epoch
                 and chromosome.aug_intensity == AugmentationIntensity.STRONG
             ):
-                update_train_augmentation(
-                    train_loader, AugmentationIntensity.STRONG
-                )
+                update_train_augmentation(train_loader, AugmentationIntensity.STRONG)
 
             train_loss, train_acc = train_epoch(
-                model, train_loader, criterion, optimizer, device, scaler
+                model, train_loader, criterion, optimizer, device, scaler, scheduler
             )
-            test_loss, test_acc = evaluate(
-                model, test_loader, criterion, device
-            )
+            test_loss, test_acc = evaluate(model, test_loader, criterion, device)
 
             if scheduler:
                 scheduler.step()
@@ -195,9 +206,7 @@ def train_and_eval(
             final_test_loss = test_loss
 
             if epoch_callback is not None:
-                epoch_callback(
-                    epoch + 1, train_acc, train_loss, test_acc, test_loss
-                )
+                epoch_callback(epoch + 1, train_acc, train_loss, test_acc, test_loss)
             else:
                 logger.info(
                     f"  Epoch {epoch + 1}/{epochs} | "
@@ -233,9 +242,7 @@ def train_and_eval(
             callback_msg = saver.save(model)
             if callback_msg:
                 if epoch_callback is not None:
-                    epoch_callback(
-                        None, None, None, None, None, final_msg=callback_msg
-                    )
+                    epoch_callback(None, None, None, None, None, final_msg=callback_msg)
                 else:
                     logger.info(callback_msg)
 
@@ -250,9 +257,7 @@ def train_and_eval(
             logger.error(
                 "DataLoader worker failed. This is often due to insufficient shared memory."
             )
-            logger.error(
-                f"An unexpected runtime error occurred in train_and_eval: {e}"
-            )
+            logger.error(f"An unexpected runtime error occurred in train_and_eval: {e}")
             raise
     except Exception as e:
         logger.error(f"An unexpected error occurred in train_and_eval: {e}")

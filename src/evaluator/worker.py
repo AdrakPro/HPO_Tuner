@@ -35,11 +35,6 @@ def init_device(device_id: Union[str, int]) -> torch.device:
             return torch.device("cpu")
         else:
             torch.cuda.set_device(device_id)
-            device_props = torch.cuda.get_device_properties(device_id)
-            logger.info(
-                f"GPU Worker {device_id}: {device_props.name}, "
-                f"{device_props.total_memory / 1024**3:.1f} GB"
-            )
             return torch.device(f"cuda:{device_id}")
     else:
         return torch.device("cpu")
@@ -104,28 +99,43 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
                 # Scaling LR based on optimizer
                 REFERENCE_BATCH = 256
+                original_lr = chromosome.base_lr
+                scale_factor = 0.0
 
                 if REFERENCE_BATCH < chromosome.batch_size:
-                    if chromosome.optimizer_schedule in [
-                        OptimizerSchedule.ADAMW_COSINE,
-                        OptimizerSchedule.ADAMW_ONECYCLE,
-                        OptimizerSchedule.ADAMW_EXPONENTIAL,
-                    ]:
-                        chromosome.base_lr = (
-                            chromosome.base_lr
-                            * (chromosome.batch_size / REFERENCE_BATCH) ** 0.5
-                        )
-                    elif chromosome.optimizer_schedule in [
-                        OptimizerSchedule.SGD_COSINE,
-                        OptimizerSchedule.SGD_ONECYCLE,
-                        OptimizerSchedule.SGD_EXPONENTIAL,
-                    ]:
-                        chromosome.base_lr = chromosome.base_lr * (
+                    if _is_adamw(chromosome.optimizer_schedule):
+                        scale_factor = (
                             chromosome.batch_size / REFERENCE_BATCH
-                        )
+                        ) ** 0.5
+                        scaled_lr = chromosome.base_lr * scale_factor
+                        max_lr = 0.01
+                        scaled_lr = min(scaled_lr, max_lr)
 
+                    elif _is_sgd(chromosome.optimizer_schedule):
+                        scale_factor = chromosome.batch_size / REFERENCE_BATCH
+                        scaled_lr = chromosome.base_lr * scale_factor
+                        max_lr = 0.5
+                        scaled_lr = min(scaled_lr, max_lr)
+                    else:
+                        scaled_lr = chromosome.base_lr
+
+                    chromosome.base_lr = scaled_lr
+
+                    if scaled_lr < original_lr * scale_factor:
+                        log_buffer.append(
+                            f"[Worker-{worker_config.worker_id} / {device_name}] "
+                            f"Scaled base_lr from {original_lr:.6f} to {original_lr * scale_factor:.6f}, "
+                            f"but CAPPED at {scaled_lr:.6f} for batch_size {chromosome.batch_size}"
+                        )
+                    else:
+                        log_buffer.append(
+                            f"[Worker-{worker_config.worker_id} / {device_name}] "
+                            f"Scaled base_lr to {chromosome.base_lr:.6f} for batch_size {chromosome.batch_size}"
+                        )
+                else:
                     log_buffer.append(
-                        f"[Worker-{worker_config.worker_id} / {device_name}] Scaled base_lr to value {chromosome.base_lr} for batch_size {chromosome.batch_size}"
+                        f"[Worker-{worker_config.worker_id} / {device_name}] "
+                        f"Using base_lr {chromosome.base_lr:.6f} for batch_size {chromosome.batch_size}"
                     )
 
                 def epoch_logger(
@@ -237,3 +247,19 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
     # Reset signal handler
     signal.signal(signal.SIGINT, original_sigint_handler)
+
+
+def _is_adamw(optimizer_schedule: OptimizerSchedule):
+    return optimizer_schedule in [
+        OptimizerSchedule.ADAMW_COSINE,
+        OptimizerSchedule.ADAMW_ONECYCLE,
+        OptimizerSchedule.ADAMW_EXPONENTIAL,
+    ]
+
+
+def _is_sgd(optimizer_schedule: OptimizerSchedule):
+    return optimizer_schedule in [
+        OptimizerSchedule.SGD_COSINE,
+        OptimizerSchedule.SGD_ONECYCLE,
+        OptimizerSchedule.SGD_EXPONENTIAL,
+    ]

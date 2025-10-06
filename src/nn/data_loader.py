@@ -138,7 +138,6 @@ def get_dataset_loaders(
             train_set = Subset(train_set, indices)
 
     num_workers = get_num_workers(num_dataloader_workers)
-    logger.error(num_workers)
     enable_persistent_workers = num_workers > 0
 
     train_loader = DataLoader(

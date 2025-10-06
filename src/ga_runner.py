@@ -175,7 +175,6 @@ def run_ga_phase(
             logger.info(f"GENERATION {gen} REPORT")
             logger.info("=" * 40)
             logger.info(f"Wall-Clock Time: {evaluation_time:.2f}s")
-            logger.info(f"Worker Utilization: {worker_utilization:.2f}%")
             logger.info(f"Total Worker Busy Time: {total_worker_time:.2f}s")
             logger.info(
                 f"Total Worker Idle Time (Overhead): {true_overhead_seconds:.2f}s"

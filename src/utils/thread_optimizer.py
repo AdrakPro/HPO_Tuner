@@ -55,11 +55,9 @@ class ThreadOptimizer:
             if major >= 8:  # A100 and newer
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True
-                logger.info("TF32 enabled for A100 GPU (3x performance boost)")
             else:
                 torch.backends.cuda.matmul.allow_tf32 = False
                 torch.backends.cudnn.allow_tf32 = False
-                logger.info("TF32 disabled (not supported on this GPU)")
 
     @staticmethod
     def get_optimal_batch_size(

@@ -92,10 +92,10 @@ def run_ga_phase(
         )
         epoch_multiplier = 1.0
 
-        if not enable_progressive_epochs:
-            logger.warning(
-                f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({MINIMUM_PROGRESSIVE_EPOCHS})."
-            )
+        # if not enable_progressive_epochs:
+        #     logger.warning(
+        #         f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({MINIMUM_PROGRESSIVE_EPOCHS})."
+        #     )
 
         for gen in range(start_gen, generations + 1):
             performance_tracker.start_generation(gen, phase_type)

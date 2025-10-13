@@ -279,7 +279,9 @@ class PerformanceTracker:
         logger.info("=" * 40)
         logger.info("OVERALL PERFORMANCE SUMMARY")
         logger.info("=" * 40)
-        logger.info(f"Total Generations: {len(self.generation_performances)}")
+        logger.info(
+            f"Total Generations: {len(self.generation_performances) - 1}"
+        )
         logger.info(f"Total Time: {total_time:.2f}s")
         logger.info(
             f"Total Sequential: {total_sequential:.2f}s ({overall_seq_frac * 100:.1f}%)"

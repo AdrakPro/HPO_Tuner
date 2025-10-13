@@ -21,6 +21,7 @@ CAL_PHASE = "calibration"
 MAIN_PHASE = "main_algorithm"
 
 
+# TODO: check IF strong aug affects calibration and maybe set it to medium
 def run_ga_phase(
     phase_name: str,
     config: Dict[str, Any],
@@ -58,7 +59,7 @@ def run_ga_phase(
     )
 
     phase_type = (
-        PhaseType.CALIBRATION if phase_name == "calibration" else PhaseType.MAIN
+        PhaseType.CALIBRATION if phase_name == CAL_PHASE else PhaseType.MAIN
     )
 
     population = starting_population
@@ -106,16 +107,16 @@ def run_ga_phase(
             )
 
             seq_prep_start = time.perf_counter()
-            if enable_progressive_epochs:
-                progress = gen / generations
-                if progress <= 0.3:
-                    epoch_multiplier = 0.5
-                elif progress <= 0.7:
-                    epoch_multiplier = 0.75
-                else:
-                    epoch_multiplier = 1.0
-
-                training_epochs = int(round(initial_epochs * epoch_multiplier))
+            # if enable_progressive_epochs:
+            #     progress = gen / generations
+            #     if progress <= 0.3:
+            #         epoch_multiplier = 0.5
+            #     elif progress <= 0.7:
+            #         epoch_multiplier = 0.75
+            #     else:
+            #         epoch_multiplier = 1.0
+            #
+            #     training_epochs = int(round(initial_epochs * epoch_multiplier))
 
             evaluator.set_training_epochs(training_epochs)
             seq_prep_time = time.perf_counter() - seq_prep_start
@@ -154,12 +155,10 @@ def run_ga_phase(
             total_worker_time = sum(durations) if durations else 0.0
             num_workers = evaluator.num_workers
 
-            total_available_time = evaluation_time * num_workers
+            total_available_time = max(evaluation_time * num_workers, 1e-6)
             worker_utilization = (
-                (total_worker_time / total_available_time) * 100
-                if total_available_time > 0.0
-                else 0.0
-            )
+                total_worker_time / total_available_time
+            ) * 100
             true_overhead_seconds = max(
                 0.0, total_available_time - total_worker_time
             )
@@ -510,9 +509,11 @@ def run_optimization(
                 logger.info(
                     "Seeding main algorithm with population from calibration phase."
                 )
-                num_elites = int(main_pop_size * 0.4)
-                num_mutated = int(main_pop_size * 0.3)
-                num_random = main_pop_size - num_mutated - num_elites
+                num_elites = min(
+                    int(main_pop_size * 0.3), len(calibrated_population)
+                )
+                num_mutated = int(main_pop_size * 0.6)
+                num_random = main_pop_size - num_elites - num_mutated
 
                 elites = calibrated_population[:num_elites]
                 main_starting_population.extend(deepcopy(elites))
@@ -523,7 +524,11 @@ def run_optimization(
 
                 mutated_offspring = []
                 for _ in range(num_mutated):
-                    parent = random.choice(elites)
+                    parent = (
+                        random.choice(elites)
+                        if elites
+                        else random.choice(calibrated_population)
+                    )
                     child = ga.mutate(deepcopy(parent))
                     mutated_offspring.append(child)
                 main_starting_population.extend(mutated_offspring)
@@ -534,7 +539,9 @@ def run_optimization(
 
                 if num_random > 0:
                     random_individuals = ga.initial_population(
-                        num_random, strat_bins=5, print_warning=False
+                        num_random,
+                        strat_bins=main_strat_bins,
+                        print_warning=False,
                     )
                     main_starting_population.extend(random_individuals)
                     logger.info(

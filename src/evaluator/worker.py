@@ -6,7 +6,6 @@ This code is executed by each process in the multiprocessing pool.
 import os
 import queue
 import signal
-import sys
 import time
 from typing import Union
 
@@ -98,11 +97,11 @@ def worker_main(worker_config: WorkerConfig) -> None:
                 chromosome = Chromosome.from_dict(task.individual_hyperparams)
 
                 # Scaling LR based on optimizer
-                REFERENCE_BATCH = 256
+                REFERENCE_BATCH = 128
                 original_lr = chromosome.base_lr
                 scale_factor = 0.0
 
-                if REFERENCE_BATCH < chromosome.batch_size:
+                if REFERENCE_BATCH != chromosome.batch_size:
                     if _is_adamw(chromosome.optimizer_schedule):
                         scale_factor = (
                             chromosome.batch_size / REFERENCE_BATCH

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.amp import GradScaler, autocast
+from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
 
 from src.logger.logger import logger
@@ -12,6 +13,7 @@ from src.nn.data_loader import update_train_augmentation
 from src.nn.model_saver import ModelSaver
 from src.nn.neural_network import get_network, get_optimizer_and_scheduler
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
+from src.utils.mixup import mixup_data, mixup_criterion
 
 
 def train_epoch(
@@ -21,6 +23,10 @@ def train_epoch(
     optimizer: optim.Optimizer,
     device: torch.device,
     scaler: GradScaler = None,
+    scheduler=None,
+    mixup_alpha: float = 0.4,
+    epoch: int = 0,
+    total_epochs: int = 100,
 ) -> tuple[float, float]:
     """
     Train the model for one epoch.
@@ -44,18 +50,31 @@ def train_epoch(
     running_loss, correct, total = 0.0, 0, 0
     nan_batches = 0
 
+    lam_alpha = mixup_alpha * (epoch / total_epochs)
+
     for inputs, targets in loader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
+
+        if lam_alpha > 0:
+            inputs, targets_a, targets_b, lam = mixup_data(
+                inputs, targets, alpha=lam_alpha, device=device
+            )
+        else:
+            targets_a, targets_b, lam = targets, targets, 1.0
 
         # Forward pass
         if scaler is not None:
             with autocast(device_type=device.type):
                 outputs = model(inputs)
-                loss = criterion(outputs, targets)
+                loss = mixup_criterion(
+                    criterion, outputs, targets_a, targets_b, lam
+                )
         else:
             outputs = model(inputs)
-            loss = criterion(outputs, targets)
+            loss = mixup_criterion(
+                criterion, outputs, targets_a, targets_b, lam
+            )
 
         # NaN loss check
         if not torch.isfinite(loss):
@@ -90,7 +109,7 @@ def train_epoch(
             scaler.unscale_(optimizer)
 
         # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
 
         # Step optimizer
         if scaler is not None:
@@ -99,11 +118,17 @@ def train_epoch(
         else:
             optimizer.step()
 
+        if scheduler is not None and isinstance(scheduler, OneCycleLR):
+            scheduler.step()
+
         # Metrics
         running_loss += loss.item() * inputs.size(0)
         _, predicted = outputs.max(1)
         total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
+        correct += (
+            lam * predicted.eq(targets_a).sum().item()
+            + (1 - lam) * predicted.eq(targets_b).sum().item()
+        )
 
     epoch_loss = running_loss / total if total > 0 else float("inf")
     epoch_acc = correct / total if total > 0 else 0.0
@@ -178,7 +203,7 @@ def train_and_eval(
 
     try:
         model: nn.Module = get_network(chromosome, neural_config).to(device)
-        criterion: nn.Module = nn.CrossEntropyLoss()
+        criterion: nn.Module = nn.CrossEntropyLoss(label_smoothing=0.05)
         optimizer, scheduler = get_optimizer_and_scheduler(
             model, chromosome, train_loader, epochs
         )
@@ -188,27 +213,41 @@ def train_and_eval(
         final_test_loss = 0.0
         best_acc_so_far = 0.0
         epochs_without_improvement = 0
+        mixup_alpha = 0.4
 
-        switch_epoch = max(1, int(0.1 * epochs))
+        update_train_augmentation(train_loader, AugmentationIntensity.NONE)
+
+        light_switch_epoch = int(0.05 * epochs)
+        strong_switch_epoch = int(0.30 * epochs)
 
         for epoch in range(epochs):
-            # STRONG augmentation on start causes neural network to not learn at all
-            if (
-                epoch == switch_epoch
-                and chromosome.aug_intensity == AugmentationIntensity.STRONG
-            ):
+            if epoch == light_switch_epoch:
                 update_train_augmentation(
-                    train_loader, AugmentationIntensity.STRONG
+                    train_loader, AugmentationIntensity.LIGHT
+                )
+
+            if epoch == strong_switch_epoch:
+                update_train_augmentation(
+                    train_loader, chromosome.aug_intensity
                 )
 
             train_loss, train_acc = train_epoch(
-                model, train_loader, criterion, optimizer, device, scaler
+                model,
+                train_loader,
+                criterion,
+                optimizer,
+                device,
+                scaler,
+                scheduler,
+                mixup_alpha,
+                epoch,
+                epochs,
             )
             test_loss, test_acc = evaluate(
                 model, test_loader, criterion, device
             )
 
-            if scheduler:
+            if scheduler is not None and not isinstance(scheduler, OneCycleLR):
                 scheduler.step()
 
             final_test_acc = test_acc

@@ -11,7 +11,6 @@ from typing import Optional, Union
 
 import numpy as np
 import torch.cuda
-import torch.multiprocessing as mp
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
@@ -187,7 +186,7 @@ def get_transforms(
     elif aug_intensity == AugmentationIntensity.LIGHT:
         train_transform = transforms.Compose(
             [
-                transforms.RandomHorizontalFlip(),
+                transforms.RandomHorizontalFlip(p=0.5),
                 transforms.ToTensor(),
                 transforms.Normalize(MEANS, STDS),
             ]
@@ -196,7 +195,7 @@ def get_transforms(
         train_transform = transforms.Compose(
             [
                 transforms.RandomCrop(IMG_SIZE, padding=CROP_PADDING),
-                transforms.RandomHorizontalFlip(),
+                transforms.RandomHorizontalFlip(p=0.5),
                 transforms.ToTensor(),
                 transforms.Normalize(MEANS, STDS),
             ]
@@ -205,20 +204,18 @@ def get_transforms(
         train_transform = transforms.Compose(
             [
                 transforms.RandomCrop(IMG_SIZE, padding=CROP_PADDING),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomApply(
-                    [
-                        transforms.ColorJitter(
-                            brightness=0.2,
-                            contrast=0.2,
-                            saturation=0.2,
-                            hue=0.1,
-                        )
-                    ],
-                    p=0.5,
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomAffine(
+                    degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=5
+                ),
+                transforms.ColorJitter(
+                    brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05
                 ),
                 transforms.ToTensor(),
                 transforms.Normalize(MEANS, STDS),
+                transforms.RandomErasing(
+                    p=0.25, scale=(0.02, 0.15), ratio=(0.3, 3.3)
+                ),
             ]
         )
     else:

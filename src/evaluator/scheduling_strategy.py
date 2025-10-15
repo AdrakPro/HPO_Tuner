@@ -52,6 +52,7 @@ class SchedulingStrategy(ABC):
         dl_workers_per_gpu: int = 1,
         dl_workers_per_cpu: int = 1,
         fixed_batch_size: Optional[int] = None,
+        gpu_worker_offset: int = 0,
     ) -> List[mp.Process]:
         """Helper to spawn and start worker processes."""
         workers = []
@@ -63,7 +64,7 @@ class SchedulingStrategy(ABC):
         # Spawn GPU workers
         for i in range(num_gpu_workers):
             w_config = WorkerConfig(
-                worker_id=i,
+                worker_id=i + gpu_worker_offset,
                 device=i,
                 task_queue=task_queue,
                 result_queue=result_queue,
@@ -79,7 +80,7 @@ class SchedulingStrategy(ABC):
         # Spawn CPU workers
         for i in range(num_cpu_workers):
             w_config = WorkerConfig(
-                worker_id=i + num_gpu_workers,
+                worker_id=i + num_gpu_workers + gpu_worker_offset,
                 device="cpu",
                 task_queue=task_queue,
                 result_queue=result_queue,
@@ -153,7 +154,7 @@ class GPUOnlyStrategy(SchedulingStrategy):
         )
 
 
-class HybridStrategy(SchedulingStrategy):
+class SimpleHybridStrategy(SchedulingStrategy):
     """Schedules tasks on both GPU and CPU workers."""
 
     def launch_workers(self, **kwargs) -> List[mp.Process]:
@@ -189,3 +190,105 @@ class HybridStrategy(SchedulingStrategy):
             dl_workers_per_gpu=dl_per_gpu,
             dl_workers_per_cpu=dl_per_cpu,
         )
+
+class GPUOnlyStrategy(SchedulingStrategy):
+    """Schedules all tasks to be run on GPU workers."""
+
+    def launch_workers(self, **kwargs: Any) -> Dict[str, Any]:
+        logger.info("Using GPU-Only scheduling strategy.")
+        ctx = kwargs["ctx"]
+        task_queue = ctx.Queue()
+
+        available_gpus = torch.cuda.device_count()
+        exec_config = kwargs["execution_config"]
+        num_gpu_workers = exec_config.get("gpu_workers", available_gpus)
+
+        if num_gpu_workers > available_gpus:
+            logger.warning(
+                f"Requested {num_gpu_workers} GPUs, but only {available_gpus} are available. Adjusting."
+            )
+            num_gpu_workers = available_gpus
+
+        if num_gpu_workers == 0:
+            logger.error(
+                "GPU-Only Strategy selected, but no GPU workers are configured or available."
+            )
+            return {"workers": [], "task_queues": []}
+
+        dl_config = exec_config.get("dataloader_workers", {})
+        dl_per_gpu = dl_config.get("per_gpu", 4)
+
+        workers = _spawn_processes(
+            ctx=ctx,
+            task_queue=task_queue,
+            result_queue=kwargs["result_queue"],
+            num_gpu_workers=num_gpu_workers,
+            session_log_filename=kwargs["session_log_filename"],
+            dl_workers_per_gpu=dl_per_gpu,
+        )
+        return {"workers": workers, "task_queues": [task_queue]}
+
+
+class HybridStrategy(SchedulingStrategy):
+    """
+    The main hybrid strategy. Implements an asymmetric scheduling mechanism 
+    with task stealing to prevent CPU bottlenecking.
+    - Creates separate queues for GPU (primary) and CPU (secondary) workers.
+    - A 'task stealer' thread is expected to be managed by the Evaluator
+      to move surplus tasks from the GPU queue to the CPU queue.
+    """
+
+    def launch_workers(self, **kwargs: Any) -> Dict[str, Any]:
+        logger.info("Using main HYBRID strategy with Task Stealing.")
+        ctx = kwargs["ctx"]
+        gpu_task_queue = ctx.Queue(maxsize=1000)
+        cpu_task_queue = ctx.Queue(maxsize=1000)
+
+        exec_config = kwargs["execution_config"]
+        available_gpus = torch.cuda.device_count()
+        num_gpu_workers = exec_config.get("gpu_workers", available_gpus)
+        num_cpu_workers = exec_config.get("cpu_workers", 0)
+
+        if num_gpu_workers > available_gpus:
+            logger.warning(
+                f"Requested {num_gpu_workers} GPUs, but only {available_gpus} are available. Adjusting."
+            )
+            num_gpu_workers = available_gpus
+
+        if num_gpu_workers + num_cpu_workers == 0:
+            logger.error(
+                "HybridStrategy selected, but no workers are configured."
+            )
+            return {"workers": [], "task_queues": []}
+
+        dl_config = exec_config.get("dataloader_workers", {})
+        dl_per_gpu = dl_config.get("per_gpu", 4)
+        dl_per_cpu = dl_config.get("per_cpu", 1)
+        
+        gpu_workers = _spawn_processes(
+            ctx=ctx,
+            task_queue=gpu_task_queue,
+            result_queue=kwargs["result_queue"],
+            num_gpu_workers=num_gpu_workers,
+            session_log_filename=kwargs["session_log_filename"],
+            dl_workers_per_gpu=dl_per_gpu,
+            fixed_batch_size=kwargs.get("fixed_batch_size")
+        )
+
+        cpu_workers = _spawn_processes(
+            ctx=ctx,
+            task_queue=cpu_task_queue,
+            result_queue=kwargs["result_queue"],
+            num_cpu_workers=num_cpu_workers,
+            session_log_filename=kwargs["session_log_filename"],
+            dl_workers_per_cpu=dl_per_cpu,
+            gpu_worker_offset=num_gpu_workers, # To ensure unique worker_ids
+            fixed_batch_size=kwargs.get("fixed_batch_size")
+        )
+
+        return {
+            "workers": gpu_workers + cpu_workers,
+            "gpu_task_queue": gpu_task_queue,
+            "cpu_task_queue": cpu_task_queue,
+        }
+

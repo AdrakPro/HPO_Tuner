@@ -1,4 +1,5 @@
-from typing import Dict
+import os
+from typing import Dict, Optional
 
 import numpy as np
 
@@ -14,104 +15,142 @@ def run_nested_resampling(
     config: Dict,
     tui: TUI,
     session_log_filename: str,
-    loaded_state: GaState | None,
+    loaded_state: Optional[GaState],
 ):
     """
-    Manages the nested resampling process (outer K-fold cross-validation).
-
-    If nested resampling is disabled in the config, it runs a single
-    optimization process. Otherwise, it iterates through K folds, running
-    the full GA optimization within each to find the best hyperparameters,
-    and then evaluates the result on the fold's test set.
-
-    Worker pool (evaluator) is created once per fold and persists for all generations in that fold.
+    Manages the nested resampling process.
+    Adapts its behavior based on the SLURM_ARRAY_TASK_ID environment variable.
     """
     nested_config = config["nested_validation_config"]
     outer_k_folds = nested_config["outer_k_folds"]
 
-    if not nested_config["enabled"] or outer_k_folds <= 1:
-        run_optimization(config, tui, session_log_filename, loaded_state)
-        return
+    # --- NOWA, KLUCZOWA LOGIKA: Wykrywanie trybu pracy ---
+    fold_to_run_str = os.environ.get("SLURM_ARRAY_TASK_ID")
+    is_slurm_array_job = fold_to_run_str is not None
 
-    logger.info(
-        f"--- Starting Nested Resampling With {outer_k_folds} Folds ---"
-    )
+    if is_slurm_array_job:
+        try:
+            fold_index = int(fold_to_run_str)
+            logger.info(
+                f"Running as SLURM array task. Executing ONLY Fold {fold_index + 1}/{outer_k_folds}."
+            )
+            # Uruchom tylko jeden, konkretny fold
+            _run_single_fold(
+                config, tui, session_log_filename, loaded_state, fold_index
+            )
+        except (ValueError, IndexError):
+            logger.error(
+                f"Invalid SLURM_ARRAY_TASK_ID: {fold_to_run_str}. Could not run fold."
+            )
+    else:
+        # Tryb lokalny/sekwencyjny: Uruchom wszystkie foldy po kolei
+        logger.info(
+            "Not a SLURM array job. Running all folds sequentially."
+        )
+        if not nested_config["enabled"] or outer_k_folds <= 1:
+            run_optimization(config, tui, session_log_filename, loaded_state)
+            return
+
+        logger.info(
+            f"--- Starting Sequential Nested Resampling With {outer_k_folds} Folds ---"
+        )
+        all_fold_scores = []
+        start_fold = 0
+
+        if loaded_state and loaded_state.outer_fold_k != -1:
+            # Logika wznawiania (bez zmian)
+            start_fold = loaded_state.outer_fold_k
+            if (
+                loaded_state.phase == "main_algorithm"
+                and loaded_state.phase_completed
+            ):
+                logger.info(f"Fold {start_fold + 1} was already completed. Resuming from Fold {start_fold + 2}.")
+                start_fold += 1
+            else:
+                logger.info(f"Resuming nested resampling from Fold {start_fold + 1}/{outer_k_folds}.")
+
+        for k in range(start_fold, outer_k_folds):
+            current_fold_loaded_state = (
+                loaded_state if k == start_fold else None
+            )
+            final_fitness, _, _ = _run_single_fold(
+                config,
+                tui,
+                session_log_filename,
+                current_fold_loaded_state,
+                k,
+            )
+            if final_fitness is not None:
+                all_fold_scores.append(final_fitness)
+
+        logger.info("--- Sequential Nested Resampling Finished ---")
+        if all_fold_scores:
+            mean_accuracy = np.mean(all_fold_scores)
+            std_accuracy = np.std(all_fold_scores)
+            logger.info(
+                f"Average Accuracy across {outer_k_folds} folds: {mean_accuracy:.4f} (±{std_accuracy:.6f})"
+            )
+
+
+def _run_single_fold(
+    config: Dict,
+    tui: TUI,
+    session_log_filename: str,
+    loaded_state: Optional[GaState],
+    fold_index: int,
+) -> (Optional[float], Optional[float], Optional[dict]):
+    """
+    Helper function to encapsulate the logic for running a single fold.
+    This is now the core logic called by both sequential and parallel modes.
+    """
+    outer_k_folds = config["nested_validation_config"]["outer_k_folds"]
+    tui.update_fold_status(fold_index + 1, outer_k_folds)
+    logger.info(f"--- Running Fold {fold_index + 1}/{outer_k_folds} ---")
+
     data_dir = "./model_data"
     seed = config["project"]["seed"]
+    fold_indices_list = create_stratified_k_folds(data_dir, outer_k_folds, seed)
+    
+    if fold_index >= len(fold_indices_list):
+        logger.error(f"Fold index {fold_index} is out of bounds for {len(fold_indices_list)} folds.")
+        return None, None, None
 
-    fold_indices = create_stratified_k_folds(data_dir, outer_k_folds, seed)
-
-    all_fold_scores = []
-    start_fold = 0
-
-    if loaded_state and loaded_state.outer_fold_k != -1:
-        start_fold = loaded_state.outer_fold_k
-
-        if (
-            loaded_state.phase == "main_algorithm"
-            and loaded_state.phase_completed
-        ):
-            logger.info(
-                f"Fold {start_fold + 1} was already completed. Resuming from Fold {start_fold + 2}."
-            )
-            start_fold += 1
-        else:
-            logger.info(
-                f"Resuming nested resampling from Fold {start_fold + 1}/{outer_k_folds}."
-            )
-
+    train_idx, test_idx = fold_indices_list[fold_index]
     ga_config = config["genetic_algorithm_config"]
+    
+    # FIXED_BATCH_SIZE jest teraz pobierany z konfiguracji lub domyślnie None
+    fixed_batch_size = ga_config.get("fixed_batch_size_for_cal", 64)
 
-    for k in range(start_fold, outer_k_folds):
-        tui.update_fold_status(k + 1, outer_k_folds)
-        logger.info(f"--- Running Fold {k + 1}/{outer_k_folds} ---")
-
-        train_idx, test_idx = fold_indices[k]
-        current_fold_loaded_state = loaded_state if k == start_fold else None
-
-        FIXED_BATCH_SIZE = 64
-
-        with create_evaluator(
-            config,
-            ga_config["calibration"]["training_epochs"],
-            ga_config["calibration"]["stop_conditions"]["early_stop_epochs"],
-            ga_config["calibration"].get("data_subset_percentage", 1.0),
-            tui,
-            session_log_filename,
+    with create_evaluator(
+        config,
+        ga_config["calibration"]["training_epochs"],
+        ga_config["calibration"]["stop_conditions"]["early_stop_epochs"],
+        ga_config["calibration"].get("data_subset_percentage", 1.0),
+        tui,
+        session_log_filename,
+        train_indices=train_idx,
+        test_indices=test_idx,
+        fixed_batch_size=fixed_batch_size,
+    ) as evaluator:
+        best_individual, final_fitness, final_loss = run_optimization(
+            config=config,
+            tui=tui,
+            session_log_filename=session_log_filename,
+            loaded_state=loaded_state,
+            outer_fold_k=fold_index,
             train_indices=train_idx,
             test_indices=test_idx,
-            fixed_batch_size=FIXED_BATCH_SIZE,
-        ) as evaluator:
-
-            best_individual, final_fitness, final_loss = run_optimization(
-                config=config,
-                tui=tui,
-                session_log_filename=session_log_filename,
-                loaded_state=current_fold_loaded_state,
-                outer_fold_k=k,
-                train_indices=train_idx,
-                test_indices=test_idx,
-                evaluator=evaluator,
-            )
-
-        logger.info(f"--- Fold {k + 1} Finished ---")
-        logger.info(
-            f"Best Fitness (Accuracy) for Fold {k + 1}: {final_fitness:.4f}"
+            evaluator=evaluator,
         )
-        logger.info(f"Best Loss for Fold {k + 1}: {final_loss:.4f}")
-        logger.info(f"Best Hyperparameters for Fold {k + 1}: {best_individual}")
-        all_fold_scores.append(final_fitness)
 
-        # if k < outer_k_folds - 1:
-        #     checkpoint_manager.delete_checkpoint()
-
-    logger.info("--- Nested Resampling Finished ---")
-
-    if all_fold_scores:
-        mean_accuracy = np.mean(all_fold_scores)
-        std_accuracy = np.std(all_fold_scores)
+    logger.info(f"--- Fold {fold_index + 1} Finished ---")
+    if final_fitness is not None:
         logger.info(
-            f"Average Accuracy across {outer_k_folds} folds: {mean_accuracy:.4f} (±{std_accuracy:.6f})"
+            f"Best Fitness (Accuracy) for Fold {fold_index + 1}: {final_fitness:.4f}"
         )
-    else:
-        logger.warning("No fold scores were recorded.")
+        logger.info(f"Best Loss for Fold {fold_index + 1}: {final_loss:.4f}")
+        logger.info(
+            f"Best Hyperparameters for Fold {fold_index + 1}: {best_individual}"
+        )
+
+    return final_fitness, final_loss, best_individual

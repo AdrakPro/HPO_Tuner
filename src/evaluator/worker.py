@@ -43,26 +43,15 @@ def worker_main(worker_config: WorkerConfig) -> None:
     """
     Top-level worker function, so it can be pickled by multiprocessing.
     """
-    if worker_config.device == "cpu":
-        cores_per_worker = ThreadOptimizer.optimize_worker_threads(
-            worker_id=worker_config.worker_id,
-            total_workers=worker_config.total_cpu_workers,
-            total_system_cores=128,
-            reserved_cores=24,  # Reserve cores for system/GPU
-        )
+    cores_per_worker = 1
 
+    if worker_config.device == "cpu":
         os.environ["OMP_NUM_THREADS"] = str(cores_per_worker)
         os.environ["MKL_NUM_THREADS"] = str(cores_per_worker)
         os.environ["NUMEXPR_NUM_THREADS"] = str(cores_per_worker)
         os.environ["OPENBLAS_NUM_THREADS"] = str(cores_per_worker)
 
         torch.set_num_threads(cores_per_worker)
-    else:
-        # GPU workers need fewer CPU threads
-        # TODO: 4 is recommended value, calculate and check if we have that many cores
-        os.environ["OMP_NUM_THREADS"] = "4"
-        os.environ["MKL_NUM_THREADS"] = "4"
-        torch.set_num_threads(4)
 
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)

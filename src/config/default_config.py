@@ -8,19 +8,19 @@ def get_default_config() -> Dict[str, Any]:
     """
 
     return {
-        "project": {"name": "HPO Paper-Based Experiment", "seed": None},
+        "project": {"name": "HPO Paper-Based Experiment", "seed": 321},
         # Checkpoints
-        "checkpoint_config": {"interval_per_gen": 1},
+        "checkpoint_config": {"interval_per_gen": 0},
         # Parallel execution and scheduling
         "parallel_config": {
             "execution": {
                 "evaluation_mode": "HYBRID",  # Options: "CPU", "GPU", "HYBRID"
                 "enable_parallel": True,
-                "gpu_workers": 1,
-                "cpu_workers": 12,
+                "gpu_workers": 4,
+                "cpu_workers": 23,
                 "dataloader_workers": {
-                    "per_gpu": 4,
-                    "per_cpu": 2,
+                    "per_gpu": 3,
+                    "per_cpu": 1,
                 },
             },
         },
@@ -28,16 +28,16 @@ def get_default_config() -> Dict[str, Any]:
         "neural_network_config": {
             "input_shape": [3, 32, 32],  # (channels, height, width)
             "output_classes": 10,
-            "conv_blocks": 2,
+            "conv_blocks": 3,
             # Parameters not subject to optimization
             "fixed_parameters": {
                 "activation_function": "relu",  # Options: relu, gelu, leaky_relu
-                "base_filters": 32,
+                "base_filters": 96,
             },
             "hyperparameter_space": {
                 "width_scale": {
                     "type": "float",
-                    "range": [0.75, 2.0],
+                    "range": [1.0, 1.5],
                     "description": "Scales the number of filters in convolutional layers",
                 },
                 "mixup_alpha": {
@@ -56,40 +56,37 @@ def get_default_config() -> Dict[str, Any]:
                         "SGD_ONECYCLE",
                         "SGD_COSINE",
                         "SGD_EXPONENTIAL",
-                        "ADAMW_ONECYCLE",
-                        "ADAMW_COSINE",
-                        "ADAMW_EXPONENTIAL",
                     ],
                     # Options: [SGD_COSINE, SGD_ONECYCLE, SGD_EXPONENTIAL, ADAMW_COSINE, ADAMW_ONECYLE, ADAMW_EXPONENTIAL]
                     "description": "Optimizer type + Learning rate scheduler",
                 },
                 "base_lr": {
                     "type": "float",
-                    "range": [0.01, 0.1],
+                    "range": [0.005, 0.1],
                     "scale": "log",
                     "description": "Base learning rate value, log scale",
                 },
                 "aug_intensity": {
                     "type": "enum",
-                    "values": ["NONE", "LIGHT", "MEDIUM", "STRONG"],
+                    "values": ["MEDIUM", "STRONG"],
                     # Options: [NONE, LIGHT, MEDIUM, STRONG]
                     "description": "Level of data augmentation",
                 },
                 "weight_decay": {
                     "type": "float",
-                    "range": [1e-4, 5e-4],
+                    "range": [1e-4, 1e-3],
                     "scale": "log",
                     "description": "L2 regularization coefficient, log scale",
                 },
                 "batch_size": {
                     "type": "enum",
-                    "values": [64, 128, 256],
+                    "values": [128, 256],
                     "description": "Training batch size",
                 },
             },
         },
         # Nested validation
-        "nested_validation_config": {"enabled": True, "outer_k_folds": 3},
+        "nested_validation_config": {"enabled": True, "outer_k_folds": 2},
         # Genetic algorithm configuration
         "genetic_algorithm_config": {
             "genetic_operators": {
@@ -99,7 +96,7 @@ def get_default_config() -> Dict[str, Any]:
                     "crossover",
                     "elitism",
                 ],  # Options: selection, mutation, crossover, elitism or random
-                "selection": {"type": "tournament", "tournament_size": 3},
+                "selection": {"type": "tournament", "tournament_size": 7},
                 "crossover": {"type": "uniform", "crossover_prob": 0.8},
                 "mutation": {
                     "mutation_prob_discrete": 0.15,
@@ -111,31 +108,31 @@ def get_default_config() -> Dict[str, Any]:
             },
             "calibration": {
                 "enabled": True,
-                "population_size": 40,
-                "generations": 8,
-                "training_epochs": 25,
-                "data_subset_percentage": 0.2,
+                "population_size": 27,
+                "generations": 1,
+                "training_epochs": 1,
+                "data_subset_percentage": 1.0,
                 "mutation_decay_rate": 0.98,
-                "stratification_bins": 3,
+                "stratification_bins": 9,
                 "stop_conditions": {
-                    "max_generations": 8,
-                    "early_stop_generations": 3,
-                    "early_stop_epochs": 5,
-                    "fitness_goal": 0.75,
+                    "max_generations": 1,
+                    "early_stop_generations": 999,
+                    "early_stop_epochs": 6,
+                    "fitness_goal": 0.99,
                     "time_limit_minutes": 0,
                 },
             },
             "main_algorithm": {
-                "population_size": 20,
-                "generations": 15,
-                "training_epochs": 80,
+                "population_size": 27,
+                "generations": 1,
+                "training_epochs": 1,
                 "mutation_decay_rate": 0.98,
-                "stratification_bins": 5,
+                "stratification_bins": 3,
                 "stop_conditions": {
-                    "max_generations": 15,
-                    "early_stop_generations": 5,
-                    "early_stop_epochs": 10,
-                    "fitness_goal": 0.945,
+                    "max_generations": 90,
+                    "early_stop_generations": 1,
+                    "early_stop_epochs": 20,
+                    "fitness_goal": 0.99,
                     "time_limit_minutes": 0,
                 },
             },
@@ -143,4 +140,3 @@ def get_default_config() -> Dict[str, Any]:
     }
 
 
-# 70 iteracji

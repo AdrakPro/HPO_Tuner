@@ -47,7 +47,7 @@ def main():
             if not config:
                 return
 
-            log_dir = "logs"
+            log_dir = "/lustre/pd01/hpc-adamak7184-1759856296"
             ensure_dir_exists(log_dir)
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
             session_log_filename = os.path.join(log_dir, f"log_{timestamp}.log")

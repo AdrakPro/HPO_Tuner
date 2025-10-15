@@ -77,17 +77,33 @@ class GeneticAlgorithm:
         for gene, info in self.chromosome_space.items():
             if info["type"] == DataType.CONTINUOUS:
                 if random.random() < self.mutation_prob_continuous:
-                    log_min, log_max = math.log10(info["min"]), math.log10(
-                        info["max"]
+                    is_valid_log = (
+                        info.get("scale") == "log" and info["min"] > 0.0
                     )
-                    range_size = log_max - log_min
-                    sigma = self.mutation_sigma_continuous * range_size
 
-                    if info.get("scale") == "log":
-                        log_val = math.log10(chromosome[gene])
-                        mutated_log = log_val + random.gauss(0, sigma)
-                        mutated = 10**mutated_log
+                    if is_valid_log:
+                        log_min = math.log10(info["min"])
+                        log_max = math.log10(info["max"])
+                        range_size = log_max - log_min
+                        sigma = self.mutation_sigma_continuous * range_size
+
+                        current_val = chromosome[gene]
+                        if current_val > 0:
+                            log_val = math.log10(current_val)
+                            mutated_log = log_val + random.gauss(0, sigma)
+                            mutated = 10**mutated_log
+                        else:
+                            linear_range = info["max"] - info["min"]
+                            linear_sigma = (
+                                self.mutation_sigma_continuous * linear_range
+                            )
+                            mutated = current_val + random.gauss(
+                                0, linear_sigma
+                            )
+
                     else:
+                        range_size = info["max"] - info["min"]
+                        sigma = self.mutation_sigma_continuous * range_size
                         mutated = chromosome[gene] + random.gauss(0, sigma)
 
                     chromosome[gene] = float(
@@ -127,7 +143,6 @@ class GeneticAlgorithm:
     def run_generation(
         self, population: List[Dict], fitness: List[float]
     ) -> List[Dict]:
-
         pop_size = len(population)
         new_pop = []
 

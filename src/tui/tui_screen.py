@@ -55,12 +55,12 @@ class TUI:
         )
 
     def __enter__(self):
-        self.live.start()
+        # self.live.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Handles graceful shutdown of the TUI."""
-        self.live.stop()
+        # self.live.stop()
         if exc_type is KeyboardInterrupt:
             return True
 

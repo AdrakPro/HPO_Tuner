@@ -36,10 +36,7 @@ def main():
     loaded_state: GaState | None = None
 
     if checkpoint_manager.is_checkpoint_exists():
-        if tui.ask_resume():
-            loaded_state = checkpoint_manager.load_checkpoint()
-        else:
-            checkpoint_manager.delete_checkpoint()
+        loaded_state = checkpoint_manager.load_checkpoint()
 
     try:
         if loaded_state:
@@ -59,7 +56,7 @@ def main():
             logger.add_file_sink(session_log_filename)
         logger.add_tui_sink(tui.get_loguru_sink())
 
-        tui.build_config_panel(config)
+        # tui.build_config_panel(config)
 
         with tui:
             logger.info(

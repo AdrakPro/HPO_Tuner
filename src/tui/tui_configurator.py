@@ -675,7 +675,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     if callback_msg:
         logger.info(callback_msg)
 
-    default_config = get_default_config()
+    return get_default_config()
 
     _print_header("GENETIC OPTIMIZATION OF CNN")
     prompt = "[1] Create new configuration\n[2] Load last configuration file\n[3] Load configuration from a file\n[4] Exit\n> "

@@ -145,7 +145,7 @@ def _validate_neural_network_config(config: Dict[str, Any]):
                     f"The 'values' field for '{name}' must be a list."
                 )
 
-            if name in ("batch_size", "fc1_units"):
+            if name in ("batch_size"):
                 # TODO Enhancement: here I can force values to be power of two
                 if not all(
                     isinstance(v, int) and v > 0 for v in params["values"]

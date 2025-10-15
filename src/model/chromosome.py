@@ -36,7 +36,7 @@ class AugmentationIntensity(Enum):
 @dataclass
 class Chromosome:
     width_scale: float
-    fc1_units: int
+    mixup_alpha: float
     dropout_rate: float
     optimizer_schedule: OptimizerSchedule
     base_lr: float

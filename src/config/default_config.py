@@ -40,10 +40,10 @@ def get_default_config() -> Dict[str, Any]:
                     "range": [0.75, 2.0],
                     "description": "Scales the number of filters in convolutional layers",
                 },
-                "fc1_units": {
-                    "type": "enum",
-                    "values": [256, 512, 1024],
-                    "description": "Number of neurons in the first fully connected layer",
+                "mixup_alpha": {
+                    "type": "float",
+                    "range": [0.0, 1.0],
+                    "description": "Base MixUp alpha value",
                 },
                 "dropout_rate": {
                     "type": "float",

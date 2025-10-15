@@ -315,7 +315,7 @@ def _prompt_for_hyperparameter_enum(
         "optimizer_schedule": get_enum_names(OptimizerSchedule),
         "aug_intensity": get_enum_names(AugmentationIntensity),
     }
-    integer_enum_values = ["batch_size", "fc1_units"]
+    integer_enum_values = ["batch_size"]
 
     if name in string_enum_values:
         allowed = string_enum_values[name]

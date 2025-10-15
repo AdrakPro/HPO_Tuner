@@ -2,7 +2,7 @@
 Core CNN model for CIFAR-10 classification.
 Allows user-defined number of convolutional blocks with global config for padding, stride, activation.
 """
-
+import math
 from enum import Enum
 from typing import Any, Dict, Tuple
 
@@ -46,67 +46,70 @@ class CNN(nn.Module):
     def __init__(self, chromosome, neural_config: Dict[str, Any]):
         super().__init__()
 
-        current_channels: int = neural_config["input_shape"][0]
+        input_channels: int = neural_config["input_shape"][0]
         output_classes: int = neural_config["output_classes"]
         conv_blocks: int = neural_config["conv_blocks"]
         base_filters = int(neural_config["fixed_parameters"]["base_filters"])
         activation = ActivationFunction(
             neural_config["fixed_parameters"]["activation_function"]
         ).get_layer()
-        spatial_dim = neural_config["input_shape"][1]
 
         # CNN HYPERPARAMETERS
-        conv_stride = 1
-        kernel_size = 3
-        padding = 1
-
-        # Calculate filters per block
-        base = int(base_filters * chromosome.width_scale)
-        out_channels = [base * (2**i) for i in range(conv_blocks)]
+        convs_per_block = 3
+        num_downsample_layers = 2
+        num_segments = num_downsample_layers + 1
+        downsample_indices = {
+            math.floor((i + 1) * conv_blocks / num_segments) - 1
+            for i in range(num_downsample_layers)
+        }
 
         layers = []
-        in_channels = current_channels
+        in_channels = input_channels
+        filter_multiplier = 1
 
+        for i in range(conv_blocks):
+            is_downsample_block = i in downsample_indices
+            out_channels = int(base_filters * filter_multiplier * chromosome.width_scale)
 
-        # Build convolutional blocks
-        for i, out_ch in enumerate(out_channels):
-            # Two conv layers per block
-            layers.append(nn.Conv2d(in_channels, out_ch, kernel_size, stride=conv_stride, padding=padding))
+            # Add standard convolutional layers for the block
+            for _ in range(convs_per_block - 1):
+                layers.append(
+                    nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+                )
+                layers.append(activation)
+                in_channels = out_channels
+
+            # The final layer of the block handles downsampling
+            stride = 2 if is_downsample_block else 1
+            layers.append(
+                nn.Conv2d(
+                    in_channels, out_channels, kernel_size=3, stride=stride, padding=1
+                )
+            )
             layers.append(activation)
-            layers.append(nn.Conv2d(out_ch, out_ch, kernel_size, stride=conv_stride, padding=padding))
-            layers.append(activation)
+            in_channels = out_channels
 
-            # Dropout (increasing with depth)
-            drop_prob = min(chromosome.dropout_rate * (i / conv_blocks), chromosome.dropout_rate)
-            if drop_prob > 0:
-                layers.append(nn.Dropout2d(drop_prob))
+            # Double the filter count for the next stage after downsampling
+            if is_downsample_block:
+                filter_multiplier *= 2
 
-            # Downsample every 2 blocks
-            if (i + 1) % 2 == 0:
-                layers.append(nn.Conv2d(out_ch, out_ch, kernel_size=3, stride=2, padding=1))
-            in_channels = out_ch
+            # Add dropout after each block
+            if chromosome.dropout_rate > 0:
+                layers.append(nn.Dropout(chromosome.dropout_rate))
 
-        self.conv_layers = nn.Sequential(*layers)
-        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.features = nn.Sequential(*layers)
 
-        # Fully connected classifier
+        # Classifier: 1x1 conv -> Global Avg Pooling
         self.classifier = nn.Sequential(
-            nn.Linear(in_channels, chromosome.fc_units),
-            activation,
-            nn.Dropout(chromosome.dropout_rate),
-            nn.Linear(chromosome.fc_units, output_classes),
+            nn.Conv2d(in_channels, output_classes, kernel_size=1),
+            nn.AdaptiveAvgPool2d((1, 1)),
         )
 
-        # Initialize weights
         self._initialize_weights()
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv_layers(x)
-        x = self.global_pool(x)
-        x = x.view(x.size(0), -1)
+        x = self.features(x)
         x = self.classifier(x)
-
-        return x
+        return x.view(x.size(0), -1)
 
     # TODO make accessible for rest nonlineraties (for gelu use relu)
     def _initialize_weights(self):
@@ -117,9 +120,6 @@ class CNN(nn.Module):
                 )
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.Linear):
                 nn.init.kaiming_normal_(
                     m.weight, mode="fan_out", nonlinearity="relu"

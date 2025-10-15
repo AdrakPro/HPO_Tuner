@@ -107,16 +107,16 @@ def run_ga_phase(
             )
 
             seq_prep_start = time.perf_counter()
-            if enable_progressive_epochs:
-                progress = gen / generations
-                if progress <= 0.3:
-                    epoch_multiplier = 0.5
-                elif progress <= 0.7:
-                    epoch_multiplier = 0.75
-                else:
-                    epoch_multiplier = 1.0
-
-                training_epochs = int(round(initial_epochs * epoch_multiplier))
+            # if enable_progressive_epochs:
+            #     progress = gen / generations
+            #     if progress <= 0.3:
+            #         epoch_multiplier = 0.5
+            #     elif progress <= 0.7:
+            #         epoch_multiplier = 0.75
+            #     else:
+            #         epoch_multiplier = 1.0
+            #
+            #     training_epochs = int(round(initial_epochs * epoch_multiplier))
 
             evaluator.set_training_epochs(training_epochs)
             seq_prep_time = time.perf_counter() - seq_prep_start

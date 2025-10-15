@@ -22,11 +22,9 @@ def train_epoch(
     criterion: nn.Module,
     optimizer: optim.Optimizer,
     device: torch.device,
+    lam_alpha: float,
     scaler: GradScaler = None,
     scheduler=None,
-    mixup_lambda: float = 0.0,
-    epoch: int = 0,
-    total_epochs: int = 100,
 ) -> tuple[float, float]:
     """
     Train the model for one epoch.
@@ -49,8 +47,6 @@ def train_epoch(
     model.train()
     running_loss, correct, total = 0.0, 0, 0
     nan_batches = 0
-
-    lam_alpha = 0.4
 
     for inputs, targets in loader:
         inputs, targets = inputs.to(device), targets.to(device)
@@ -214,8 +210,6 @@ def train_and_eval(
         best_acc_so_far = 0.0
         epochs_without_improvement = 0
 
-        base_mixup_alpha = 0.4
-
         update_train_augmentation(train_loader, AugmentationIntensity.NONE)
 
         light_switch_epoch = int(0.1 * epochs)
@@ -232,7 +226,7 @@ def train_and_eval(
                     train_loader, chromosome.aug_intensity
                 )
 
-            lam_epoch = mixup_schedule(epoch, epochs, base_mixup_alpha, warmup_frac=0.2, cooldown_frac=0.2)
+            lam_epoch = mixup_schedule(epoch, epochs, chromosome.mixup_alpha, warmup_frac=0.4, cooldown_frac=0.2)
 
             train_loss, train_acc = train_epoch(
                 model,
@@ -240,11 +234,9 @@ def train_and_eval(
                 criterion,
                 optimizer,
                 device,
+                lam_epoch,
                 scaler,
                 scheduler,
-                lam_epoch,
-                epoch,
-                epochs,
             )
             test_loss, test_acc = evaluate(
                 model, test_loader, criterion, device

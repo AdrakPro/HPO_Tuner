@@ -1,0 +1,235 @@
+2025-10-15 14:04:02.971 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 1236
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 8,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 4,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    1.0,
+                    2.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    512,
+                    640,
+                    896,
+                    1024
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_COSINE",
+                    "SGD_ONECYCLE",
+                    "SGD_EXPONENTIAL"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.005,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    0.0001,
+                    0.001
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    128,
+                    256
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 2
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 4
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": false,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 1.0,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 6,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 5,
+            "training_epochs": 150,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 8,
+                "early_stop_epochs": 20,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-15 14:04:02.972 | INFO     | Logger initialized. Log file at logs/log_2025-10-15_12-04-02.log
+2025-10-15 14:04:02.972 | INFO     | --- Starting Nested Resampling With 2 Folds ---
+2025-10-15 14:04:03.844 | INFO     | --- Running Fold 1/2 ---
+2025-10-15 14:04:03.845 | INFO     | Initializing worker pool...
+2025-10-15 14:04:03.845 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-15 14:04:03.848 | INFO     | Worker pool initialized with 4 workers.
+2025-10-15 14:04:05.861 | INFO     | Calibration disabled. Starting main algorithm with random population.
+2025-10-15 14:04:05.863 | INFO     | --- Starting MAIN_ALGORITHM Phase ---
+2025-10-15 14:04:05.863 | INFO     | Generations: 5, Population: 24
+2025-10-15 14:04:05.863 | INFO     | --- MAIN_ALGORITHM - Generation 1/5 ---
+2025-10-15 14:04:49.656 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 0/24 (75 epochs)
+2025-10-15 14:04:49.657 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.8996323206788368, 'fc1_units': 640, 'dropout_rate': 0.4184918058748145, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.07773462768563776, 'aug_intensity': 'STRONG', 'weight_decay': 0.0007873225762954947, 'batch_size': 256}
+2025-10-15 14:04:49.657 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.155469 for batch_size 256
+2025-10-15 14:04:49.657 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 0: Given groups=1, weight of size [60, 3, 3, 3], expected input[256, 60, 32, 32] to have 3 channels, but got 60 channels instead
+2025-10-15 14:04:49.754 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 1/24 (75 epochs)
+2025-10-15 14:04:49.755 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.1178764654013644, 'fc1_units': 512, 'dropout_rate': 0.37604560289229183, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.058421109845713, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00014452925874973866, 'batch_size': 128}
+2025-10-15 14:04:49.755 | INFO     | [Worker-3 / GPU-3] Using base_lr 0.058421 for batch_size 128
+2025-10-15 14:04:49.755 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 1: Given groups=1, weight of size [35, 3, 3, 3], expected input[128, 35, 32, 32] to have 3 channels, but got 35 channels instead
+2025-10-15 14:04:50.025 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 2/24 (75 epochs)
+2025-10-15 14:04:50.025 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.1115470840133375, 'fc1_units': 1024, 'dropout_rate': 0.3697703107367075, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.010216025597280975, 'aug_intensity': 'STRONG', 'weight_decay': 0.00040479961534491083, 'batch_size': 256}
+2025-10-15 14:04:50.026 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.020432 for batch_size 256
+2025-10-15 14:04:50.026 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 2: Given groups=1, weight of size [35, 3, 3, 3], expected input[256, 35, 32, 32] to have 3 channels, but got 35 channels instead
+2025-10-15 14:04:50.638 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 3/24 (75 epochs)
+2025-10-15 14:04:50.638 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.8356714889390422, 'fc1_units': 640, 'dropout_rate': 0.3357724865124029, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.023900055216642947, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00013005122513121367, 'batch_size': 128}
+2025-10-15 14:04:50.639 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.023900 for batch_size 128
+2025-10-15 14:04:50.639 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 3: Given groups=1, weight of size [58, 3, 3, 3], expected input[128, 58, 32, 32] to have 3 channels, but got 58 channels instead
+2025-10-15 14:05:26.519 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 5/24 (75 epochs)
+2025-10-15 14:05:26.519 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.157783424356266, 'fc1_units': 896, 'dropout_rate': 0.21551092287823967, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.010158894346812521, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002288796678694982, 'batch_size': 256}
+2025-10-15 14:05:26.519 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.020318 for batch_size 256
+2025-10-15 14:05:26.520 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 5: Given groups=1, weight of size [37, 3, 3, 3], expected input[256, 37, 32, 32] to have 3 channels, but got 37 channels instead
+2025-10-15 14:05:26.545 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 4/24 (75 epochs)
+2025-10-15 14:05:26.545 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.7363868910810192, 'fc1_units': 640, 'dropout_rate': 0.2703696392100816, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.008103532069991223, 'aug_intensity': 'STRONG', 'weight_decay': 0.0003202794326576724, 'batch_size': 128}
+2025-10-15 14:05:26.545 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.008104 for batch_size 128
+2025-10-15 14:05:26.545 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 4: Given groups=1, weight of size [55, 3, 3, 3], expected input[128, 55, 32, 32] to have 3 channels, but got 55 channels instead
+2025-10-15 14:05:27.998 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 6/24 (75 epochs)
+2025-10-15 14:05:27.999 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.741998602557428, 'fc1_units': 896, 'dropout_rate': 0.4362884365474685, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0065220315539000415, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00010286487628369931, 'batch_size': 256}
+2025-10-15 14:05:27.999 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.013044 for batch_size 256
+2025-10-15 14:05:28.000 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 6: Given groups=1, weight of size [55, 3, 3, 3], expected input[256, 55, 32, 32] to have 3 channels, but got 55 channels instead
+2025-10-15 14:05:28.041 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 7/24 (75 epochs)
+2025-10-15 14:05:28.042 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.584412040578938, 'fc1_units': 640, 'dropout_rate': 0.20540644419088672, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03711875776366411, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00014124778237790673, 'batch_size': 256}
+2025-10-15 14:05:28.042 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.074238 for batch_size 256
+2025-10-15 14:05:28.042 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 7: Given groups=1, weight of size [50, 3, 3, 3], expected input[256, 50, 32, 32] to have 3 channels, but got 50 channels instead
+2025-10-15 14:06:02.005 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 8/24 (75 epochs)
+2025-10-15 14:06:02.005 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.886346879929983, 'fc1_units': 640, 'dropout_rate': 0.4356880925518261, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.006808230203875121, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00014489615087623595, 'batch_size': 128}
+2025-10-15 14:06:02.005 | INFO     | [Worker-3 / GPU-3] Using base_lr 0.006808 for batch_size 128
+2025-10-15 14:06:02.006 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 8: Given groups=1, weight of size [60, 3, 3, 3], expected input[128, 60, 32, 32] to have 3 channels, but got 60 channels instead
+2025-10-15 14:06:02.772 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 9/24 (75 epochs)
+2025-10-15 14:06:02.773 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.7736606663862293, 'fc1_units': 1024, 'dropout_rate': 0.23082005570842024, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.08453779616347983, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002569380765841451, 'batch_size': 128}
+2025-10-15 14:06:02.773 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.084538 for batch_size 128
+2025-10-15 14:06:02.773 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 9: Given groups=1, weight of size [56, 3, 3, 3], expected input[128, 56, 32, 32] to have 3 channels, but got 56 channels instead
+2025-10-15 14:06:04.844 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 11/24 (75 epochs)
+2025-10-15 14:06:04.844 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.0857187971576976, 'fc1_units': 1024, 'dropout_rate': 0.20428022274978314, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.06639623258606601, 'aug_intensity': 'STRONG', 'weight_decay': 0.00022654148052735624, 'batch_size': 128}
+2025-10-15 14:06:04.845 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.066396 for batch_size 128
+2025-10-15 14:06:04.845 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 11: Given groups=1, weight of size [34, 3, 3, 3], expected input[128, 34, 32, 32] to have 3 channels, but got 34 channels instead
+2025-10-15 14:06:05.380 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 10/24 (75 epochs)
+2025-10-15 14:06:05.381 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.5395202488485848, 'fc1_units': 512, 'dropout_rate': 0.3970963229754467, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.013534902609605218, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0007269359709565513, 'batch_size': 128}
+2025-10-15 14:06:05.381 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.013535 for batch_size 128
+2025-10-15 14:06:05.381 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 10: Given groups=1, weight of size [49, 3, 3, 3], expected input[128, 49, 32, 32] to have 3 channels, but got 49 channels instead

@@ -1,0 +1,194 @@
+2025-10-03 12:38:38.478 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 6873
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 8,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 3,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    0.75,
+                    2.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    768,
+                    1024
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_ONECYCLE",
+                    "SGD_COSINE",
+                    "ADAMW_COSINE",
+                    "ADAMW_ONECYCLE"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.001,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    1e-06,
+                    0.01
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    1024,
+                    2048
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 2
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 3
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": false,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 0.2,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 5,
+                "fitness_goal": 0.81,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 70,
+            "training_epochs": 100,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 10,
+                "early_stop_epochs": 10,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-03 12:38:38.478 | INFO     | Logger initialized. Log file at logs/log_2025-10-03_10-38-38.log
+2025-10-03 12:38:38.479 | INFO     | --- Starting Nested Resampling With 2 Folds ---
+2025-10-03 12:38:39.345 | INFO     | --- Running Fold 1/2 ---
+2025-10-03 12:38:39.345 | INFO     | Initializing worker pool...
+2025-10-03 12:38:39.346 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-03 12:38:39.349 | INFO     | Worker pool initialized with 4 workers.
+2025-10-03 12:38:40.572 | INFO     | Calibration disabled. Starting main algorithm with random population.
+2025-10-03 12:38:40.573 | INFO     | --- Starting MAIN_ALGORITHM Phase ---
+2025-10-03 12:38:40.573 | INFO     | Generations: 70, Population: 24
+2025-10-03 12:38:40.573 | INFO     | --- MAIN_ALGORITHM - Generation 1/70 ---
+2025-10-03 12:39:21.408 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 2/24 (50 epochs)
+2025-10-03 12:39:21.409 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.3629224849630195, 'fc1_units': 256, 'dropout_rate': 0.29270066086112106, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.09986296195292337, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00130290705189384, 'batch_size': 2048}
+2025-10-03 12:39:21.409 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to value 0.7989036956233869 for batch_size 2048
+2025-10-03 12:39:21.409 | INFO     | [Worker-0 / GPU-0] Controlled failure for individual 2: Loss is not finite: nan

@@ -1,0 +1,528 @@
+2025-10-06 13:51:27.068 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 3432
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 8,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 3,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    0.75,
+                    3.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    768,
+                    1024,
+                    2048
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_ONECYCLE",
+                    "SGD_COSINE",
+                    "ADAMW_COSINE",
+                    "ADAMW_ONECYCLE"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.001,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    1e-06,
+                    0.01
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    1024
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 3
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 3
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": true,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 0.2,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 5,
+                "fitness_goal": 0.81,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 70,
+            "training_epochs": 100,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 10,
+                "early_stop_epochs": 10,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-06 13:51:27.069 | INFO     | Logger initialized. Log file at logs/log_2025-10-06_11-51-25.log
+2025-10-06 13:51:27.069 | INFO     | --- Starting Nested Resampling With 3 Folds ---
+2025-10-06 13:51:27.903 | INFO     | --- Running Fold 1/3 ---
+2025-10-06 13:51:27.908 | INFO     | Initializing worker pool...
+2025-10-06 13:51:27.909 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-06 13:51:27.912 | INFO     | Worker pool initialized with 4 workers.
+2025-10-06 13:51:36.924 | INFO     | Starting new calibration phase.
+2025-10-06 13:51:36.925 | INFO     | --- Starting CALIBRATION Phase ---
+2025-10-06 13:51:36.925 | INFO     | Generations: 10, Population: 48
+2025-10-06 13:51:36.926 | WARNING  | Progressive epochs are disabled! To enable progression minimal training epochs must be at least (20).
+2025-10-06 13:51:36.926 | INFO     | --- CALIBRATION - Generation 1/10 ---
+2025-10-06 13:53:13.537 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 0/48 (20 epochs)
+2025-10-06 13:53:13.538 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.167114575784348, 'fc1_units': 768, 'dropout_rate': 0.476582118431476, 'optimizer_schedule': 'ADAMW_COSINE', 'base_lr': 0.006580842622232067, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0016518743847935384, 'batch_size': 256}
+2025-10-06 13:53:13.538 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.006581 for batch_size 256
+2025-10-06 13:53:13.538 | INFO     | [Worker-0 / GPU-0] Epoch 1/20 | Train Acc: 0.1010, Train Loss: 7.5264 | Test Loss: 2.3035, Test Acc: 0.1000
+2025-10-06 13:53:13.539 | INFO     | [Worker-0 / GPU-0] Epoch 2/20 | Train Acc: 0.0982, Train Loss: 2.3043 | Test Loss: 2.3030, Test Acc: 0.0999
+2025-10-06 13:53:13.539 | INFO     | [Worker-0 / GPU-0] Epoch 3/20 | Train Acc: 0.0962, Train Loss: 2.3034 | Test Loss: 2.3027, Test Acc: 0.1000
+2025-10-06 13:53:13.539 | INFO     | [Worker-0 / GPU-0] Epoch 4/20 | Train Acc: 0.0937, Train Loss: 2.3035 | Test Loss: 2.3028, Test Acc: 0.1000
+2025-10-06 13:53:13.539 | INFO     | [Worker-0 / GPU-0] Epoch 5/20 | Train Acc: 0.0994, Train Loss: 2.3033 | Test Loss: 2.3027, Test Acc: 0.1000
+2025-10-06 13:53:13.539 | INFO     | [Worker-0 / GPU-0] Epoch 6/20 | Train Acc: 0.0959, Train Loss: 2.3032 | Test Loss: 2.3029, Test Acc: 0.1000
+2025-10-06 13:53:13.540 | INFO     | [Worker-0 / GPU-0] Epoch 6/20 | Train Acc: 0.0959, Train Loss: 2.3032 | Test Loss: 2.3029, Test Acc: 0.1000 / Early stopping triggered
+2025-10-06 13:53:13.540 | INFO     | [Worker-0 / GPU-0] Individual 0 -> Accuracy: 0.1000, Loss: 2.3029 | Duration: 95.53s
+2025-10-06 13:53:13.540 | INFO     | [Worker-0 / GPU-0] GPU memory used: 0.10 GB
+2025-10-06 13:53:50.087 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 1/48 (20 epochs)
+2025-10-06 13:53:50.088 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 2.3236828316980107, 'fc1_units': 256, 'dropout_rate': 0.2833288675022626, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0037819293021202523, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.005943544707575146, 'batch_size': 1024}
+2025-10-06 13:53:50.088 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.015128 for batch_size 1024
+2025-10-06 13:53:50.088 | INFO     | [Worker-1 / GPU-1] Epoch 1/20 | Train Acc: 0.1972, Train Loss: 24.8569 | Test Loss: 8.8393, Test Acc: 0.3173
+2025-10-06 13:53:50.088 | INFO     | [Worker-1 / GPU-1] Epoch 2/20 | Train Acc: 0.2405, Train Loss: 8.3742 | Test Loss: 4.2392, Test Acc: 0.3175
+2025-10-06 13:53:50.088 | INFO     | [Worker-1 / GPU-1] Epoch 3/20 | Train Acc: 0.2253, Train Loss: 2.9070 | Test Loss: 2.2663, Test Acc: 0.3160
+2025-10-06 13:53:50.088 | INFO     | [Worker-1 / GPU-1] Epoch 4/20 | Train Acc: 0.2504, Train Loss: 2.1316 | Test Loss: 1.9354, Test Acc: 0.3485
+2025-10-06 13:53:50.089 | INFO     | [Worker-1 / GPU-1] Epoch 5/20 | Train Acc: 0.2940, Train Loss: 1.9809 | Test Loss: 1.7681, Test Acc: 0.3919
+2025-10-06 13:53:50.089 | INFO     | [Worker-1 / GPU-1] Epoch 6/20 | Train Acc: 0.3225, Train Loss: 1.8936 | Test Loss: 1.6908, Test Acc: 0.4050
+2025-10-06 13:53:50.089 | INFO     | [Worker-1 / GPU-1] Epoch 7/20 | Train Acc: 0.3478, Train Loss: 1.8169 | Test Loss: 1.6166, Test Acc: 0.4256
+2025-10-06 13:53:50.089 | INFO     | [Worker-1 / GPU-1] Epoch 8/20 | Train Acc: 0.3685, Train Loss: 1.7487 | Test Loss: 1.5494, Test Acc: 0.4474
+2025-10-06 13:53:50.089 | INFO     | [Worker-1 / GPU-1] Epoch 9/20 | Train Acc: 0.3887, Train Loss: 1.6945 | Test Loss: 1.4896, Test Acc: 0.4681
+2025-10-06 13:53:50.090 | INFO     | [Worker-1 / GPU-1] Epoch 10/20 | Train Acc: 0.3996, Train Loss: 1.6529 | Test Loss: 1.4542, Test Acc: 0.4804
+2025-10-06 13:53:50.090 | INFO     | [Worker-1 / GPU-1] Epoch 11/20 | Train Acc: 0.4166, Train Loss: 1.6069 | Test Loss: 1.4123, Test Acc: 0.4928
+2025-10-06 13:53:50.090 | INFO     | [Worker-1 / GPU-1] Epoch 12/20 | Train Acc: 0.4289, Train Loss: 1.5747 | Test Loss: 1.3792, Test Acc: 0.5045
+2025-10-06 13:53:50.090 | INFO     | [Worker-1 / GPU-1] Epoch 13/20 | Train Acc: 0.4429, Train Loss: 1.5349 | Test Loss: 1.3493, Test Acc: 0.5156
+2025-10-06 13:53:50.090 | INFO     | [Worker-1 / GPU-1] Epoch 14/20 | Train Acc: 0.4571, Train Loss: 1.5021 | Test Loss: 1.3162, Test Acc: 0.5267
+2025-10-06 13:53:50.090 | INFO     | [Worker-1 / GPU-1] Epoch 15/20 | Train Acc: 0.4675, Train Loss: 1.4691 | Test Loss: 1.2891, Test Acc: 0.5427
+2025-10-06 13:53:50.091 | INFO     | [Worker-1 / GPU-1] Epoch 16/20 | Train Acc: 0.4793, Train Loss: 1.4435 | Test Loss: 1.2557, Test Acc: 0.5505
+2025-10-06 13:53:50.091 | INFO     | [Worker-1 / GPU-1] Epoch 17/20 | Train Acc: 0.4907, Train Loss: 1.4137 | Test Loss: 1.2260, Test Acc: 0.5634
+2025-10-06 13:53:50.091 | INFO     | [Worker-1 / GPU-1] Epoch 18/20 | Train Acc: 0.5025, Train Loss: 1.3798 | Test Loss: 1.2200, Test Acc: 0.5700
+2025-10-06 13:53:50.091 | INFO     | [Worker-1 / GPU-1] Epoch 19/20 | Train Acc: 0.5126, Train Loss: 1.3594 | Test Loss: 1.1791, Test Acc: 0.5805
+2025-10-06 13:53:50.091 | INFO     | [Worker-1 / GPU-1] Epoch 20/20 | Train Acc: 0.5223, Train Loss: 1.3374 | Test Loss: 1.1574, Test Acc: 0.5964
+2025-10-06 13:53:50.091 | INFO     | [Worker-1 / GPU-1] Individual 1 -> Accuracy: 0.5964, Loss: 1.1574 | Duration: 132.07s
+2025-10-06 13:53:50.092 | INFO     | [Worker-1 / GPU-1] GPU memory used: 0.13 GB
+2025-10-06 13:54:04.358 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 3/48 (20 epochs)
+2025-10-06 13:54:04.359 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.5235471900519975, 'fc1_units': 768, 'dropout_rate': 0.2586555749409528, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.002218810160177849, 'aug_intensity': 'STRONG', 'weight_decay': 3.385647096688127e-06, 'batch_size': 512}
+2025-10-06 13:54:04.359 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.003138 for batch_size 512
+2025-10-06 13:54:04.359 | INFO     | [Worker-3 / GPU-3] Epoch 1/20 | Train Acc: 0.2512, Train Loss: 4.8379 | Test Loss: 1.7159, Test Acc: 0.3914
+2025-10-06 13:54:04.360 | INFO     | [Worker-3 / GPU-3] Epoch 2/20 | Train Acc: 0.3369, Train Loss: 1.8369 | Test Loss: 1.4958, Test Acc: 0.4621
+2025-10-06 13:54:04.360 | INFO     | [Worker-3 / GPU-3] Epoch 3/20 | Train Acc: 0.3778, Train Loss: 1.7156 | Test Loss: 1.4456, Test Acc: 0.4835
+2025-10-06 13:54:04.360 | INFO     | [Worker-3 / GPU-3] Epoch 4/20 | Train Acc: 0.4122, Train Loss: 1.6228 | Test Loss: 1.3384, Test Acc: 0.5222
+2025-10-06 13:54:04.360 | INFO     | [Worker-3 / GPU-3] Epoch 5/20 | Train Acc: 0.4351, Train Loss: 1.5569 | Test Loss: 1.2996, Test Acc: 0.5433
+2025-10-06 13:54:04.360 | INFO     | [Worker-3 / GPU-3] Epoch 6/20 | Train Acc: 0.4543, Train Loss: 1.5010 | Test Loss: 1.2242, Test Acc: 0.5664
+2025-10-06 13:54:04.360 | INFO     | [Worker-3 / GPU-3] Epoch 7/20 | Train Acc: 0.4712, Train Loss: 1.4596 | Test Loss: 1.1914, Test Acc: 0.5790
+2025-10-06 13:54:04.361 | INFO     | [Worker-3 / GPU-3] Epoch 8/20 | Train Acc: 0.4830, Train Loss: 1.4229 | Test Loss: 1.1535, Test Acc: 0.5903
+2025-10-06 13:54:04.361 | INFO     | [Worker-3 / GPU-3] Epoch 9/20 | Train Acc: 0.4985, Train Loss: 1.3788 | Test Loss: 1.1347, Test Acc: 0.6035
+2025-10-06 13:54:04.361 | INFO     | [Worker-3 / GPU-3] Epoch 10/20 | Train Acc: 0.5081, Train Loss: 1.3561 | Test Loss: 1.1142, Test Acc: 0.6111
+2025-10-06 13:54:04.361 | INFO     | [Worker-3 / GPU-3] Epoch 11/20 | Train Acc: 0.5193, Train Loss: 1.3352 | Test Loss: 1.0763, Test Acc: 0.6305
+2025-10-06 13:54:04.361 | INFO     | [Worker-3 / GPU-3] Epoch 12/20 | Train Acc: 0.5254, Train Loss: 1.3094 | Test Loss: 1.0740, Test Acc: 0.6239
+2025-10-06 13:54:04.361 | INFO     | [Worker-3 / GPU-3] Epoch 13/20 | Train Acc: 0.5330, Train Loss: 1.2937 | Test Loss: 1.0446, Test Acc: 0.6353
+2025-10-06 13:54:04.362 | INFO     | [Worker-3 / GPU-3] Epoch 14/20 | Train Acc: 0.5375, Train Loss: 1.2771 | Test Loss: 1.0196, Test Acc: 0.6471
+2025-10-06 13:54:04.362 | INFO     | [Worker-3 / GPU-3] Epoch 15/20 | Train Acc: 0.5533, Train Loss: 1.2407 | Test Loss: 0.9900, Test Acc: 0.6557
+2025-10-06 13:54:04.362 | INFO     | [Worker-3 / GPU-3] Epoch 16/20 | Train Acc: 0.5599, Train Loss: 1.2229 | Test Loss: 1.0028, Test Acc: 0.6552
+2025-10-06 13:54:04.362 | INFO     | [Worker-3 / GPU-3] Epoch 17/20 | Train Acc: 0.5597, Train Loss: 1.2177 | Test Loss: 0.9749, Test Acc: 0.6634
+2025-10-06 13:54:04.362 | INFO     | [Worker-3 / GPU-3] Epoch 18/20 | Train Acc: 0.5708, Train Loss: 1.1957 | Test Loss: 0.9736, Test Acc: 0.6641
+2025-10-06 13:54:04.362 | INFO     | [Worker-3 / GPU-3] Epoch 19/20 | Train Acc: 0.5803, Train Loss: 1.1743 | Test Loss: 0.9488, Test Acc: 0.6720
+2025-10-06 13:54:04.363 | INFO     | [Worker-3 / GPU-3] Epoch 20/20 | Train Acc: 0.5903, Train Loss: 1.1568 | Test Loss: 0.9358, Test Acc: 0.6767
+2025-10-06 13:54:04.363 | INFO     | [Worker-3 / GPU-3] Individual 3 -> Accuracy: 0.6767, Loss: 0.9358 | Duration: 146.31s
+2025-10-06 13:54:04.363 | INFO     | [Worker-3 / GPU-3] GPU memory used: 0.12 GB
+2025-10-06 13:55:06.321 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 2/48 (20 epochs)
+2025-10-06 13:55:06.322 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.67746242820777, 'fc1_units': 768, 'dropout_rate': 0.484591796821256, 'optimizer_schedule': 'ADAMW_COSINE', 'base_lr': 0.01615236100281636, 'aug_intensity': 'STRONG', 'weight_decay': 0.0072366992574626286, 'batch_size': 256}
+2025-10-06 13:55:06.322 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.016152 for batch_size 256
+2025-10-06 13:55:06.322 | INFO     | [Worker-2 / GPU-2] Epoch 1/20 | Train Acc: 0.2654, Train Loss: 20.1095 | Test Loss: 1.6307, Test Acc: 0.4004
+2025-10-06 13:55:06.322 | INFO     | [Worker-2 / GPU-2] Epoch 2/20 | Train Acc: 0.3618, Train Loss: 1.7285 | Test Loss: 1.4438, Test Acc: 0.4543
+2025-10-06 13:55:06.322 | INFO     | [Worker-2 / GPU-2] Epoch 3/20 | Train Acc: 0.4110, Train Loss: 1.6109 | Test Loss: 1.4159, Test Acc: 0.4772
+2025-10-06 13:55:06.323 | INFO     | [Worker-2 / GPU-2] Epoch 4/20 | Train Acc: 0.4348, Train Loss: 1.5420 | Test Loss: 1.3042, Test Acc: 0.5172
+2025-10-06 13:55:06.323 | INFO     | [Worker-2 / GPU-2] Epoch 5/20 | Train Acc: 0.4580, Train Loss: 1.4800 | Test Loss: 1.3929, Test Acc: 0.4913
+2025-10-06 13:55:06.323 | INFO     | [Worker-2 / GPU-2] Epoch 6/20 | Train Acc: 0.4743, Train Loss: 1.4308 | Test Loss: 1.2786, Test Acc: 0.5376
+2025-10-06 13:55:06.323 | INFO     | [Worker-2 / GPU-2] Epoch 7/20 | Train Acc: 0.4932, Train Loss: 1.3971 | Test Loss: 1.2197, Test Acc: 0.5492
+2025-10-06 13:55:06.323 | INFO     | [Worker-2 / GPU-2] Epoch 8/20 | Train Acc: 0.5054, Train Loss: 1.3522 | Test Loss: 1.1726, Test Acc: 0.5705
+2025-10-06 13:55:06.324 | INFO     | [Worker-2 / GPU-2] Epoch 9/20 | Train Acc: 0.5190, Train Loss: 1.3215 | Test Loss: 1.1659, Test Acc: 0.5749
+2025-10-06 13:55:06.324 | INFO     | [Worker-2 / GPU-2] Epoch 10/20 | Train Acc: 0.5332, Train Loss: 1.2890 | Test Loss: 1.1106, Test Acc: 0.5956
+2025-10-06 13:55:06.324 | INFO     | [Worker-2 / GPU-2] Epoch 11/20 | Train Acc: 0.5496, Train Loss: 1.2514 | Test Loss: 1.0882, Test Acc: 0.5970
+2025-10-06 13:55:06.324 | INFO     | [Worker-2 / GPU-2] Epoch 12/20 | Train Acc: 0.5581, Train Loss: 1.2156 | Test Loss: 1.1447, Test Acc: 0.5856
+2025-10-06 13:55:06.324 | INFO     | [Worker-2 / GPU-2] Epoch 13/20 | Train Acc: 0.5705, Train Loss: 1.1963 | Test Loss: 1.0561, Test Acc: 0.6207
+2025-10-06 13:55:06.324 | INFO     | [Worker-2 / GPU-2] Epoch 14/20 | Train Acc: 0.5823, Train Loss: 1.1678 | Test Loss: 1.0031, Test Acc: 0.6361
+2025-10-06 13:55:06.325 | INFO     | [Worker-2 / GPU-2] Epoch 15/20 | Train Acc: 0.5966, Train Loss: 1.1345 | Test Loss: 1.0088, Test Acc: 0.6386
+2025-10-06 13:55:06.325 | INFO     | [Worker-2 / GPU-2] Epoch 16/20 | Train Acc: 0.6003, Train Loss: 1.1191 | Test Loss: 0.9585, Test Acc: 0.6545
+2025-10-06 13:55:06.325 | INFO     | [Worker-2 / GPU-2] Epoch 17/20 | Train Acc: 0.6054, Train Loss: 1.1085 | Test Loss: 0.9617, Test Acc: 0.6498
+2025-10-06 13:55:06.325 | INFO     | [Worker-2 / GPU-2] Epoch 18/20 | Train Acc: 0.6082, Train Loss: 1.0997 | Test Loss: 0.9570, Test Acc: 0.6533
+2025-10-06 13:55:06.331 | INFO     | [Worker-2 / GPU-2] Epoch 19/20 | Train Acc: 0.6074, Train Loss: 1.1001 | Test Loss: 0.9562, Test Acc: 0.6542
+2025-10-06 13:55:06.331 | INFO     | [Worker-2 / GPU-2] Epoch 20/20 | Train Acc: 0.6078, Train Loss: 1.0940 | Test Loss: 0.9604, Test Acc: 0.6513
+2025-10-06 13:55:06.332 | INFO     | [Worker-2 / GPU-2] Individual 2 -> Accuracy: 0.6513, Loss: 0.9604 | Duration: 208.30s
+2025-10-06 13:55:06.332 | INFO     | [Worker-2 / GPU-2] GPU memory used: 0.13 GB
+2025-10-06 13:55:28.530 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 4/48 (20 epochs)
+2025-10-06 13:55:28.531 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 2.085106049879257, 'fc1_units': 1024, 'dropout_rate': 0.3100161865116145, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.014327190885458144, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00015665576518831984, 'batch_size': 256}
+2025-10-06 13:55:28.531 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.014327 for batch_size 256
+2025-10-06 13:55:28.531 | INFO     | [Worker-0 / GPU-0] Epoch 1/20 | Train Acc: 0.1708, Train Loss: 4.7260 | Test Loss: 1.9581, Test Acc: 0.2367
+2025-10-06 13:55:28.531 | INFO     | [Worker-0 / GPU-0] Epoch 2/20 | Train Acc: 0.2094, Train Loss: 2.0268 | Test Loss: 1.7744, Test Acc: 0.2932
+2025-10-06 13:55:28.532 | INFO     | [Worker-0 / GPU-0] Epoch 3/20 | Train Acc: 0.2275, Train Loss: 1.9319 | Test Loss: 1.6836, Test Acc: 0.3210
+2025-10-06 13:55:28.532 | INFO     | [Worker-0 / GPU-0] Epoch 4/20 | Train Acc: 0.2403, Train Loss: 1.8970 | Test Loss: 1.7373, Test Acc: 0.3167
+2025-10-06 13:55:28.532 | INFO     | [Worker-0 / GPU-0] Epoch 5/20 | Train Acc: 0.2646, Train Loss: 1.8501 | Test Loss: 1.6084, Test Acc: 0.3587
+2025-10-06 13:55:28.532 | INFO     | [Worker-0 / GPU-0] Epoch 6/20 | Train Acc: 0.2726, Train Loss: 1.8297 | Test Loss: 1.5685, Test Acc: 0.3908
+2025-10-06 13:55:28.532 | INFO     | [Worker-0 / GPU-0] Epoch 7/20 | Train Acc: 0.2865, Train Loss: 1.7989 | Test Loss: 1.5352, Test Acc: 0.4004
+2025-10-06 13:55:28.533 | INFO     | [Worker-0 / GPU-0] Epoch 8/20 | Train Acc: 0.2950, Train Loss: 1.7905 | Test Loss: 1.4954, Test Acc: 0.4447
+2025-10-06 13:55:28.533 | INFO     | [Worker-0 / GPU-0] Epoch 9/20 | Train Acc: 0.3080, Train Loss: 1.7654 | Test Loss: 1.4887, Test Acc: 0.4499
+2025-10-06 13:55:28.533 | INFO     | [Worker-0 / GPU-0] Epoch 10/20 | Train Acc: 0.3173, Train Loss: 1.7547 | Test Loss: 1.4926, Test Acc: 0.4606
+2025-10-06 13:55:28.533 | INFO     | [Worker-0 / GPU-0] Epoch 11/20 | Train Acc: 0.3255, Train Loss: 1.7433 | Test Loss: 1.4464, Test Acc: 0.4877
+2025-10-06 13:55:28.533 | INFO     | [Worker-0 / GPU-0] Epoch 12/20 | Train Acc: 0.3331, Train Loss: 1.7293 | Test Loss: 1.4074, Test Acc: 0.4924
+2025-10-06 13:55:28.533 | INFO     | [Worker-0 / GPU-0] Epoch 13/20 | Train Acc: 0.3368, Train Loss: 1.7231 | Test Loss: 1.3971, Test Acc: 0.5236
+2025-10-06 13:55:28.534 | INFO     | [Worker-0 / GPU-0] Epoch 14/20 | Train Acc: 0.3448, Train Loss: 1.7195 | Test Loss: 1.4376, Test Acc: 0.4996
+2025-10-06 13:55:28.534 | INFO     | [Worker-0 / GPU-0] Epoch 15/20 | Train Acc: 0.3464, Train Loss: 1.7103 | Test Loss: 1.4130, Test Acc: 0.5101
+2025-10-06 13:55:28.534 | INFO     | [Worker-0 / GPU-0] Epoch 16/20 | Train Acc: 0.3585, Train Loss: 1.6858 | Test Loss: 1.3630, Test Acc: 0.5032
+2025-10-06 13:55:28.534 | INFO     | [Worker-0 / GPU-0] Epoch 17/20 | Train Acc: 0.3594, Train Loss: 1.6896 | Test Loss: 1.3909, Test Acc: 0.5118
+2025-10-06 13:55:28.534 | INFO     | [Worker-0 / GPU-0] Epoch 18/20 | Train Acc: 0.3597, Train Loss: 1.6866 | Test Loss: 1.3357, Test Acc: 0.5330
+2025-10-06 13:55:28.535 | INFO     | [Worker-0 / GPU-0] Epoch 19/20 | Train Acc: 0.3680, Train Loss: 1.6683 | Test Loss: 1.3483, Test Acc: 0.5306
+2025-10-06 13:55:28.535 | INFO     | [Worker-0 / GPU-0] Epoch 20/20 | Train Acc: 0.3740, Train Loss: 1.6556 | Test Loss: 1.2863, Test Acc: 0.5649
+2025-10-06 13:55:28.535 | INFO     | [Worker-0 / GPU-0] Individual 4 -> Accuracy: 0.5649, Loss: 1.2863 | Duration: 134.99s
+2025-10-06 13:55:28.535 | INFO     | [Worker-0 / GPU-0] GPU memory used: 0.18 GB
+2025-10-06 13:55:39.631 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 6/48 (20 epochs)
+2025-10-06 13:55:39.631 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 0.7855644149575125, 'fc1_units': 256, 'dropout_rate': 0.497366613603649, 'optimizer_schedule': 'ADAMW_COSINE', 'base_lr': 0.025646710292884713, 'aug_intensity': 'STRONG', 'weight_decay': 0.00037036891350037044, 'batch_size': 512}
+2025-10-06 13:55:39.631 | INFO     | [Worker-3 / GPU-3] Scaled base_lr from 0.025647 to 0.036270, but CAPPED at 0.010000 for batch_size 512
+2025-10-06 13:55:39.632 | INFO     | [Worker-3 / GPU-3] Epoch 1/20 | Train Acc: 0.0980, Train Loss: 3.6157 | Test Loss: 2.3031, Test Acc: 0.1000
+2025-10-06 13:55:39.632 | INFO     | [Worker-3 / GPU-3] Epoch 2/20 | Train Acc: 0.0976, Train Loss: 2.3038 | Test Loss: 2.3033, Test Acc: 0.1000
+2025-10-06 13:55:39.632 | INFO     | [Worker-3 / GPU-3] Epoch 3/20 | Train Acc: 0.0986, Train Loss: 2.3036 | Test Loss: 2.3034, Test Acc: 0.1000
+2025-10-06 13:55:39.632 | INFO     | [Worker-3 / GPU-3] Epoch 4/20 | Train Acc: 0.0995, Train Loss: 2.3037 | Test Loss: 2.3031, Test Acc: 0.1000
+2025-10-06 13:55:39.632 | INFO     | [Worker-3 / GPU-3] Epoch 5/20 | Train Acc: 0.0995, Train Loss: 2.3034 | Test Loss: 2.3036, Test Acc: 0.1000
+2025-10-06 13:55:39.632 | INFO     | [Worker-3 / GPU-3] Epoch 6/20 | Train Acc: 0.0992, Train Loss: 2.3034 | Test Loss: 2.3039, Test Acc: 0.1000
+2025-10-06 13:55:39.633 | INFO     | [Worker-3 / GPU-3] Epoch 6/20 | Train Acc: 0.0992, Train Loss: 2.3034 | Test Loss: 2.3039, Test Acc: 0.1000 / Early stopping triggered
+2025-10-06 13:55:39.633 | INFO     | [Worker-3 / GPU-3] Individual 6 -> Accuracy: 0.1000, Loss: 2.3039 | Duration: 95.26s
+2025-10-06 13:55:39.633 | INFO     | [Worker-3 / GPU-3] GPU memory used: 0.06 GB
+2025-10-06 13:56:16.850 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 5/48 (20 epochs)
+2025-10-06 13:56:16.851 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.7882277363272765, 'fc1_units': 1024, 'dropout_rate': 0.20719459581126623, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.02908716947815127, 'aug_intensity': 'STRONG', 'weight_decay': 0.0004175180339448477, 'batch_size': 256}
+2025-10-06 13:56:16.851 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.029087 for batch_size 256
+2025-10-06 13:56:16.851 | INFO     | [Worker-1 / GPU-1] Epoch 1/20 | Train Acc: 0.2330, Train Loss: 5.5493 | Test Loss: 1.7249, Test Acc: 0.3206
+2025-10-06 13:56:16.851 | INFO     | [Worker-1 / GPU-1] Epoch 2/20 | Train Acc: 0.3079, Train Loss: 1.8121 | Test Loss: 1.5046, Test Acc: 0.4248
+2025-10-06 13:56:16.852 | INFO     | [Worker-1 / GPU-1] Epoch 3/20 | Train Acc: 0.3639, Train Loss: 1.6802 | Test Loss: 1.4107, Test Acc: 0.4802
+2025-10-06 13:56:16.852 | INFO     | [Worker-1 / GPU-1] Epoch 4/20 | Train Acc: 0.4275, Train Loss: 1.5421 | Test Loss: 1.2459, Test Acc: 0.5438
+2025-10-06 13:56:16.852 | INFO     | [Worker-1 / GPU-1] Epoch 5/20 | Train Acc: 0.4751, Train Loss: 1.4335 | Test Loss: 1.1363, Test Acc: 0.6051
+2025-10-06 13:56:16.852 | INFO     | [Worker-1 / GPU-1] Epoch 6/20 | Train Acc: 0.5266, Train Loss: 1.3043 | Test Loss: 0.9952, Test Acc: 0.6441
+2025-10-06 13:56:16.852 | INFO     | [Worker-1 / GPU-1] Epoch 7/20 | Train Acc: 0.5716, Train Loss: 1.1889 | Test Loss: 0.9694, Test Acc: 0.6564
+2025-10-06 13:56:16.853 | INFO     | [Worker-1 / GPU-1] Epoch 8/20 | Train Acc: 0.6063, Train Loss: 1.1034 | Test Loss: 0.8918, Test Acc: 0.6836
+2025-10-06 13:56:16.853 | INFO     | [Worker-1 / GPU-1] Epoch 9/20 | Train Acc: 0.6369, Train Loss: 1.0257 | Test Loss: 0.7990, Test Acc: 0.7139
+2025-10-06 13:56:16.853 | INFO     | [Worker-1 / GPU-1] Epoch 10/20 | Train Acc: 0.6565, Train Loss: 0.9724 | Test Loss: 0.7841, Test Acc: 0.7250
+2025-10-06 13:56:16.854 | INFO     | [Worker-1 / GPU-1] Epoch 11/20 | Train Acc: 0.6734, Train Loss: 0.9185 | Test Loss: 0.8054, Test Acc: 0.7210
+2025-10-06 13:56:16.854 | INFO     | [Worker-1 / GPU-1] Epoch 12/20 | Train Acc: 0.6919, Train Loss: 0.8687 | Test Loss: 0.7331, Test Acc: 0.7417
+2025-10-06 13:56:16.854 | INFO     | [Worker-1 / GPU-1] Epoch 13/20 | Train Acc: 0.7099, Train Loss: 0.8269 | Test Loss: 0.6980, Test Acc: 0.7535
+2025-10-06 13:56:16.854 | INFO     | [Worker-1 / GPU-1] Epoch 14/20 | Train Acc: 0.7161, Train Loss: 0.8025 | Test Loss: 0.6682, Test Acc: 0.7635
+2025-10-06 13:56:16.855 | INFO     | [Worker-1 / GPU-1] Epoch 15/20 | Train Acc: 0.7319, Train Loss: 0.7668 | Test Loss: 0.6516, Test Acc: 0.7682
+2025-10-06 13:56:16.855 | INFO     | [Worker-1 / GPU-1] Epoch 16/20 | Train Acc: 0.7402, Train Loss: 0.7472 | Test Loss: 0.6408, Test Acc: 0.7720
+2025-10-06 13:56:16.855 | INFO     | [Worker-1 / GPU-1] Epoch 17/20 | Train Acc: 0.7422, Train Loss: 0.7351 | Test Loss: 0.6306, Test Acc: 0.7798
+2025-10-06 13:56:16.855 | INFO     | [Worker-1 / GPU-1] Epoch 18/20 | Train Acc: 0.7448, Train Loss: 0.7315 | Test Loss: 0.6252, Test Acc: 0.7803
+2025-10-06 13:56:16.855 | INFO     | [Worker-1 / GPU-1] Epoch 19/20 | Train Acc: 0.7465, Train Loss: 0.7288 | Test Loss: 0.6253, Test Acc: 0.7794
+2025-10-06 13:56:16.855 | INFO     | [Worker-1 / GPU-1] Epoch 20/20 | Train Acc: 0.7433, Train Loss: 0.7304 | Test Loss: 0.6250, Test Acc: 0.7794
+2025-10-06 13:56:16.856 | INFO     | [Worker-1 / GPU-1] Individual 5 -> Accuracy: 0.7794, Loss: 0.6250 | Duration: 146.76s
+2025-10-06 13:56:16.856 | INFO     | [Worker-1 / GPU-1] GPU memory used: 0.14 GB
+2025-10-06 13:57:40.156 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 8/48 (20 epochs)
+2025-10-06 13:57:40.158 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 2.1691473115296818, 'fc1_units': 1024, 'dropout_rate': 0.2013951746685471, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03171167761895351, 'aug_intensity': 'STRONG', 'weight_decay': 0.0004749147358382419, 'batch_size': 1024}
+2025-10-06 13:57:40.158 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.126847 for batch_size 1024
+2025-10-06 13:57:40.158 | INFO     | [Worker-0 / GPU-0] Epoch 1/20 | Train Acc: 0.1181, Train Loss: 4.2431 | Test Loss: 2.2842, Test Acc: 0.1552
+2025-10-06 13:57:40.158 | INFO     | [Worker-0 / GPU-0] Epoch 2/20 | Train Acc: 0.2554, Train Loss: 2.0128 | Test Loss: 1.6065, Test Acc: 0.4010
+2025-10-06 13:57:40.159 | INFO     | [Worker-0 / GPU-0] Epoch 3/20 | Train Acc: 0.4572, Train Loss: 1.5036 | Test Loss: 1.5292, Test Acc: 0.4601
+2025-10-06 13:57:40.159 | INFO     | [Worker-0 / GPU-0] Epoch 4/20 | Train Acc: 0.5515, Train Loss: 1.2579 | Test Loss: 1.3239, Test Acc: 0.5432
+2025-10-06 13:57:40.159 | INFO     | [Worker-0 / GPU-0] Epoch 5/20 | Train Acc: 0.6035, Train Loss: 1.1184 | Test Loss: 1.0803, Test Acc: 0.6298
+2025-10-06 13:57:40.159 | INFO     | [Worker-0 / GPU-0] Epoch 6/20 | Train Acc: 0.6354, Train Loss: 1.0360 | Test Loss: 1.0018, Test Acc: 0.6515
+2025-10-06 13:57:40.159 | INFO     | [Worker-0 / GPU-0] Epoch 7/20 | Train Acc: 0.6626, Train Loss: 0.9617 | Test Loss: 0.8847, Test Acc: 0.7002
+2025-10-06 13:57:40.160 | INFO     | [Worker-0 / GPU-0] Epoch 8/20 | Train Acc: 0.6883, Train Loss: 0.8951 | Test Loss: 0.8037, Test Acc: 0.7203
+2025-10-06 13:57:40.160 | INFO     | [Worker-0 / GPU-0] Epoch 9/20 | Train Acc: 0.7063, Train Loss: 0.8449 | Test Loss: 0.8348, Test Acc: 0.7165
+2025-10-06 13:57:40.160 | INFO     | [Worker-0 / GPU-0] Epoch 10/20 | Train Acc: 0.7254, Train Loss: 0.7877 | Test Loss: 0.7679, Test Acc: 0.7301
+2025-10-06 13:57:40.160 | INFO     | [Worker-0 / GPU-0] Epoch 11/20 | Train Acc: 0.7416, Train Loss: 0.7385 | Test Loss: 0.6516, Test Acc: 0.7790
+2025-10-06 13:57:40.160 | INFO     | [Worker-0 / GPU-0] Epoch 12/20 | Train Acc: 0.7614, Train Loss: 0.6859 | Test Loss: 0.6922, Test Acc: 0.7656
+2025-10-06 13:57:40.160 | INFO     | [Worker-0 / GPU-0] Epoch 13/20 | Train Acc: 0.7793, Train Loss: 0.6307 | Test Loss: 0.6527, Test Acc: 0.7772
+2025-10-06 13:57:40.161 | INFO     | [Worker-0 / GPU-0] Epoch 14/20 | Train Acc: 0.7967, Train Loss: 0.5861 | Test Loss: 0.5670, Test Acc: 0.8055
+2025-10-06 13:57:40.161 | INFO     | [Worker-0 / GPU-0] Epoch 15/20 | Train Acc: 0.8122, Train Loss: 0.5385 | Test Loss: 0.5163, Test Acc: 0.8228
+2025-10-06 13:57:40.161 | INFO     | [Worker-0 / GPU-0] Epoch 16/20 | Train Acc: 0.8230, Train Loss: 0.5022 | Test Loss: 0.4818, Test Acc: 0.8366
+2025-10-06 13:57:40.161 | INFO     | [Worker-0 / GPU-0] Epoch 17/20 | Train Acc: 0.8372, Train Loss: 0.4727 | Test Loss: 0.4659, Test Acc: 0.8414
+2025-10-06 13:57:40.161 | INFO     | [Worker-0 / GPU-0] Epoch 18/20 | Train Acc: 0.8400, Train Loss: 0.4545 | Test Loss: 0.4615, Test Acc: 0.8420
+2025-10-06 13:57:40.161 | INFO     | [Worker-0 / GPU-0] Epoch 19/20 | Train Acc: 0.8442, Train Loss: 0.4507 | Test Loss: 0.4607, Test Acc: 0.8424
+2025-10-06 13:57:40.162 | INFO     | [Worker-0 / GPU-0] Epoch 20/20 | Train Acc: 0.8423, Train Loss: 0.4473 | Test Loss: 0.4601, Test Acc: 0.8432
+2025-10-06 13:57:40.162 | INFO     | [Worker-0 / GPU-0] Individual 8 -> Accuracy: 0.8432, Loss: 0.4601 | Duration: 131.61s
+2025-10-06 13:57:40.162 | INFO     | [Worker-0 / GPU-0] GPU memory used: 0.16 GB
+2025-10-06 13:57:40.162 | INFO     | Early stop triggered. Draining task queue to unblock workers.
+2025-10-06 13:57:40.162 | INFO     | Fitness goal of 0.81 reached. Stopping evaluation for current generation and proceeding to the next.
+2025-10-06 13:57:40.163 | INFO     | Early stop triggered. Draining task queue to unblock workers.
+2025-10-06 13:57:40.163 | INFO     | ========================================
+2025-10-06 13:57:40.163 | INFO     | GENERATION 1 REPORT
+2025-10-06 13:57:40.164 | INFO     | ========================================
+2025-10-06 13:57:40.164 | INFO     | Wall-Clock Time: 363.24s
+2025-10-06 13:57:40.164 | INFO     | Total Worker Busy Time: 1090.82s
+2025-10-06 13:57:40.164 | INFO     | Total Worker Idle Time (Overhead): 362.12s
+2025-10-06 13:57:40.164 | INFO     | Best Fitness: 0.8432 | Loss: 0.4601
+2025-10-06 13:57:40.833 | INFO     | Generation 1/ (Fold 1) checkpointed successfully.
+2025-10-06 13:57:40.835 | INFO     | Sequential Time: 0.0015s
+2025-10-06 13:57:40.835 | INFO     | Parallel Time: 363.9089s
+2025-10-06 13:57:40.836 | INFO     | Total Time: 363.9104s
+2025-10-06 13:57:40.836 | INFO     | Number of Workers: 4
+2025-10-06 13:57:40.836 | INFO     | Effective Workers (GPU-adjusted): 4.0
+2025-10-06 13:57:40.836 | INFO     | --- SCALABILITY LAWS ---
+2025-10-06 13:57:40.836 | INFO     | Sequential Fraction: 0.00000416 (0.000416%)
+2025-10-06 13:57:40.836 | INFO     | Parallel Fraction: 1.0000 (100.0%)
+2025-10-06 13:57:40.837 | INFO     | Amdahl's Law Speedup: 4.00x
+2025-10-06 13:57:40.837 | INFO     | Gustafson's Law Speedup: 4.00x
+2025-10-06 13:57:40.837 | INFO     | Efficiency (Amdahl): 100.00% | Efficiency (Gustafson): 100.00%
+2025-10-06 13:57:40.837 | INFO     | ========================================
+2025-10-06 13:57:40.837 | INFO     | --- CALIBRATION - Generation 2/10 ---
+2025-10-06 13:57:42.402 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 7/48 (20 epochs)
+2025-10-06 13:57:42.402 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 2.8346759134037476, 'fc1_units': 256, 'dropout_rate': 0.41652707790671867, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.0029343112873115584, 'aug_intensity': 'STRONG', 'weight_decay': 9.878493779427773e-06, 'batch_size': 256}
+2025-10-06 13:57:42.402 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.002934 for batch_size 256
+2025-10-06 13:57:42.402 | INFO     | [Worker-2 / GPU-2] Epoch 1/20 | Train Acc: 0.1320, Train Loss: 4.9093 | Test Loss: 2.1700, Test Acc: 0.1742
+2025-10-06 13:57:42.403 | INFO     | [Worker-2 / GPU-2] Epoch 2/20 | Train Acc: 0.1604, Train Loss: 2.2161 | Test Loss: 2.0063, Test Acc: 0.2686
+2025-10-06 13:57:42.403 | INFO     | [Worker-2 / GPU-2] Epoch 3/20 | Train Acc: 0.1899, Train Loss: 2.1253 | Test Loss: 1.8859, Test Acc: 0.2784
+2025-10-06 13:57:42.403 | INFO     | [Worker-2 / GPU-2] Epoch 4/20 | Train Acc: 0.2040, Train Loss: 2.0764 | Test Loss: 1.8448, Test Acc: 0.2950
+2025-10-06 13:57:42.403 | INFO     | [Worker-2 / GPU-2] Epoch 5/20 | Train Acc: 0.2124, Train Loss: 2.0212 | Test Loss: 1.7899, Test Acc: 0.3219
+2025-10-06 13:57:42.403 | INFO     | [Worker-2 / GPU-2] Epoch 6/20 | Train Acc: 0.2282, Train Loss: 1.9900 | Test Loss: 1.7273, Test Acc: 0.3076
+2025-10-06 13:57:42.403 | INFO     | [Worker-2 / GPU-2] Epoch 7/20 | Train Acc: 0.2291, Train Loss: 1.9743 | Test Loss: 1.6943, Test Acc: 0.3385
+2025-10-06 13:57:42.404 | INFO     | [Worker-2 / GPU-2] Epoch 8/20 | Train Acc: 0.2370, Train Loss: 1.9502 | Test Loss: 1.7281, Test Acc: 0.3494
+2025-10-06 13:57:42.404 | INFO     | [Worker-2 / GPU-2] Epoch 9/20 | Train Acc: 0.2435, Train Loss: 1.9265 | Test Loss: 1.6528, Test Acc: 0.3763
+2025-10-06 13:57:42.404 | INFO     | [Worker-2 / GPU-2] Epoch 10/20 | Train Acc: 0.2539, Train Loss: 1.8969 | Test Loss: 1.6167, Test Acc: 0.3840
+2025-10-06 13:57:42.404 | INFO     | [Worker-2 / GPU-2] Epoch 11/20 | Train Acc: 0.2631, Train Loss: 1.8747 | Test Loss: 1.6012, Test Acc: 0.3860
+2025-10-06 13:57:42.404 | INFO     | [Worker-2 / GPU-2] Epoch 12/20 | Train Acc: 0.2667, Train Loss: 1.8576 | Test Loss: 1.6170, Test Acc: 0.4048
+2025-10-06 13:57:42.405 | INFO     | [Worker-2 / GPU-2] Epoch 13/20 | Train Acc: 0.2721, Train Loss: 1.8467 | Test Loss: 1.5637, Test Acc: 0.4033
+2025-10-06 13:57:42.405 | INFO     | [Worker-2 / GPU-2] Epoch 14/20 | Train Acc: 0.2785, Train Loss: 1.8249 | Test Loss: 1.5672, Test Acc: 0.4111
+2025-10-06 13:57:42.405 | INFO     | [Worker-2 / GPU-2] Epoch 15/20 | Train Acc: 0.2872, Train Loss: 1.8101 | Test Loss: 1.5499, Test Acc: 0.4208
+2025-10-06 13:57:42.405 | INFO     | [Worker-2 / GPU-2] Epoch 16/20 | Train Acc: 0.3010, Train Loss: 1.7893 | Test Loss: 1.5251, Test Acc: 0.4338
+2025-10-06 13:57:42.405 | INFO     | [Worker-2 / GPU-2] Epoch 17/20 | Train Acc: 0.3112, Train Loss: 1.7763 | Test Loss: 1.5141, Test Acc: 0.4407
+2025-10-06 13:57:42.405 | INFO     | [Worker-2 / GPU-2] Epoch 18/20 | Train Acc: 0.3144, Train Loss: 1.7582 | Test Loss: 1.5212, Test Acc: 0.4453
+2025-10-06 13:57:42.406 | INFO     | [Worker-2 / GPU-2] Epoch 19/20 | Train Acc: 0.3160, Train Loss: 1.7497 | Test Loss: 1.4825, Test Acc: 0.4617
+2025-10-06 13:57:42.406 | INFO     | [Worker-2 / GPU-2] Epoch 20/20 | Train Acc: 0.3231, Train Loss: 1.7309 | Test Loss: 1.4732, Test Acc: 0.4441
+2025-10-06 13:57:42.406 | INFO     | [Worker-2 / GPU-2] Individual 7 -> Accuracy: 0.4441, Loss: 1.4732 | Duration: 156.07s
+2025-10-06 13:57:42.406 | INFO     | [Worker-2 / GPU-2] GPU memory used: 0.16 GB
+2025-10-06 13:57:57.461 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 9/48 (20 epochs)
+2025-10-06 13:57:57.461 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.2969795273316185, 'fc1_units': 512, 'dropout_rate': 0.26049430191892675, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.00486656868646637, 'aug_intensity': 'STRONG', 'weight_decay': 0.0008322539624864301, 'batch_size': 512}
+2025-10-06 13:57:57.461 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.009733 for batch_size 512
+2025-10-06 13:57:57.462 | INFO     | [Worker-3 / GPU-3] Epoch 1/20 | Train Acc: 0.1555, Train Loss: 23.5540 | Test Loss: 9.6763, Test Acc: 0.2687
+2025-10-06 13:57:57.462 | INFO     | [Worker-3 / GPU-3] Epoch 2/20 | Train Acc: 0.2104, Train Loss: 14.2445 | Test Loss: 7.3924, Test Acc: 0.3034
+2025-10-06 13:57:57.462 | INFO     | [Worker-3 / GPU-3] Epoch 3/20 | Train Acc: 0.2386, Train Loss: 9.6946 | Test Loss: 5.3287, Test Acc: 0.3317
+2025-10-06 13:57:57.462 | INFO     | [Worker-3 / GPU-3] Epoch 4/20 | Train Acc: 0.2510, Train Loss: 6.5387 | Test Loss: 3.8999, Test Acc: 0.3343
+2025-10-06 13:57:57.462 | INFO     | [Worker-3 / GPU-3] Epoch 5/20 | Train Acc: 0.2449, Train Loss: 4.1097 | Test Loss: 2.7966, Test Acc: 0.3234
+2025-10-06 13:57:57.462 | INFO     | [Worker-3 / GPU-3] Epoch 6/20 | Train Acc: 0.2389, Train Loss: 2.7111 | Test Loss: 2.1570, Test Acc: 0.3132
+2025-10-06 13:57:57.463 | INFO     | [Worker-3 / GPU-3] Epoch 7/20 | Train Acc: 0.2471, Train Loss: 2.2389 | Test Loss: 1.9590, Test Acc: 0.3347
+2025-10-06 13:57:57.463 | INFO     | [Worker-3 / GPU-3] Epoch 8/20 | Train Acc: 0.2735, Train Loss: 2.0788 | Test Loss: 1.8606, Test Acc: 0.3515
+2025-10-06 13:57:57.463 | INFO     | [Worker-3 / GPU-3] Epoch 9/20 | Train Acc: 0.2877, Train Loss: 2.0126 | Test Loss: 1.7908, Test Acc: 0.3705
+2025-10-06 13:57:57.463 | INFO     | [Worker-3 / GPU-3] Epoch 10/20 | Train Acc: 0.3075, Train Loss: 1.9492 | Test Loss: 1.7352, Test Acc: 0.3893
+2025-10-06 13:57:57.463 | INFO     | [Worker-3 / GPU-3] Epoch 11/20 | Train Acc: 0.3202, Train Loss: 1.9080 | Test Loss: 1.6908, Test Acc: 0.4016
+2025-10-06 13:57:57.463 | INFO     | [Worker-3 / GPU-3] Epoch 12/20 | Train Acc: 0.3319, Train Loss: 1.8748 | Test Loss: 1.6514, Test Acc: 0.4125
+2025-10-06 13:57:57.464 | INFO     | [Worker-3 / GPU-3] Epoch 13/20 | Train Acc: 0.3455, Train Loss: 1.8322 | Test Loss: 1.6163, Test Acc: 0.4253
+2025-10-06 13:57:57.464 | INFO     | [Worker-3 / GPU-3] Epoch 14/20 | Train Acc: 0.3570, Train Loss: 1.8071 | Test Loss: 1.5936, Test Acc: 0.4345
+2025-10-06 13:57:57.464 | INFO     | [Worker-3 / GPU-3] Epoch 15/20 | Train Acc: 0.3610, Train Loss: 1.7826 | Test Loss: 1.5644, Test Acc: 0.4432
+2025-10-06 13:57:57.464 | INFO     | [Worker-3 / GPU-3] Epoch 16/20 | Train Acc: 0.3713, Train Loss: 1.7577 | Test Loss: 1.5471, Test Acc: 0.4489
+2025-10-06 13:57:57.464 | INFO     | [Worker-3 / GPU-3] Epoch 17/20 | Train Acc: 0.3743, Train Loss: 1.7344 | Test Loss: 1.5199, Test Acc: 0.4593
+2025-10-06 13:57:57.464 | INFO     | [Worker-3 / GPU-3] Epoch 18/20 | Train Acc: 0.3822, Train Loss: 1.7222 | Test Loss: 1.5068, Test Acc: 0.4669
+2025-10-06 13:57:57.465 | INFO     | [Worker-3 / GPU-3] Epoch 19/20 | Train Acc: 0.3851, Train Loss: 1.7034 | Test Loss: 1.4863, Test Acc: 0.4664
+2025-10-06 13:57:57.465 | INFO     | [Worker-3 / GPU-3] Epoch 20/20 | Train Acc: 0.4017, Train Loss: 1.6780 | Test Loss: 1.4652, Test Acc: 0.4742
+2025-10-06 13:57:57.465 | INFO     | [Worker-3 / GPU-3] Individual 9 -> Accuracy: 0.4742, Loss: 1.4652 | Duration: 137.82s
+2025-10-06 13:57:57.465 | INFO     | [Worker-3 / GPU-3] GPU memory used: 0.09 GB
+2025-10-06 13:58:08.504 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 10/48 (20 epochs)
+2025-10-06 13:58:08.505 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 0.9041642325208855, 'fc1_units': 256, 'dropout_rate': 0.21578428048418363, 'optimizer_schedule': 'ADAMW_COSINE', 'base_lr': 0.09455345906945233, 'aug_intensity': 'STRONG', 'weight_decay': 0.00013438027101889406, 'batch_size': 1024}
+2025-10-06 13:58:08.505 | INFO     | [Worker-1 / GPU-1] Scaled base_lr from 0.094553 to 0.189107, but CAPPED at 0.010000 for batch_size 1024
+2025-10-06 13:58:08.505 | INFO     | [Worker-1 / GPU-1] Epoch 1/20 | Train Acc: 0.1040, Train Loss: 4.2751 | Test Loss: 2.3036, Test Acc: 0.1000
+2025-10-06 13:58:08.505 | INFO     | [Worker-1 / GPU-1] Epoch 2/20 | Train Acc: 0.1000, Train Loss: 2.3033 | Test Loss: 2.3031, Test Acc: 0.1000
+2025-10-06 13:58:08.505 | INFO     | [Worker-1 / GPU-1] Epoch 3/20 | Train Acc: 0.0961, Train Loss: 2.3038 | Test Loss: 2.3035, Test Acc: 0.1000
+2025-10-06 13:58:08.505 | INFO     | [Worker-1 / GPU-1] Epoch 4/20 | Train Acc: 0.1027, Train Loss: 2.3035 | Test Loss: 2.3041, Test Acc: 0.1000
+2025-10-06 13:58:08.506 | INFO     | [Worker-1 / GPU-1] Epoch 5/20 | Train Acc: 0.1007, Train Loss: 2.3035 | Test Loss: 2.3032, Test Acc: 0.1000
+2025-10-06 13:58:08.506 | INFO     | [Worker-1 / GPU-1] Epoch 6/20 | Train Acc: 0.0988, Train Loss: 2.3034 | Test Loss: 2.3034, Test Acc: 0.1000
+2025-10-06 13:58:08.506 | INFO     | [Worker-1 / GPU-1] Epoch 7/20 | Train Acc: 0.1015, Train Loss: 2.3033 | Test Loss: 2.3038, Test Acc: 0.1000
+2025-10-06 13:58:08.506 | INFO     | [Worker-1 / GPU-1] Epoch 8/20 | Train Acc: 0.0991, Train Loss: 2.3033 | Test Loss: 2.3031, Test Acc: 0.1000
+2025-10-06 13:58:08.506 | INFO     | [Worker-1 / GPU-1] Epoch 8/20 | Train Acc: 0.0991, Train Loss: 2.3033 | Test Loss: 2.3031, Test Acc: 0.1000 / Early stopping triggered
+2025-10-06 13:58:08.506 | INFO     | [Worker-1 / GPU-1] Individual 10 -> Accuracy: 0.1000, Loss: 2.3031 | Duration: 111.49s
+2025-10-06 13:58:08.507 | INFO     | [Worker-1 / GPU-1] GPU memory used: 0.06 GB
+2025-10-06 13:59:52.336 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 12/48 (20 epochs)
+2025-10-06 13:59:52.337 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 0.964656345403298, 'fc1_units': 256, 'dropout_rate': 0.2151697827955113, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.012760376088996097, 'aug_intensity': 'STRONG', 'weight_decay': 0.0027727586669284033, 'batch_size': 256}
+2025-10-06 13:59:52.337 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.012760 for batch_size 256
+2025-10-06 13:59:52.337 | INFO     | [Worker-2 / GPU-2] Epoch 1/20 | Train Acc: 0.2424, Train Loss: 4.2579 | Test Loss: 1.6343, Test Acc: 0.4061
+2025-10-06 13:59:52.338 | INFO     | [Worker-2 / GPU-2] Epoch 2/20 | Train Acc: 0.3640, Train Loss: 1.7138 | Test Loss: 1.4802, Test Acc: 0.4640
+2025-10-06 13:59:52.338 | INFO     | [Worker-2 / GPU-2] Epoch 3/20 | Train Acc: 0.4256, Train Loss: 1.5544 | Test Loss: 1.3159, Test Acc: 0.5254
+2025-10-06 13:59:52.338 | INFO     | [Worker-2 / GPU-2] Epoch 4/20 | Train Acc: 0.4892, Train Loss: 1.4103 | Test Loss: 1.1864, Test Acc: 0.5856
+2025-10-06 13:59:52.338 | INFO     | [Worker-2 / GPU-2] Epoch 5/20 | Train Acc: 0.5270, Train Loss: 1.3054 | Test Loss: 1.1180, Test Acc: 0.6171
+2025-10-06 13:59:52.338 | INFO     | [Worker-2 / GPU-2] Epoch 6/20 | Train Acc: 0.5570, Train Loss: 1.2320 | Test Loss: 1.0753, Test Acc: 0.6149
+2025-10-06 13:59:52.339 | INFO     | [Worker-2 / GPU-2] Epoch 7/20 | Train Acc: 0.5896, Train Loss: 1.1538 | Test Loss: 1.0187, Test Acc: 0.6456
+2025-10-06 13:59:52.339 | INFO     | [Worker-2 / GPU-2] Epoch 8/20 | Train Acc: 0.6068, Train Loss: 1.1092 | Test Loss: 0.9789, Test Acc: 0.6563
+2025-10-06 13:59:52.339 | INFO     | [Worker-2 / GPU-2] Epoch 9/20 | Train Acc: 0.6299, Train Loss: 1.0577 | Test Loss: 1.0483, Test Acc: 0.6218
+2025-10-06 13:59:52.339 | INFO     | [Worker-2 / GPU-2] Epoch 10/20 | Train Acc: 0.6431, Train Loss: 1.0233 | Test Loss: 0.8703, Test Acc: 0.7035
+2025-10-06 13:59:52.339 | INFO     | [Worker-2 / GPU-2] Epoch 11/20 | Train Acc: 0.6592, Train Loss: 0.9873 | Test Loss: 0.8703, Test Acc: 0.7051
+2025-10-06 13:59:52.339 | INFO     | [Worker-2 / GPU-2] Epoch 12/20 | Train Acc: 0.6663, Train Loss: 0.9624 | Test Loss: 0.8201, Test Acc: 0.7218
+2025-10-06 13:59:52.340 | INFO     | [Worker-2 / GPU-2] Epoch 13/20 | Train Acc: 0.6804, Train Loss: 0.9349 | Test Loss: 0.8124, Test Acc: 0.7250
+2025-10-06 13:59:52.340 | INFO     | [Worker-2 / GPU-2] Epoch 14/20 | Train Acc: 0.6831, Train Loss: 0.9174 | Test Loss: 0.7971, Test Acc: 0.7286
+2025-10-06 13:59:52.340 | INFO     | [Worker-2 / GPU-2] Epoch 15/20 | Train Acc: 0.6912, Train Loss: 0.8967 | Test Loss: 0.7790, Test Acc: 0.7319
+2025-10-06 13:59:52.340 | INFO     | [Worker-2 / GPU-2] Epoch 16/20 | Train Acc: 0.6959, Train Loss: 0.8842 | Test Loss: 0.7604, Test Acc: 0.7418
+2025-10-06 13:59:52.340 | INFO     | [Worker-2 / GPU-2] Epoch 17/20 | Train Acc: 0.7001, Train Loss: 0.8761 | Test Loss: 0.7524, Test Acc: 0.7460
+2025-10-06 13:59:52.340 | INFO     | [Worker-2 / GPU-2] Epoch 18/20 | Train Acc: 0.7036, Train Loss: 0.8670 | Test Loss: 0.7518, Test Acc: 0.7469
+2025-10-06 13:59:52.341 | INFO     | [Worker-2 / GPU-2] Epoch 19/20 | Train Acc: 0.7053, Train Loss: 0.8698 | Test Loss: 0.7484, Test Acc: 0.7476
+2025-10-06 13:59:52.341 | INFO     | [Worker-2 / GPU-2] Epoch 20/20 | Train Acc: 0.7038, Train Loss: 0.8661 | Test Loss: 0.7497, Test Acc: 0.7467
+2025-10-06 13:59:52.341 | INFO     | [Worker-2 / GPU-2] Individual 12 -> Accuracy: 0.7467, Loss: 0.7497 | Duration: 129.93s
+2025-10-06 13:59:52.341 | INFO     | [Worker-2 / GPU-2] GPU memory used: 0.06 GB
+2025-10-06 13:59:53.725 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 11/48 (20 epochs)
+2025-10-06 13:59:53.725 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 2.414805562530527, 'fc1_units': 1024, 'dropout_rate': 0.4783174156859355, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.015545618399918476, 'aug_intensity': 'STRONG', 'weight_decay': 9.817775359506979e-05, 'batch_size': 256}
+2025-10-06 13:59:53.725 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.015546 for batch_size 256
+2025-10-06 13:59:53.725 | INFO     | [Worker-0 / GPU-0] Epoch 1/20 | Train Acc: 0.1845, Train Loss: 9.0282 | Test Loss: 2.0177, Test Acc: 0.2555
+2025-10-06 13:59:53.726 | INFO     | [Worker-0 / GPU-0] Epoch 2/20 | Train Acc: 0.1826, Train Loss: 2.0882 | Test Loss: 1.9056, Test Acc: 0.2307
+2025-10-06 13:59:53.726 | INFO     | [Worker-0 / GPU-0] Epoch 3/20 | Train Acc: 0.2047, Train Loss: 2.0041 | Test Loss: 1.7207, Test Acc: 0.3241
+2025-10-06 13:59:53.726 | INFO     | [Worker-0 / GPU-0] Epoch 4/20 | Train Acc: 0.2205, Train Loss: 1.9733 | Test Loss: 1.6898, Test Acc: 0.3410
+2025-10-06 13:59:53.726 | INFO     | [Worker-0 / GPU-0] Epoch 5/20 | Train Acc: 0.2343, Train Loss: 1.9287 | Test Loss: 1.6908, Test Acc: 0.3262
+2025-10-06 13:59:53.726 | INFO     | [Worker-0 / GPU-0] Epoch 6/20 | Train Acc: 0.2486, Train Loss: 1.8970 | Test Loss: 1.6321, Test Acc: 0.3632
+2025-10-06 13:59:53.727 | INFO     | [Worker-0 / GPU-0] Epoch 7/20 | Train Acc: 0.2598, Train Loss: 1.8730 | Test Loss: 1.5723, Test Acc: 0.3692
+2025-10-06 13:59:53.727 | INFO     | [Worker-0 / GPU-0] Epoch 8/20 | Train Acc: 0.2773, Train Loss: 1.8318 | Test Loss: 1.4975, Test Acc: 0.4383
+2025-10-06 13:59:53.727 | INFO     | [Worker-0 / GPU-0] Epoch 9/20 | Train Acc: 0.2909, Train Loss: 1.7969 | Test Loss: 1.5401, Test Acc: 0.4324
+2025-10-06 13:59:53.727 | INFO     | [Worker-0 / GPU-0] Epoch 10/20 | Train Acc: 0.3153, Train Loss: 1.7498 | Test Loss: 1.4251, Test Acc: 0.4504
+2025-10-06 13:59:53.727 | INFO     | [Worker-0 / GPU-0] Epoch 11/20 | Train Acc: 0.3287, Train Loss: 1.7118 | Test Loss: 1.3973, Test Acc: 0.4837
+2025-10-06 13:59:53.727 | INFO     | [Worker-0 / GPU-0] Epoch 12/20 | Train Acc: 0.3405, Train Loss: 1.6773 | Test Loss: 1.3503, Test Acc: 0.5036
+2025-10-06 13:59:53.728 | INFO     | [Worker-0 / GPU-0] Epoch 13/20 | Train Acc: 0.3530, Train Loss: 1.6479 | Test Loss: 1.3450, Test Acc: 0.5235
+2025-10-06 13:59:53.728 | INFO     | [Worker-0 / GPU-0] Epoch 14/20 | Train Acc: 0.3703, Train Loss: 1.6110 | Test Loss: 1.2860, Test Acc: 0.5429
+2025-10-06 13:59:53.728 | INFO     | [Worker-0 / GPU-0] Epoch 15/20 | Train Acc: 0.3798, Train Loss: 1.5933 | Test Loss: 1.2562, Test Acc: 0.5423
+2025-10-06 13:59:53.728 | INFO     | [Worker-0 / GPU-0] Epoch 16/20 | Train Acc: 0.3842, Train Loss: 1.5744 | Test Loss: 1.2475, Test Acc: 0.5504
+2025-10-06 13:59:53.728 | INFO     | [Worker-0 / GPU-0] Epoch 17/20 | Train Acc: 0.3895, Train Loss: 1.5669 | Test Loss: 1.2428, Test Acc: 0.5578
+2025-10-06 13:59:53.728 | INFO     | [Worker-0 / GPU-0] Epoch 18/20 | Train Acc: 0.3917, Train Loss: 1.5617 | Test Loss: 1.2358, Test Acc: 0.5613
+2025-10-06 13:59:53.729 | INFO     | [Worker-0 / GPU-0] Epoch 19/20 | Train Acc: 0.3925, Train Loss: 1.5546 | Test Loss: 1.2380, Test Acc: 0.5619
+2025-10-06 13:59:53.729 | INFO     | [Worker-0 / GPU-0] Epoch 20/20 | Train Acc: 0.3895, Train Loss: 1.5525 | Test Loss: 1.2307, Test Acc: 0.5646
+2025-10-06 13:59:53.729 | INFO     | [Worker-0 / GPU-0] Individual 11 -> Accuracy: 0.5646, Loss: 1.2307 | Duration: 132.88s
+2025-10-06 13:59:53.729 | INFO     | [Worker-0 / GPU-0] GPU memory used: 0.18 GB
+2025-10-06 14:00:18.320 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 13/48 (20 epochs)
+2025-10-06 14:00:18.321 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.500833877504133, 'fc1_units': 2048, 'dropout_rate': 0.2889669070663636, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.01770639654653057, 'aug_intensity': 'MEDIUM', 'weight_decay': 7.998310180724906e-06, 'batch_size': 512}
+2025-10-06 14:00:18.321 | INFO     | [Worker-3 / GPU-3] Scaled base_lr from 0.017706 to 0.025041, but CAPPED at 0.010000 for batch_size 512
+2025-10-06 14:00:18.322 | INFO     | [Worker-3 / GPU-3] Epoch 1/20 | Train Acc: 0.2791, Train Loss: 5.6195 | Test Loss: 1.7125, Test Acc: 0.3415
+2025-10-06 14:00:18.322 | INFO     | [Worker-3 / GPU-3] Epoch 2/20 | Train Acc: 0.3677, Train Loss: 1.7293 | Test Loss: 1.3890, Test Acc: 0.5067
+2025-10-06 14:00:18.322 | INFO     | [Worker-3 / GPU-3] Epoch 3/20 | Train Acc: 0.4227, Train Loss: 1.5743 | Test Loss: 1.2907, Test Acc: 0.5481
+2025-10-06 14:00:18.322 | INFO     | [Worker-3 / GPU-3] Epoch 4/20 | Train Acc: 0.4607, Train Loss: 1.4659 | Test Loss: 1.2392, Test Acc: 0.5573
+2025-10-06 14:00:18.322 | INFO     | [Worker-3 / GPU-3] Epoch 5/20 | Train Acc: 0.4915, Train Loss: 1.3876 | Test Loss: 1.1381, Test Acc: 0.6067
+2025-10-06 14:00:18.322 | INFO     | [Worker-3 / GPU-3] Epoch 6/20 | Train Acc: 0.5158, Train Loss: 1.3210 | Test Loss: 1.0191, Test Acc: 0.6483
+2025-10-06 14:00:18.323 | INFO     | [Worker-3 / GPU-3] Epoch 7/20 | Train Acc: 0.5374, Train Loss: 1.2714 | Test Loss: 1.0285, Test Acc: 0.6396
+2025-10-06 14:00:18.323 | INFO     | [Worker-3 / GPU-3] Epoch 8/20 | Train Acc: 0.5528, Train Loss: 1.2310 | Test Loss: 1.0023, Test Acc: 0.6469
+2025-10-06 14:00:18.323 | INFO     | [Worker-3 / GPU-3] Epoch 9/20 | Train Acc: 0.5716, Train Loss: 1.1914 | Test Loss: 1.0070, Test Acc: 0.6489
+2025-10-06 14:00:18.323 | INFO     | [Worker-3 / GPU-3] Epoch 10/20 | Train Acc: 0.5762, Train Loss: 1.1762 | Test Loss: 0.9825, Test Acc: 0.6579
+2025-10-06 14:00:18.323 | INFO     | [Worker-3 / GPU-3] Epoch 11/20 | Train Acc: 0.5873, Train Loss: 1.1400 | Test Loss: 0.9075, Test Acc: 0.6932
+2025-10-06 14:00:18.324 | INFO     | [Worker-3 / GPU-3] Epoch 12/20 | Train Acc: 0.5971, Train Loss: 1.1130 | Test Loss: 0.9236, Test Acc: 0.6829
+2025-10-06 14:00:18.324 | INFO     | [Worker-3 / GPU-3] Epoch 13/20 | Train Acc: 0.6056, Train Loss: 1.0948 | Test Loss: 0.9039, Test Acc: 0.6885
+2025-10-06 14:00:18.324 | INFO     | [Worker-3 / GPU-3] Epoch 14/20 | Train Acc: 0.6191, Train Loss: 1.0764 | Test Loss: 0.8638, Test Acc: 0.6989
+2025-10-06 14:00:18.324 | INFO     | [Worker-3 / GPU-3] Epoch 15/20 | Train Acc: 0.6217, Train Loss: 1.0508 | Test Loss: 0.8223, Test Acc: 0.7136
+2025-10-06 14:00:18.324 | INFO     | [Worker-3 / GPU-3] Epoch 16/20 | Train Acc: 0.6308, Train Loss: 1.0263 | Test Loss: 0.7956, Test Acc: 0.7253
+2025-10-06 14:00:18.324 | INFO     | [Worker-3 / GPU-3] Epoch 17/20 | Train Acc: 0.6370, Train Loss: 1.0118 | Test Loss: 0.8716, Test Acc: 0.6993
+2025-10-06 14:00:18.325 | INFO     | [Worker-3 / GPU-3] Epoch 18/20 | Train Acc: 0.6446, Train Loss: 0.9970 | Test Loss: 0.8371, Test Acc: 0.7122
+2025-10-06 14:00:18.325 | INFO     | [Worker-3 / GPU-3] Epoch 19/20 | Train Acc: 0.6511, Train Loss: 0.9755 | Test Loss: 0.7899, Test Acc: 0.7216
+2025-10-06 14:00:18.325 | INFO     | [Worker-3 / GPU-3] Epoch 20/20 | Train Acc: 0.6538, Train Loss: 0.9694 | Test Loss: 0.7588, Test Acc: 0.7350
+2025-10-06 14:00:18.325 | INFO     | [Worker-3 / GPU-3] Individual 13 -> Accuracy: 0.7350, Loss: 0.7588 | Duration: 140.85s
+2025-10-06 14:00:18.325 | INFO     | [Worker-3 / GPU-3] GPU memory used: 0.18 GB

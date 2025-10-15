@@ -1,0 +1,299 @@
+2025-10-06 14:37:07.679 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 29369
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 8,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 3,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    0.75,
+                    3.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    768,
+                    1024,
+                    2048
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_ONECYCLE",
+                    "SGD_COSINE",
+                    "ADAMW_COSINE",
+                    "ADAMW_ONECYCLE"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.001,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    1e-06,
+                    0.01
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    1024
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 3
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 3
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": true,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 0.2,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 5,
+                "fitness_goal": 0.81,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 70,
+            "training_epochs": 100,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 10,
+                "early_stop_epochs": 10,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-06 14:37:07.680 | INFO     | Logger initialized. Log file at logs/log_2025-10-06_12-37-07.log
+2025-10-06 14:37:07.680 | INFO     | --- Starting Nested Resampling With 3 Folds ---
+2025-10-06 14:37:08.537 | INFO     | --- Running Fold 1/3 ---
+2025-10-06 14:37:08.538 | INFO     | Initializing worker pool...
+2025-10-06 14:37:08.538 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-06 14:37:08.541 | INFO     | Worker pool initialized with 4 workers.
+2025-10-06 14:37:11.214 | INFO     | Starting new calibration phase.
+2025-10-06 14:37:11.222 | INFO     | --- Starting CALIBRATION Phase ---
+2025-10-06 14:37:11.223 | INFO     | Generations: 10, Population: 48
+2025-10-06 14:37:11.223 | WARNING  | Progressive epochs are disabled! To enable progression minimal training epochs must be at least (20).
+2025-10-06 14:37:11.223 | INFO     | --- CALIBRATION - Generation 1/10 ---
+2025-10-06 14:37:52.645 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 3/48 (20 epochs)
+2025-10-06 14:37:52.646 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.6180843853554008, 'fc1_units': 768, 'dropout_rate': 0.20308112570691905, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.02402577812243889, 'aug_intensity': 'STRONG', 'weight_decay': 0.00035200108797272064, 'batch_size': 512}
+2025-10-06 14:37:52.646 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.048052 for batch_size 512
+2025-10-06 14:37:52.646 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 3: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:37:52.647 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 2/48 (20 epochs)
+2025-10-06 14:37:52.647 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 2.6685011754392804, 'fc1_units': 1024, 'dropout_rate': 0.2384932516694457, 'optimizer_schedule': 'ADAMW_COSINE', 'base_lr': 0.05557629663438841, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0005044041090586798, 'batch_size': 1024}
+2025-10-06 14:37:52.647 | INFO     | [Worker-0 / GPU-0] Scaled base_lr from 0.055576 to 0.111153, but CAPPED at 0.010000 for batch_size 1024
+2025-10-06 14:37:52.647 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 2: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:37:52.665 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 0/48 (20 epochs)
+2025-10-06 14:37:52.666 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.316382085270635, 'fc1_units': 2048, 'dropout_rate': 0.2769369106081461, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.001972298733851653, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.008542500003053032, 'batch_size': 256}
+2025-10-06 14:37:52.666 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.001972 for batch_size 256
+2025-10-06 14:37:52.666 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 0: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:37:52.712 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 1/48 (20 epochs)
+2025-10-06 14:37:52.712 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.157642094450401, 'fc1_units': 1024, 'dropout_rate': 0.25695035847361847, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.01259690867444474, 'aug_intensity': 'MEDIUM', 'weight_decay': 3.423415616763078e-06, 'batch_size': 512}
+2025-10-06 14:37:52.712 | INFO     | [Worker-1 / GPU-1] Scaled base_lr from 0.012597 to 0.017815, but CAPPED at 0.010000 for batch_size 512
+2025-10-06 14:37:52.712 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 1: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:38:31.327 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 6/48 (20 epochs)
+2025-10-06 14:38:31.328 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 2.2627345242828976, 'fc1_units': 1024, 'dropout_rate': 0.3402068714188583, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.02632220926100336, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0010251216805599588, 'batch_size': 256}
+2025-10-06 14:38:31.328 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.026322 for batch_size 256
+2025-10-06 14:38:31.328 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 6: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:38:32.555 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 4/48 (20 epochs)
+2025-10-06 14:38:32.556 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 2.363457435750088, 'fc1_units': 512, 'dropout_rate': 0.309685869259816, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.0016295577992445117, 'aug_intensity': 'STRONG', 'weight_decay': 0.0038448027671579713, 'batch_size': 1024}
+2025-10-06 14:38:32.556 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.003259 for batch_size 1024
+2025-10-06 14:38:32.557 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 4: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:38:32.557 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 7/48 (20 epochs)
+2025-10-06 14:38:32.557 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 2.3046930356270376, 'fc1_units': 768, 'dropout_rate': 0.38503998187533406, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0012232387587725075, 'aug_intensity': 'STRONG', 'weight_decay': 1.8581798847246125e-05, 'batch_size': 512}
+2025-10-06 14:38:32.558 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.002446 for batch_size 512
+2025-10-06 14:38:32.558 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 7: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:38:32.895 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 5/48 (20 epochs)
+2025-10-06 14:38:32.896 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.3030612397086352, 'fc1_units': 1024, 'dropout_rate': 0.3314312638616598, 'optimizer_schedule': 'ADAMW_COSINE', 'base_lr': 0.0367808990958871, 'aug_intensity': 'STRONG', 'weight_decay': 0.0002723867658422177, 'batch_size': 512}
+2025-10-06 14:38:32.896 | INFO     | [Worker-0 / GPU-0] Scaled base_lr from 0.036781 to 0.052016, but CAPPED at 0.010000 for batch_size 512
+2025-10-06 14:38:32.896 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 5: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:39:10.565 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 8/48 (20 epochs)
+2025-10-06 14:39:10.566 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 0.9344602206869805, 'fc1_units': 768, 'dropout_rate': 0.44556591640675064, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.012580703647576491, 'aug_intensity': 'STRONG', 'weight_decay': 1.2591638515453332e-06, 'batch_size': 512}
+2025-10-06 14:39:10.566 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.025161 for batch_size 512
+2025-10-06 14:39:10.566 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 8: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:39:10.647 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 10/48 (20 epochs)
+2025-10-06 14:39:10.648 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.215615635161619, 'fc1_units': 512, 'dropout_rate': 0.4017309928707229, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.0011656175551529341, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0026112030657656805, 'batch_size': 256}
+2025-10-06 14:39:10.648 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.001166 for batch_size 256
+2025-10-06 14:39:10.648 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 10: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:39:10.793 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 9/48 (20 epochs)
+2025-10-06 14:39:10.793 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.1809698539703712, 'fc1_units': 768, 'dropout_rate': 0.3893537161846608, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.001475292712775541, 'aug_intensity': 'STRONG', 'weight_decay': 0.00022183252307297451, 'batch_size': 1024}
+2025-10-06 14:39:10.793 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.002951 for batch_size 1024
+2025-10-06 14:39:10.794 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 9: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+
+2025-10-06 14:39:12.262 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 11/48 (20 epochs)
+2025-10-06 14:39:12.263 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 2.2512902461588165, 'fc1_units': 1024, 'dropout_rate': 0.303611821530378, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.002099023032577955, 'aug_intensity': 'STRONG', 'weight_decay': 1.0427823212430285e-05, 'batch_size': 256}
+2025-10-06 14:39:12.263 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.002099 for batch_size 256
+2025-10-06 14:39:12.264 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 11: cannot unpack non-iterable NoneType object - Traceback (most recent call last):
+  File "/usr/src/inz/src/evaluator/worker.py", line 175, in worker_main
+    accuracy, loss = train_and_eval(
+    ^^^^^^^^^^^^^^
+TypeError: cannot unpack non-iterable NoneType object
+

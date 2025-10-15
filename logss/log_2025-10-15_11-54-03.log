@@ -1,0 +1,304 @@
+2025-10-15 13:54:03.085 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 1236
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 8,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 8,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    1.0,
+                    2.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    512,
+                    640,
+                    896,
+                    1024
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_COSINE",
+                    "SGD_ONECYCLE",
+                    "SGD_EXPONENTIAL"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.005,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    0.0001,
+                    0.001
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    128,
+                    256
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 2
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 4
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": false,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 1.0,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 6,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 5,
+            "training_epochs": 150,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 8,
+                "early_stop_epochs": 20,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-15 13:54:03.086 | INFO     | Logger initialized. Log file at logs/log_2025-10-15_11-54-03.log
+2025-10-15 13:54:03.086 | INFO     | --- Starting Nested Resampling With 2 Folds ---
+2025-10-15 13:54:03.945 | INFO     | --- Running Fold 1/2 ---
+2025-10-15 13:54:03.946 | INFO     | Initializing worker pool...
+2025-10-15 13:54:03.946 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-15 13:54:03.949 | INFO     | Worker pool initialized with 4 workers.
+2025-10-15 13:54:05.152 | INFO     | Calibration disabled. Starting main algorithm with random population.
+2025-10-15 13:54:05.154 | INFO     | --- Starting MAIN_ALGORITHM Phase ---
+2025-10-15 13:54:05.154 | INFO     | Generations: 5, Population: 24
+2025-10-15 13:54:05.154 | INFO     | --- MAIN_ALGORITHM - Generation 1/5 ---
+2025-10-15 13:54:54.034 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 1/24 (75 epochs)
+2025-10-15 13:54:54.035 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.1178764654013644, 'fc1_units': 512, 'dropout_rate': 0.37604560289229183, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.058421109845713, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00014452925874973866, 'batch_size': 128}
+2025-10-15 13:54:54.035 | INFO     | [Worker-3 / GPU-3] Using base_lr 0.058421 for batch_size 128
+2025-10-15 13:54:54.035 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 1: Given input size: (1120x1x1). Calculated output size: (1120x0x0). Output size is too small
+2025-10-15 13:54:54.264 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 2/24 (75 epochs)
+2025-10-15 13:54:54.265 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.1115470840133375, 'fc1_units': 1024, 'dropout_rate': 0.3697703107367075, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.010216025597280975, 'aug_intensity': 'STRONG', 'weight_decay': 0.00040479961534491083, 'batch_size': 256}
+2025-10-15 13:54:54.265 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.020432 for batch_size 256
+2025-10-15 13:54:54.265 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 2: Given input size: (1120x1x1). Calculated output size: (1120x0x0). Output size is too small
+2025-10-15 13:54:55.856 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 0/24 (75 epochs)
+2025-10-15 13:54:55.857 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.8996323206788368, 'fc1_units': 640, 'dropout_rate': 0.4184918058748145, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.07773462768563776, 'aug_intensity': 'STRONG', 'weight_decay': 0.0007873225762954947, 'batch_size': 256}
+2025-10-15 13:54:55.857 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.155469 for batch_size 256
+2025-10-15 13:54:55.857 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 0: Given input size: (1920x1x1). Calculated output size: (1920x0x0). Output size is too small
+2025-10-15 13:54:58.225 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 3/24 (75 epochs)
+2025-10-15 13:54:58.225 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.8356714889390422, 'fc1_units': 640, 'dropout_rate': 0.3357724865124029, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.023900055216642947, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00013005122513121367, 'batch_size': 128}
+2025-10-15 13:54:58.226 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.023900 for batch_size 128
+2025-10-15 13:54:58.226 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 3: Given input size: (1856x1x1). Calculated output size: (1856x0x0). Output size is too small
+2025-10-15 13:55:34.883 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 5/24 (75 epochs)
+2025-10-15 13:55:34.884 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.157783424356266, 'fc1_units': 896, 'dropout_rate': 0.21551092287823967, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.010158894346812521, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002288796678694982, 'batch_size': 256}
+2025-10-15 13:55:34.884 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.020318 for batch_size 256
+2025-10-15 13:55:34.884 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 5: Given input size: (1184x1x1). Calculated output size: (1184x0x0). Output size is too small
+2025-10-15 13:55:34.887 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 4/24 (75 epochs)
+2025-10-15 13:55:34.888 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.7363868910810192, 'fc1_units': 640, 'dropout_rate': 0.2703696392100816, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.008103532069991223, 'aug_intensity': 'STRONG', 'weight_decay': 0.0003202794326576724, 'batch_size': 128}
+2025-10-15 13:55:34.888 | INFO     | [Worker-3 / GPU-3] Using base_lr 0.008104 for batch_size 128
+2025-10-15 13:55:34.888 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 4: Given input size: (1760x1x1). Calculated output size: (1760x0x0). Output size is too small
+2025-10-15 13:55:35.705 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 6/24 (75 epochs)
+2025-10-15 13:55:35.706 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.741998602557428, 'fc1_units': 896, 'dropout_rate': 0.4362884365474685, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0065220315539000415, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00010286487628369931, 'batch_size': 256}
+2025-10-15 13:55:35.706 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.013044 for batch_size 256
+2025-10-15 13:55:35.706 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 6: Given input size: (1760x1x1). Calculated output size: (1760x0x0). Output size is too small
+2025-10-15 13:55:41.099 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 7/24 (75 epochs)
+2025-10-15 13:55:41.100 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.584412040578938, 'fc1_units': 640, 'dropout_rate': 0.20540644419088672, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03711875776366411, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00014124778237790673, 'batch_size': 256}
+2025-10-15 13:55:41.100 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.074238 for batch_size 256
+2025-10-15 13:55:41.101 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 7: Given input size: (1600x1x1). Calculated output size: (1600x0x0). Output size is too small
+2025-10-15 13:56:14.285 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 10/24 (75 epochs)
+2025-10-15 13:56:14.286 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.5395202488485848, 'fc1_units': 512, 'dropout_rate': 0.3970963229754467, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.013534902609605218, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0007269359709565513, 'batch_size': 128}
+2025-10-15 13:56:14.286 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.013535 for batch_size 128
+2025-10-15 13:56:14.286 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 10: Given input size: (1568x1x1). Calculated output size: (1568x0x0). Output size is too small
+2025-10-15 13:56:14.925 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 9/24 (75 epochs)
+2025-10-15 13:56:14.926 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.7736606663862293, 'fc1_units': 1024, 'dropout_rate': 0.23082005570842024, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.08453779616347983, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002569380765841451, 'batch_size': 128}
+2025-10-15 13:56:14.926 | INFO     | [Worker-3 / GPU-3] Using base_lr 0.084538 for batch_size 128
+2025-10-15 13:56:14.926 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 9: Given input size: (1792x1x1). Calculated output size: (1792x0x0). Output size is too small
+2025-10-15 13:56:16.252 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 8/24 (75 epochs)
+2025-10-15 13:56:16.253 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.886346879929983, 'fc1_units': 640, 'dropout_rate': 0.4356880925518261, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.006808230203875121, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00014489615087623595, 'batch_size': 128}
+2025-10-15 13:56:16.253 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.006808 for batch_size 128
+2025-10-15 13:56:16.253 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 8: Given input size: (1920x1x1). Calculated output size: (1920x0x0). Output size is too small
+2025-10-15 13:56:21.579 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 11/24 (75 epochs)
+2025-10-15 13:56:21.580 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.0857187971576976, 'fc1_units': 1024, 'dropout_rate': 0.20428022274978314, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.06639623258606601, 'aug_intensity': 'STRONG', 'weight_decay': 0.00022654148052735624, 'batch_size': 128}
+2025-10-15 13:56:21.580 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.066396 for batch_size 128
+2025-10-15 13:56:21.580 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 11: Given input size: (1088x1x1). Calculated output size: (1088x0x0). Output size is too small
+2025-10-15 13:56:54.159 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 12/24 (75 epochs)
+2025-10-15 13:56:54.160 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.668695584365886, 'fc1_units': 640, 'dropout_rate': 0.2866274746127161, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.01415538035633712, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0003178470966502042, 'batch_size': 128}
+2025-10-15 13:56:54.160 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.014155 for batch_size 128
+2025-10-15 13:56:54.160 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 12: Given input size: (1696x1x1). Calculated output size: (1696x0x0). Output size is too small
+2025-10-15 13:56:57.067 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 13/24 (75 epochs)
+2025-10-15 13:56:57.068 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.8674291549205162, 'fc1_units': 1024, 'dropout_rate': 0.205261927052928, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.012296526100243033, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0004574386546110156, 'batch_size': 128}
+2025-10-15 13:56:57.068 | INFO     | [Worker-3 / GPU-3] Using base_lr 0.012297 for batch_size 128
+2025-10-15 13:56:57.069 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 13: Given input size: (1888x1x1). Calculated output size: (1888x0x0). Output size is too small
+2025-10-15 13:56:57.113 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 14/24 (75 epochs)
+2025-10-15 13:56:57.113 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.3346105639790893, 'fc1_units': 1024, 'dropout_rate': 0.39614845062186327, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.007539398733538129, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00045554262733782874, 'batch_size': 256}
+2025-10-15 13:56:57.113 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.015079 for batch_size 256
+2025-10-15 13:56:57.113 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 14: Given input size: (1344x1x1). Calculated output size: (1344x0x0). Output size is too small
+2025-10-15 13:57:13.9e04 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 15/24 (75 epochs)
+2025-10-15 13:57:13.905 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.307002231695194, 'fc1_units': 640, 'dropout_rate': 0.47307955560753945, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.03213568836616474, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00045795732483233637, 'batch_size': 256}
+2025-10-15 13:57:13.905 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.064271 for batch_size 256
+2025-10-15 13:57:13.905 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 15: Given input size: (1312x1x1). Calculated output size: (1312x0x0). Output size is too small
+2025-10-15 13:57:32.215 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 16/24 (75 epochs)
+2025-10-15 13:57:32.216 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.1203269544621768, 'fc1_units': 896, 'dropout_rate': 0.4859402329467713, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.00588637051291725, 'aug_intensity': 'STRONG', 'weight_decay': 0.0004389158838101093, 'batch_size': 256}
+2025-10-15 13:57:32.216 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.011773 for batch_size 256
+2025-10-15 13:57:32.216 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 16: Given input size: (1120x1x1). Calculated output size: (1120x0x0). Output size is too small
+2025-10-15 13:57:37.792 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 18/24 (75 epochs)
+2025-10-15 13:57:37.793 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.3811961069593883, 'fc1_units': 896, 'dropout_rate': 0.2851248942935558, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.012661507315854548, 'aug_intensity': 'STRONG', 'weight_decay': 0.00025285462481753083, 'batch_size': 128}
+2025-10-15 13:57:37.793 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.012662 for batch_size 128
+2025-10-15 13:57:37.793 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 18: Given input size: (1408x1x1). Calculated output size: (1408x0x0). Output size is too small
+2025-10-15 13:57:37.873 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 17/24 (75 epochs)
+2025-10-15 13:57:37.873 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.5333705282025947, 'fc1_units': 512, 'dropout_rate': 0.422014137356885, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.010949067071444819, 'aug_intensity': 'STRONG', 'weight_decay': 0.00034286310689507883, 'batch_size': 256}
+2025-10-15 13:57:37.873 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.021898 for batch_size 256
+2025-10-15 13:57:37.874 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 17: Given input size: (1568x1x1). Calculated output size: (1568x0x0). Output size is too small
+2025-10-15 13:57:57.680 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 19/24 (75 epochs)
+2025-10-15 13:57:57.680 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.7895215704309124, 'fc1_units': 896, 'dropout_rate': 0.3071004667831104, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.0202545787185715, 'aug_intensity': 'STRONG', 'weight_decay': 0.0009971945748175814, 'batch_size': 128}
+2025-10-15 13:57:57.680 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.020255 for batch_size 128
+2025-10-15 13:57:57.681 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 19: Given input size: (1824x1x1). Calculated output size: (1824x0x0). Output size is too small
+2025-10-15 13:58:12.445 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 20/24 (75 epochs)
+2025-10-15 13:58:12.445 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.93552448062677, 'fc1_units': 896, 'dropout_rate': 0.26367969846249684, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.00508933757846038, 'aug_intensity': 'STRONG', 'weight_decay': 0.0006735956293678112, 'batch_size': 256}
+2025-10-15 13:58:12.445 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.010179 for batch_size 256
+2025-10-15 13:58:12.445 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 20: Given input size: (1952x1x1). Calculated output size: (1952x0x0). Output size is too small
+2025-10-15 13:58:17.213 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 22/24 (75 epochs)
+2025-10-15 13:58:17.213 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.3329390798388867, 'fc1_units': 640, 'dropout_rate': 0.2115967826968202, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.020070860954983512, 'aug_intensity': 'STRONG', 'weight_decay': 0.0001088542912614207, 'batch_size': 128}
+2025-10-15 13:58:17.214 | INFO     | [Worker-3 / GPU-3] Using base_lr 0.020071 for batch_size 128
+2025-10-15 13:58:17.214 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 22: Given input size: (1344x1x1). Calculated output size: (1344x0x0). Output size is too small
+2025-10-15 13:58:18.022 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 21/24 (75 epochs)
+2025-10-15 13:58:18.023 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.612163999796401, 'fc1_units': 1024, 'dropout_rate': 0.404093071835657, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.005494479149884555, 'aug_intensity': 'STRONG', 'weight_decay': 0.0005366430390278605, 'batch_size': 256}
+2025-10-15 13:58:18.023 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.010989 for batch_size 256
+2025-10-15 13:58:18.023 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 21: Given input size: (1632x1x1). Calculated output size: (1632x0x0). Output size is too small
+2025-10-15 13:58:42.652 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 23/24 (75 epochs)
+2025-10-15 13:58:42.653 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.1656980287555068, 'fc1_units': 512, 'dropout_rate': 0.41839932983647843, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.04833981775107584, 'aug_intensity': 'STRONG', 'weight_decay': 0.00013188754309062295, 'batch_size': 256}
+2025-10-15 13:58:42.653 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.096680 for batch_size 256
+2025-10-15 13:58:42.654 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 23: Given input size: (1184x1x1). Calculated output size: (1184x0x0). Output size is too small
+2025-10-15 13:58:42.654 | INFO     | ========================================
+2025-10-15 13:58:42.654 | INFO     | GENERATION 1 REPORT
+2025-10-15 13:58:42.654 | INFO     | ========================================
+2025-10-15 13:58:42.654 | INFO     | Wall-Clock Time: 277.50s
+2025-10-15 13:58:42.655 | INFO     | Total Worker Busy Time: 0.00s
+2025-10-15 13:58:42.655 | INFO     | Total Worker Idle Time (Overhead): 1110.00s
+2025-10-15 13:58:42.655 | INFO     | Best Fitness: 0.0000 | Loss: inf
+2025-10-15 13:58:42.675 | INFO     | Generation 1/ (Fold 1) checkpointed successfully.
+2025-10-15 13:58:42.676 | INFO     | Sequential Time: 0.0007s
+2025-10-15 13:58:42.676 | INFO     | Parallel Time: 277.5210s
+2025-10-15 13:58:42.676 | INFO     | Total Time: 277.5217s
+2025-10-15 13:58:42.676 | INFO     | Number of Workers: 4
+2025-10-15 13:58:42.676 | INFO     | Effective Workers (GPU-adjusted): 4.0
+2025-10-15 13:58:42.676 | INFO     | --- SCALABILITY LAWS ---
+2025-10-15 13:58:42.677 | INFO     | Sequential Fraction: 0.00000266 (0.000266%)
+2025-10-15 13:58:42.677 | INFO     | Parallel Fraction: 1.0000 (100.0%)
+2025-10-15 13:58:42.677 | INFO     | Amdahl's Law Speedup: 4.00x
+2025-10-15 13:58:42.677 | INFO     | Gustafson's Law Speedup: 4.00x
+2025-10-15 13:58:42.677 | INFO     | Efficiency (Amdahl): 100.00% | Efficiency (Gustafson): 100.00%
+2025-10-15 13:58:42.677 | INFO     | ========================================
+2025-10-15 13:58:42.678 | INFO     | --- MAIN_ALGORITHM - Generation 2/5 ---

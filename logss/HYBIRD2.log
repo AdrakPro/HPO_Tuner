@@ -1,0 +1,555 @@
+2025-09-25 07:28:05.620 | WARNING  | CPU oversubscription detected! Requested cores (196) exceed available (128).
+2025-09-25 07:28:05.621 | WARNING  | Scaling down worker configuration to fit resources.
+2025-09-25 07:28:05.621 | INFO     | --- Adjusted Worker Configuration ---
+2025-09-25 07:28:05.621 | INFO     | CPU Processes: 39 (was 60)
+2025-09-25 07:28:05.621 | INFO     | GPU Processes: 2 (was 4)
+2025-09-25 07:28:05.621 | INFO     | Dataloader workers/CPU process: 1 (was 2)
+2025-09-25 07:28:05.621 | INFO     | Dataloader workers/GPU process: 2 (was 4)
+2025-09-25 07:28:05.621 | INFO     | New estimated CPU core usage: 82/128
+2025-09-25 07:28:05.693 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 2137
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "HYBRID",
+            "enable_parallel": true,
+            "gpu_workers": 2,
+            "cpu_workers": 39,
+            "dataloader_workers": {
+                "per_gpu": 2,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 3,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    0.75,
+                    2.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    1024
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_ONECYCLE",
+                    "SGD_COSINE",
+                    "SGD_EXPONENTIAL"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.01,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "LIGHT",
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    0.0001,
+                    0.0005
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    64,
+                    128,
+                    256
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 3
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 3
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.1
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": true,
+            "population_size": 40,
+            "generations": 10,
+            "training_epochs": 25,
+            "data_subset_percentage": 0.3,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 5,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 3,
+                "early_stop_epochs": 7,
+                "fitness_goal": 0.85,
+                "time_limit_minutes": 0
+            }
+        },
+        "main_algorithm": {
+            "population_size": 128,
+            "generations": 150,
+            "training_epochs": 50,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 5,
+            "stop_conditions": {
+                "max_generations": 150,
+                "early_stop_generations": 12,
+                "early_stop_epochs": 105,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 10080
+            }
+        }
+    }
+}
+2025-09-25 07:28:05.693 | INFO     | Logger initialized. Log file at logs/log_2025-09-25_05-28-05.log
+2025-09-25 07:28:05.694 | INFO     | --- Starting Nested Resampling With 3 Folds ---
+2025-09-25 07:28:06.531 | INFO     | --- Running Fold 1/3 ---
+2025-09-25 07:28:07.397 | INFO     | Starting new calibration phase.
+2025-09-25 07:28:07.398 | INFO     | --- Starting CALIBRATION Phase ---
+2025-09-25 07:28:07.398 | INFO     | Generations: 10, Population: 40
+2025-09-25 07:28:07.399 | INFO     | Initializing worker pool...
+2025-09-25 07:28:07.399 | INFO     | Using HYBRID scheduling strategy.
+2025-09-25 07:28:07.444 | INFO     | Worker pool initialized with 41 workers.
+2025-09-25 07:28:07.445 | INFO     | --- CALIBRATION - Generation 1/10 ---
+2025-09-25 07:35:05.733 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 19/40 (5 epochs)
+2025-09-25 07:35:05.739 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.8300852335780056, 'fc1_units': 1024, 'dropout_rate': 0.33106186990292635, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.02192410195430759, 'aug_intensity': 'STRONG', 'weight_decay': 0.00011706896200957572, 'batch_size': 64}
+2025-09-25 07:35:05.739 | INFO     | [Worker-0 / GPU-0] Epoch 1/5 | Train Acc: 0.4075, Train Loss: 1.6120 | Test Loss: 1.2022, Test Acc: 0.5684
+2025-09-25 07:35:05.739 | INFO     | [Worker-0 / GPU-0] Epoch 2/5 | Train Acc: 0.4791, Train Loss: 1.4362 | Test Loss: 1.3130, Test Acc: 0.5253
+2025-09-25 07:35:05.739 | INFO     | [Worker-0 / GPU-0] Epoch 3/5 | Train Acc: 0.5072, Train Loss: 1.3822 | Test Loss: 1.1008, Test Acc: 0.6174
+2025-09-25 07:35:05.740 | INFO     | [Worker-0 / GPU-0] Epoch 4/5 | Train Acc: 0.5269, Train Loss: 1.3502 | Test Loss: 1.1813, Test Acc: 0.5888
+2025-09-25 07:35:05.740 | INFO     | [Worker-0 / GPU-0] Epoch 5/5 | Train Acc: 0.6273, Train Loss: 1.0620 | Test Loss: 0.8553, Test Acc: 0.6986
+2025-09-25 07:35:05.740 | INFO     | [Worker-0 / GPU-0] Individual 19 -> Accuracy: 0.6986, Loss: 0.8553 | Duration: 412.07s
+2025-09-25 07:37:22.671 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 18/40 (5 epochs)
+2025-09-25 07:37:22.672 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.2705998456901355, 'fc1_units': 1024, 'dropout_rate': 0.27345938586397023, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.07457315056365177, 'aug_intensity': 'STRONG', 'weight_decay': 0.0004917130590685156, 'batch_size': 256}
+2025-09-25 07:37:22.672 | INFO     | [Worker-1 / GPU-1] Epoch 1/5 | Train Acc: 0.3697, Train Loss: 1.7224 | Test Loss: 1.3915, Test Acc: 0.5099
+2025-09-25 07:37:22.672 | INFO     | [Worker-1 / GPU-1] Epoch 2/5 | Train Acc: 0.4723, Train Loss: 1.4465 | Test Loss: 1.1234, Test Acc: 0.5917
+2025-09-25 07:37:22.672 | INFO     | [Worker-1 / GPU-1] Epoch 3/5 | Train Acc: 0.5188, Train Loss: 1.3332 | Test Loss: 1.3867, Test Acc: 0.5222
+2025-09-25 07:37:22.673 | INFO     | [Worker-1 / GPU-1] Epoch 4/5 | Train Acc: 0.5538, Train Loss: 1.2512 | Test Loss: 1.2611, Test Acc: 0.5840
+2025-09-25 07:37:22.673 | INFO     | [Worker-1 / GPU-1] Epoch 5/5 | Train Acc: 0.6128, Train Loss: 1.1017 | Test Loss: 1.0069, Test Acc: 0.6518
+2025-09-25 07:37:22.673 | INFO     | [Worker-1 / GPU-1] Individual 18 -> Accuracy: 0.6518, Loss: 1.0069 | Duration: 548.74s
+2025-09-25 10:47:17.788 | INFO     | [Worker-32 / CPU] Evaluating Individual 2/40 (5 epochs)
+2025-09-25 10:47:17.789 | INFO     | [Worker-32 / CPU] Hyperparameters: {'width_scale': 0.9486617989875368, 'fc1_units': 1024, 'dropout_rate': 0.37570050042612047, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.01573242879728388, 'aug_intensity': 'LIGHT', 'weight_decay': 0.000270064101446835, 'batch_size': 256}
+2025-09-25 10:47:17.792 | INFO     | [Worker-32 / CPU] Epoch 1/5 | Train Acc: 0.3455, Train Loss: 1.8245 | Test Loss: 1.5108, Test Acc: 0.4645
+2025-09-25 10:47:17.796 | INFO     | [Worker-32 / CPU] Epoch 2/5 | Train Acc: 0.5170, Train Loss: 1.3413 | Test Loss: 1.2069, Test Acc: 0.5715
+2025-09-25 10:47:17.797 | INFO     | [Worker-32 / CPU] Epoch 3/5 | Train Acc: 0.6025, Train Loss: 1.1115 | Test Loss: 1.1366, Test Acc: 0.6036
+2025-09-25 10:47:17.797 | INFO     | [Worker-32 / CPU] Epoch 4/5 | Train Acc: 0.6525, Train Loss: 0.9732 | Test Loss: 0.9401, Test Acc: 0.6752
+2025-09-25 10:47:17.797 | INFO     | [Worker-32 / CPU] Epoch 5/5 | Train Acc: 0.7181, Train Loss: 0.8044 | Test Loss: 0.8060, Test Acc: 0.7184
+2025-09-25 10:47:17.800 | INFO     | [Worker-32 / CPU] Individual 2 -> Accuracy: 0.7184, Loss: 0.8060 | Duration: 11944.78s
+2025-09-25 10:57:56.960 | INFO     | [Worker-28 / CPU] Evaluating Individual 37/40 (5 epochs)
+2025-09-25 10:57:56.961 | INFO     | [Worker-28 / CPU] Hyperparameters: {'width_scale': 1.834345171428801, 'fc1_units': 1024, 'dropout_rate': 0.40026677298728397, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.034001326593153476, 'aug_intensity': 'LIGHT', 'weight_decay': 0.0002334549328218835, 'batch_size': 256}
+2025-09-25 10:57:56.961 | INFO     | [Worker-28 / CPU] Epoch 1/5 | Train Acc: 0.4286, Train Loss: 1.5834 | Test Loss: 1.2425, Test Acc: 0.5672
+2025-09-25 10:57:56.962 | INFO     | [Worker-28 / CPU] Epoch 2/5 | Train Acc: 0.5667, Train Loss: 1.1982 | Test Loss: 1.1620, Test Acc: 0.5859
+2025-09-25 10:57:56.962 | INFO     | [Worker-28 / CPU] Epoch 3/5 | Train Acc: 0.6162, Train Loss: 1.0780 | Test Loss: 1.0654, Test Acc: 0.6196
+2025-09-25 10:57:56.962 | INFO     | [Worker-28 / CPU] Epoch 4/5 | Train Acc: 0.6482, Train Loss: 0.9947 | Test Loss: 0.9674, Test Acc: 0.6688
+2025-09-25 10:57:56.963 | INFO     | [Worker-28 / CPU] Epoch 5/5 | Train Acc: 0.6830, Train Loss: 0.9024 | Test Loss: 0.8346, Test Acc: 0.7044
+2025-09-25 10:57:56.963 | INFO     | [Worker-28 / CPU] Individual 37 -> Accuracy: 0.7044, Loss: 0.8346 | Duration: 12582.79s
+2025-09-25 12:36:02.037 | INFO     | [Worker-38 / CPU] Evaluating Individual 1/40 (5 epochs)
+2025-09-25 12:36:02.039 | INFO     | [Worker-38 / CPU] Hyperparameters: {'width_scale': 1.0311526398987938, 'fc1_units': 512, 'dropout_rate': 0.373527312430919, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.06933552791113602, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00011170489737717891, 'batch_size': 256}
+2025-09-25 12:36:02.039 | INFO     | [Worker-38 / CPU] Epoch 1/5 | Train Acc: 0.4274, Train Loss: 1.5802 | Test Loss: 1.2949, Test Acc: 0.5376
+2025-09-25 12:36:02.039 | INFO     | [Worker-38 / CPU] Epoch 2/5 | Train Acc: 0.5477, Train Loss: 1.2461 | Test Loss: 1.1346, Test Acc: 0.5934
+2025-09-25 12:36:02.039 | INFO     | [Worker-38 / CPU] Epoch 3/5 | Train Acc: 0.5923, Train Loss: 1.1444 | Test Loss: 1.1063, Test Acc: 0.6075
+2025-09-25 12:36:02.040 | INFO     | [Worker-38 / CPU] Epoch 4/5 | Train Acc: 0.6184, Train Loss: 1.0916 | Test Loss: 1.0700, Test Acc: 0.6161
+2025-09-25 12:36:02.040 | INFO     | [Worker-38 / CPU] Epoch 5/5 | Train Acc: 0.7012, Train Loss: 0.8576 | Test Loss: 0.7954, Test Acc: 0.7257
+2025-09-25 12:36:02.040 | INFO     | [Worker-38 / CPU] Individual 1 -> Accuracy: 0.7257, Loss: 0.7954 | Duration: 18469.56s
+2025-09-25 12:40:11.328 | INFO     | [Worker-10 / CPU] Evaluating Individual 12/40 (5 epochs)
+2025-09-25 12:40:11.329 | INFO     | [Worker-10 / CPU] Hyperparameters: {'width_scale': 0.8402129874047193, 'fc1_units': 512, 'dropout_rate': 0.4158705487590153, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.017053619331025928, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00023664564636995477, 'batch_size': 256}
+2025-09-25 12:40:11.329 | INFO     | [Worker-10 / CPU] Epoch 1/5 | Train Acc: 0.3316, Train Loss: 1.8627 | Test Loss: 1.5488, Test Acc: 0.4480
+2025-09-25 12:40:11.330 | INFO     | [Worker-10 / CPU] Epoch 2/5 | Train Acc: 0.4966, Train Loss: 1.3820 | Test Loss: 1.2311, Test Acc: 0.5668
+2025-09-25 12:40:11.330 | INFO     | [Worker-10 / CPU] Epoch 3/5 | Train Acc: 0.5889, Train Loss: 1.1459 | Test Loss: 1.1556, Test Acc: 0.5877
+2025-09-25 12:40:11.330 | INFO     | [Worker-10 / CPU] Epoch 4/5 | Train Acc: 0.6296, Train Loss: 1.0355 | Test Loss: 1.0776, Test Acc: 0.6206
+2025-09-25 12:40:11.330 | INFO     | [Worker-10 / CPU] Epoch 5/5 | Train Acc: 0.6781, Train Loss: 0.8998 | Test Loss: 0.8921, Test Acc: 0.6839
+2025-09-25 12:40:11.330 | INFO     | [Worker-10 / CPU] Individual 12 -> Accuracy: 0.6839, Loss: 0.8921 | Duration: 18717.80s
+2025-09-25 12:47:59.286 | INFO     | [Worker-20 / CPU] Evaluating Individual 20/40 (5 epochs)
+2025-09-25 12:47:59.287 | INFO     | [Worker-20 / CPU] Hyperparameters: {'width_scale': 1.0583783322480915, 'fc1_units': 1024, 'dropout_rate': 0.43965433984317637, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.029050292677702285, 'aug_intensity': 'STRONG', 'weight_decay': 0.0004081313576828697, 'batch_size': 256}
+2025-09-25 12:47:59.288 | INFO     | [Worker-20 / CPU] Epoch 1/5 | Train Acc: 0.3072, Train Loss: 1.8893 | Test Loss: 1.5333, Test Acc: 0.4526
+2025-09-25 12:47:59.288 | INFO     | [Worker-20 / CPU] Epoch 2/5 | Train Acc: 0.4399, Train Loss: 1.5232 | Test Loss: 1.3373, Test Acc: 0.5204
+2025-09-25 12:47:59.288 | INFO     | [Worker-20 / CPU] Epoch 3/5 | Train Acc: 0.5153, Train Loss: 1.3458 | Test Loss: 1.2445, Test Acc: 0.5682
+2025-09-25 12:47:59.288 | INFO     | [Worker-20 / CPU] Epoch 4/5 | Train Acc: 0.5572, Train Loss: 1.2309 | Test Loss: 1.0734, Test Acc: 0.6135
+2025-09-25 12:47:59.288 | INFO     | [Worker-20 / CPU] Epoch 5/5 | Train Acc: 0.6252, Train Loss: 1.0463 | Test Loss: 0.8592, Test Acc: 0.6977
+2025-09-25 12:47:59.289 | INFO     | [Worker-20 / CPU] Individual 20 -> Accuracy: 0.6977, Loss: 0.8592 | Duration: 19185.26s
+2025-09-25 13:00:35.754 | INFO     | [Worker-5 / CPU] Evaluating Individual 21/40 (5 epochs)
+2025-09-25 13:00:35.755 | INFO     | [Worker-5 / CPU] Hyperparameters: {'width_scale': 1.9634398195980995, 'fc1_units': 1024, 'dropout_rate': 0.49416678789714263, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.05834168479285178, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00013410760579343157, 'batch_size': 256}
+2025-09-25 13:00:35.755 | INFO     | [Worker-5 / CPU] Epoch 1/5 | Train Acc: 0.4159, Train Loss: 1.6062 | Test Loss: 1.2550, Test Acc: 0.5487
+2025-09-25 13:00:35.756 | INFO     | [Worker-5 / CPU] Epoch 2/5 | Train Acc: 0.5810, Train Loss: 1.1765 | Test Loss: 1.1020, Test Acc: 0.6153
+2025-09-25 13:00:35.756 | INFO     | [Worker-5 / CPU] Epoch 3/5 | Train Acc: 0.6452, Train Loss: 1.0051 | Test Loss: 0.9945, Test Acc: 0.6500
+2025-09-25 13:00:35.756 | INFO     | [Worker-5 / CPU] Epoch 4/5 | Train Acc: 0.6740, Train Loss: 0.9174 | Test Loss: 0.9223, Test Acc: 0.6730
+2025-09-25 13:00:35.756 | INFO     | [Worker-5 / CPU] Epoch 5/5 | Train Acc: 0.7077, Train Loss: 0.8336 | Test Loss: 0.8111, Test Acc: 0.7188
+2025-09-25 13:00:35.757 | INFO     | [Worker-5 / CPU] Individual 21 -> Accuracy: 0.7188, Loss: 0.8111 | Duration: 19942.02s
+2025-09-25 13:04:12.266 | INFO     | [Worker-6 / CPU] Evaluating Individual 11/40 (5 epochs)
+2025-09-25 13:04:12.267 | INFO     | [Worker-6 / CPU] Hyperparameters: {'width_scale': 1.5704913076134421, 'fc1_units': 512, 'dropout_rate': 0.41607656824826333, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.07099587769539852, 'aug_intensity': 'STRONG', 'weight_decay': 0.0003416436972293216, 'batch_size': 256}
+2025-09-25 13:04:12.267 | INFO     | [Worker-6 / CPU] Epoch 1/5 | Train Acc: 0.3632, Train Loss: 1.7317 | Test Loss: 1.3433, Test Acc: 0.5118
+2025-09-25 13:04:12.267 | INFO     | [Worker-6 / CPU] Epoch 2/5 | Train Acc: 0.4525, Train Loss: 1.4950 | Test Loss: 1.5162, Test Acc: 0.4663
+2025-09-25 13:04:12.268 | INFO     | [Worker-6 / CPU] Epoch 3/5 | Train Acc: 0.4746, Train Loss: 1.4558 | Test Loss: 1.2756, Test Acc: 0.5408
+2025-09-25 13:04:12.268 | INFO     | [Worker-6 / CPU] Epoch 4/5 | Train Acc: 0.4665, Train Loss: 1.4880 | Test Loss: 1.2141, Test Acc: 0.5741
+2025-09-25 13:04:12.268 | INFO     | [Worker-6 / CPU] Epoch 5/5 | Train Acc: 0.5543, Train Loss: 1.2607 | Test Loss: 1.0821, Test Acc: 0.6060
+2025-09-25 13:04:12.268 | INFO     | [Worker-6 / CPU] Individual 11 -> Accuracy: 0.6060, Loss: 1.0821 | Duration: 20158.65s
+2025-09-25 13:14:03.917 | INFO     | [Worker-9 / CPU] Evaluating Individual 31/40 (5 epochs)
+2025-09-25 13:14:03.920 | INFO     | [Worker-9 / CPU] Hyperparameters: {'width_scale': 1.794919207945295, 'fc1_units': 1024, 'dropout_rate': 0.34003381350713635, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.09736355475593636, 'aug_intensity': 'STRONG', 'weight_decay': 0.0004435298995541009, 'batch_size': 256}
+2025-09-25 13:14:03.920 | INFO     | [Worker-9 / CPU] Epoch 1/5 | Train Acc: 0.3742, Train Loss: 1.7009 | Test Loss: 1.3547, Test Acc: 0.5086
+2025-09-25 13:14:03.920 | INFO     | [Worker-9 / CPU] Epoch 2/5 | Train Acc: 0.4392, Train Loss: 1.5367 | Test Loss: 1.2508, Test Acc: 0.5508
+2025-09-25 13:14:03.921 | INFO     | [Worker-9 / CPU] Epoch 3/5 | Train Acc: 0.4724, Train Loss: 1.4704 | Test Loss: 1.3461, Test Acc: 0.5192
+2025-09-25 13:14:03.921 | INFO     | [Worker-9 / CPU] Epoch 4/5 | Train Acc: 0.4966, Train Loss: 1.4219 | Test Loss: 1.2160, Test Acc: 0.5753
+2025-09-25 13:14:03.921 | INFO     | [Worker-9 / CPU] Epoch 5/5 | Train Acc: 0.6050, Train Loss: 1.1157 | Test Loss: 0.9029, Test Acc: 0.6804
+2025-09-25 13:14:03.922 | INFO     | [Worker-9 / CPU] Individual 31 -> Accuracy: 0.6804, Loss: 0.9029 | Duration: 20749.75s
+2025-09-25 13:15:34.995 | INFO     | [Worker-37 / CPU] Evaluating Individual 6/40 (5 epochs)
+2025-09-25 13:15:34.996 | INFO     | [Worker-37 / CPU] Hyperparameters: {'width_scale': 1.4322777907660733, 'fc1_units': 512, 'dropout_rate': 0.40780905925120414, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.012512047437623575, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00011285604813341913, 'batch_size': 256}
+2025-09-25 13:15:34.996 | INFO     | [Worker-37 / CPU] Epoch 1/5 | Train Acc: 0.3012, Train Loss: 1.9357 | Test Loss: 1.6302, Test Acc: 0.4203
+2025-09-25 13:15:34.996 | INFO     | [Worker-37 / CPU] Epoch 2/5 | Train Acc: 0.4493, Train Loss: 1.5433 | Test Loss: 1.4042, Test Acc: 0.5056
+2025-09-25 13:15:34.996 | INFO     | [Worker-37 / CPU] Epoch 3/5 | Train Acc: 0.5117, Train Loss: 1.3728 | Test Loss: 1.2836, Test Acc: 0.5498
+2025-09-25 13:15:34.997 | INFO     | [Worker-37 / CPU] Epoch 4/5 | Train Acc: 0.5548, Train Loss: 1.2573 | Test Loss: 1.1983, Test Acc: 0.5733
+2025-09-25 13:15:35.035 | INFO     | [Worker-37 / CPU] Epoch 5/5 | Train Acc: 0.5869, Train Loss: 1.1691 | Test Loss: 1.1062, Test Acc: 0.6181
+2025-09-25 13:15:35.035 | INFO     | [Worker-37 / CPU] Individual 6 -> Accuracy: 0.6181, Loss: 1.1062 | Duration: 20841.81s
+2025-09-25 13:16:46.029 | INFO     | [Worker-22 / CPU] Evaluating Individual 33/40 (5 epochs)
+2025-09-25 13:16:46.031 | INFO     | [Worker-22 / CPU] Hyperparameters: {'width_scale': 1.5448245539590597, 'fc1_units': 256, 'dropout_rate': 0.250169384408184, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.021156295223255166, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00011203572406032032, 'batch_size': 128}
+2025-09-25 13:16:46.031 | INFO     | [Worker-22 / CPU] Epoch 1/5 | Train Acc: 0.3661, Train Loss: 1.7155 | Test Loss: 1.4366, Test Acc: 0.4663
+2025-09-25 13:16:46.031 | INFO     | [Worker-22 / CPU] Epoch 2/5 | Train Acc: 0.4950, Train Loss: 1.3865 | Test Loss: 1.2198, Test Acc: 0.5748
+2025-09-25 13:16:46.032 | INFO     | [Worker-22 / CPU] Epoch 3/5 | Train Acc: 0.5527, Train Loss: 1.2356 | Test Loss: 1.3349, Test Acc: 0.5434
+2025-09-25 13:16:46.032 | INFO     | [Worker-22 / CPU] Epoch 4/5 | Train Acc: 0.5802, Train Loss: 1.1799 | Test Loss: 1.1006, Test Acc: 0.6176
+2025-09-25 13:16:46.050 | INFO     | [Worker-22 / CPU] Epoch 5/5 | Train Acc: 0.6164, Train Loss: 1.0815 | Test Loss: 0.8780, Test Acc: 0.6957
+2025-09-25 13:16:46.050 | INFO     | [Worker-22 / CPU] Individual 33 -> Accuracy: 0.6957, Loss: 0.8780 | Duration: 20912.12s
+2025-09-25 13:17:37.004 | INFO     | [Worker-23 / CPU] Evaluating Individual 29/40 (5 epochs)
+2025-09-25 13:17:37.005 | INFO     | [Worker-23 / CPU] Hyperparameters: {'width_scale': 1.2454461356793607, 'fc1_units': 512, 'dropout_rate': 0.4771479412610708, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0860663534231779, 'aug_intensity': 'STRONG', 'weight_decay': 0.00019567596555861963, 'batch_size': 128}
+2025-09-25 13:17:37.007 | INFO     | [Worker-23 / CPU] Epoch 1/5 | Train Acc: 0.3656, Train Loss: 1.7296 | Test Loss: 1.3487, Test Acc: 0.5093
+2025-09-25 13:17:37.007 | INFO     | [Worker-23 / CPU] Epoch 2/5 | Train Acc: 0.4804, Train Loss: 1.4146 | Test Loss: 1.1851, Test Acc: 0.5675
+2025-09-25 13:17:37.008 | INFO     | [Worker-23 / CPU] Epoch 3/5 | Train Acc: 0.5451, Train Loss: 1.2520 | Test Loss: 1.1426, Test Acc: 0.6010
+2025-09-25 13:17:37.008 | INFO     | [Worker-23 / CPU] Epoch 4/5 | Train Acc: 0.5877, Train Loss: 1.1467 | Test Loss: 0.9568, Test Acc: 0.6663
+2025-09-25 13:17:37.008 | INFO     | [Worker-23 / CPU] Epoch 5/5 | Train Acc: 0.6106, Train Loss: 1.0861 | Test Loss: 0.9058, Test Acc: 0.6812
+2025-09-25 13:17:37.008 | INFO     | [Worker-23 / CPU] Individual 29 -> Accuracy: 0.6812, Loss: 0.9058 | Duration: 20963.12s
+2025-09-25 13:22:08.832 | INFO     | [Worker-15 / CPU] Evaluating Individual 7/40 (5 epochs)
+2025-09-25 13:22:08.833 | INFO     | [Worker-15 / CPU] Hyperparameters: {'width_scale': 0.8789233086785145, 'fc1_units': 512, 'dropout_rate': 0.4571008640007791, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.05434209462259232, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002081914888344944, 'batch_size': 128}
+2025-09-25 13:22:08.833 | INFO     | [Worker-15 / CPU] Epoch 1/5 | Train Acc: 0.3903, Train Loss: 1.6521 | Test Loss: 1.3770, Test Acc: 0.4954
+2025-09-25 13:22:08.834 | INFO     | [Worker-15 / CPU] Epoch 2/5 | Train Acc: 0.4550, Train Loss: 1.4880 | Test Loss: 1.2658, Test Acc: 0.5333
+2025-09-25 13:22:08.834 | INFO     | [Worker-15 / CPU] Epoch 3/5 | Train Acc: 0.4877, Train Loss: 1.4232 | Test Loss: 1.1467, Test Acc: 0.5862
+2025-09-25 13:22:08.834 | INFO     | [Worker-15 / CPU] Epoch 4/5 | Train Acc: 0.5486, Train Loss: 1.2784 | Test Loss: 1.2131, Test Acc: 0.6029
+2025-09-25 13:22:08.834 | INFO     | [Worker-15 / CPU] Epoch 5/5 | Train Acc: 0.6259, Train Loss: 1.0628 | Test Loss: 1.0196, Test Acc: 0.6439
+2025-09-25 13:22:08.835 | INFO     | [Worker-15 / CPU] Individual 7 -> Accuracy: 0.6439, Loss: 1.0196 | Duration: 21235.38s
+2025-09-25 13:33:26.417 | INFO     | [Worker-39 / CPU] Evaluating Individual 10/40 (5 epochs)
+2025-09-25 13:33:26.418 | INFO     | [Worker-39 / CPU] Hyperparameters: {'width_scale': 0.8322207039102796, 'fc1_units': 256, 'dropout_rate': 0.21831651355307616, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.013317807484649249, 'aug_intensity': 'LIGHT', 'weight_decay': 0.0002447247322110561, 'batch_size': 128}
+2025-09-25 13:33:26.418 | INFO     | [Worker-39 / CPU] Epoch 1/5 | Train Acc: 0.3792, Train Loss: 1.7294 | Test Loss: 1.4367, Test Acc: 0.4842
+2025-09-25 13:33:26.419 | INFO     | [Worker-39 / CPU] Epoch 2/5 | Train Acc: 0.5432, Train Loss: 1.2706 | Test Loss: 1.2457, Test Acc: 0.5510
+2025-09-25 13:33:26.419 | INFO     | [Worker-39 / CPU] Epoch 3/5 | Train Acc: 0.6155, Train Loss: 1.0754 | Test Loss: 1.0531, Test Acc: 0.6311
+2025-09-25 13:33:26.419 | INFO     | [Worker-39 / CPU] Epoch 4/5 | Train Acc: 0.6602, Train Loss: 0.9592 | Test Loss: 0.9860, Test Acc: 0.6598
+2025-09-25 13:33:26.419 | INFO     | [Worker-39 / CPU] Epoch 5/5 | Train Acc: 0.7281, Train Loss: 0.7740 | Test Loss: 0.7869, Test Acc: 0.7251
+2025-09-25 13:33:26.420 | INFO     | [Worker-39 / CPU] Individual 10 -> Accuracy: 0.7251, Loss: 0.7869 | Duration: 21912.71s
+2025-09-25 13:48:16.551 | INFO     | [Worker-35 / CPU] Evaluating Individual 8/40 (5 epochs)
+2025-09-25 13:48:16.566 | INFO     | [Worker-35 / CPU] Hyperparameters: {'width_scale': 1.0312711267089079, 'fc1_units': 512, 'dropout_rate': 0.43623062143347824, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.016317746453379287, 'aug_intensity': 'STRONG', 'weight_decay': 0.00037270639551490234, 'batch_size': 128}
+2025-09-25 13:48:16.567 | INFO     | [Worker-35 / CPU] Epoch 1/5 | Train Acc: 0.2978, Train Loss: 1.9152 | Test Loss: 1.5841, Test Acc: 0.4428
+2025-09-25 13:48:16.567 | INFO     | [Worker-35 / CPU] Epoch 2/5 | Train Acc: 0.4113, Train Loss: 1.6146 | Test Loss: 1.4110, Test Acc: 0.4845
+2025-09-25 13:48:16.567 | INFO     | [Worker-35 / CPU] Epoch 3/5 | Train Acc: 0.4626, Train Loss: 1.4803 | Test Loss: 1.3193, Test Acc: 0.5303
+2025-09-25 13:48:16.568 | INFO     | [Worker-35 / CPU] Epoch 4/5 | Train Acc: 0.5013, Train Loss: 1.3748 | Test Loss: 1.1774, Test Acc: 0.5942
+2025-09-25 13:48:16.568 | INFO     | [Worker-35 / CPU] Epoch 5/5 | Train Acc: 0.5377, Train Loss: 1.2830 | Test Loss: 1.0885, Test Acc: 0.6110
+2025-09-25 13:48:16.568 | INFO     | [Worker-35 / CPU] Individual 8 -> Accuracy: 0.6110, Loss: 1.0885 | Duration: 22803.16s
+2025-09-25 14:25:35.679 | INFO     | [Worker-16 / CPU] Evaluating Individual 22/40 (5 epochs)
+2025-09-25 14:25:35.680 | INFO     | [Worker-16 / CPU] Hyperparameters: {'width_scale': 1.9466254398325442, 'fc1_units': 256, 'dropout_rate': 0.28487158662055606, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.015054468048473957, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00012630731265788104, 'batch_size': 128}
+2025-09-25 14:25:35.681 | INFO     | [Worker-16 / CPU] Epoch 1/5 | Train Acc: 0.3476, Train Loss: 1.7987 | Test Loss: 1.4890, Test Acc: 0.4598
+2025-09-25 14:25:35.681 | INFO     | [Worker-16 / CPU] Epoch 2/5 | Train Acc: 0.4704, Train Loss: 1.4538 | Test Loss: 1.2928, Test Acc: 0.5335
+2025-09-25 14:25:35.681 | INFO     | [Worker-16 / CPU] Epoch 3/5 | Train Acc: 0.5222, Train Loss: 1.3222 | Test Loss: 1.1670, Test Acc: 0.5816
+2025-09-25 14:25:35.681 | INFO     | [Worker-16 / CPU] Epoch 4/5 | Train Acc: 0.5613, Train Loss: 1.2165 | Test Loss: 1.0826, Test Acc: 0.6161
+2025-09-25 14:25:35.682 | INFO     | [Worker-16 / CPU] Epoch 5/5 | Train Acc: 0.5915, Train Loss: 1.1362 | Test Loss: 1.0092, Test Acc: 0.6401
+2025-09-25 14:25:35.682 | INFO     | [Worker-16 / CPU] Individual 22 -> Accuracy: 0.6401, Loss: 1.0092 | Duration: 25041.94s
+2025-09-25 14:32:23.361 | INFO     | [Worker-36 / CPU] Evaluating Individual 13/40 (5 epochs)
+2025-09-25 14:32:23.362 | INFO     | [Worker-36 / CPU] Hyperparameters: {'width_scale': 1.1038892562170992, 'fc1_units': 512, 'dropout_rate': 0.3423387241210081, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.08591869288984029, 'aug_intensity': 'STRONG', 'weight_decay': 0.0002998291698903262, 'batch_size': 128}
+2025-09-25 14:32:23.362 | INFO     | [Worker-36 / CPU] Epoch 1/5 | Train Acc: 0.3878, Train Loss: 1.6633 | Test Loss: 1.3236, Test Acc: 0.5215
+2025-09-25 14:32:23.363 | INFO     | [Worker-36 / CPU] Epoch 2/5 | Train Acc: 0.4433, Train Loss: 1.5394 | Test Loss: 1.6025, Test Acc: 0.4855
+2025-09-25 14:32:23.363 | INFO     | [Worker-36 / CPU] Epoch 3/5 | Train Acc: 0.4722, Train Loss: 1.4775 | Test Loss: 1.2015, Test Acc: 0.5787
+2025-09-25 14:32:23.364 | INFO     | [Worker-36 / CPU] Epoch 4/5 | Train Acc: 0.5701, Train Loss: 1.2243 | Test Loss: 1.0606, Test Acc: 0.6265
+2025-09-25 14:32:23.368 | INFO     | [Worker-36 / CPU] Epoch 5/5 | Train Acc: 0.6553, Train Loss: 0.9778 | Test Loss: 0.8257, Test Acc: 0.7076
+2025-09-25 14:32:23.368 | INFO     | [Worker-36 / CPU] Individual 13 -> Accuracy: 0.7076, Loss: 0.8257 | Duration: 25449.66s
+2025-09-25 14:41:34.427 | INFO     | [Worker-27 / CPU] Evaluating Individual 39/40 (5 epochs)
+2025-09-25 14:41:34.428 | INFO     | [Worker-27 / CPU] Hyperparameters: {'width_scale': 1.9532896774769766, 'fc1_units': 512, 'dropout_rate': 0.4651350384082379, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.01297726897179198, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0003263882237455055, 'batch_size': 128}
+2025-09-25 14:41:34.428 | INFO     | [Worker-27 / CPU] Epoch 1/5 | Train Acc: 0.3517, Train Loss: 1.7761 | Test Loss: 1.4379, Test Acc: 0.4833
+2025-09-25 14:41:34.429 | INFO     | [Worker-27 / CPU] Epoch 2/5 | Train Acc: 0.4714, Train Loss: 1.4459 | Test Loss: 1.2638, Test Acc: 0.5427
+2025-09-25 14:41:34.429 | INFO     | [Worker-27 / CPU] Epoch 3/5 | Train Acc: 0.5276, Train Loss: 1.3058 | Test Loss: 1.0956, Test Acc: 0.5985
+2025-09-25 14:41:34.429 | INFO     | [Worker-27 / CPU] Epoch 4/5 | Train Acc: 0.5606, Train Loss: 1.2211 | Test Loss: 1.1559, Test Acc: 0.5877
+2025-09-25 14:41:34.430 | INFO     | [Worker-27 / CPU] Epoch 5/5 | Train Acc: 0.6337, Train Loss: 1.0200 | Test Loss: 0.8935, Test Acc: 0.6892
+2025-09-25 14:41:34.440 | INFO     | [Worker-27 / CPU] Individual 39 -> Accuracy: 0.6892, Loss: 0.8935 | Duration: 26000.20s
+2025-09-25 15:31:46.359 | INFO     | [Worker-13 / CPU] Evaluating Individual 24/40 (5 epochs)
+2025-09-25 15:31:46.360 | INFO     | [Worker-13 / CPU] Hyperparameters: {'width_scale': 1.183670877495559, 'fc1_units': 512, 'dropout_rate': 0.2573155607728752, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03544685301011429, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00034733376418850486, 'batch_size': 128}
+2025-09-25 15:31:46.360 | INFO     | [Worker-13 / CPU] Epoch 1/5 | Train Acc: 0.3912, Train Loss: 1.6594 | Test Loss: 1.3458, Test Acc: 0.5141
+2025-09-25 15:31:46.360 | INFO     | [Worker-13 / CPU] Epoch 2/5 | Train Acc: 0.4990, Train Loss: 1.3789 | Test Loss: 1.1703, Test Acc: 0.5723
+2025-09-25 15:31:46.360 | INFO     | [Worker-13 / CPU] Epoch 3/5 | Train Acc: 0.5488, Train Loss: 1.2544 | Test Loss: 1.1187, Test Acc: 0.5923
+2025-09-25 15:31:46.361 | INFO     | [Worker-13 / CPU] Epoch 4/5 | Train Acc: 0.5744, Train Loss: 1.2034 | Test Loss: 1.1784, Test Acc: 0.5978
+2025-09-25 15:31:46.361 | INFO     | [Worker-13 / CPU] Epoch 5/5 | Train Acc: 0.6560, Train Loss: 0.9716 | Test Loss: 0.8266, Test Acc: 0.7131
+2025-09-25 15:31:46.378 | INFO     | [Worker-13 / CPU] Individual 24 -> Accuracy: 0.7131, Loss: 0.8266 | Duration: 29012.46s
+2025-09-25 15:32:50.476 | INFO     | [Worker-24 / CPU] Evaluating Individual 17/40 (5 epochs)
+2025-09-25 15:32:50.489 | INFO     | [Worker-24 / CPU] Hyperparameters: {'width_scale': 1.2598719317971492, 'fc1_units': 1024, 'dropout_rate': 0.22604756168003048, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.07981709240278595, 'aug_intensity': 'LIGHT', 'weight_decay': 0.0002303514161578305, 'batch_size': 128}
+2025-09-25 15:32:50.489 | INFO     | [Worker-24 / CPU] Epoch 1/5 | Train Acc: 0.4957, Train Loss: 1.3879 | Test Loss: 1.1232, Test Acc: 0.5978
+2025-09-25 15:32:50.489 | INFO     | [Worker-24 / CPU] Epoch 2/5 | Train Acc: 0.5670, Train Loss: 1.2154 | Test Loss: 1.2375, Test Acc: 0.5815
+2025-09-25 15:32:50.490 | INFO     | [Worker-24 / CPU] Epoch 3/5 | Train Acc: 0.6173, Train Loss: 1.0929 | Test Loss: 1.0231, Test Acc: 0.6455
+2025-09-25 15:32:50.490 | INFO     | [Worker-24 / CPU] Epoch 4/5 | Train Acc: 0.6809, Train Loss: 0.9153 | Test Loss: 0.8275, Test Acc: 0.7165
+2025-09-25 15:32:50.490 | INFO     | [Worker-24 / CPU] Epoch 5/5 | Train Acc: 0.7447, Train Loss: 0.7334 | Test Loss: 0.7403, Test Acc: 0.7435
+2025-09-25 15:32:50.490 | INFO     | [Worker-24 / CPU] Individual 17 -> Accuracy: 0.7435, Loss: 0.7403 | Duration: 29076.85s
+2025-09-25 15:47:57.059 | INFO     | [Worker-3 / CPU] Evaluating Individual 38/40 (5 epochs)
+2025-09-25 15:47:57.090 | INFO     | [Worker-3 / CPU] Hyperparameters: {'width_scale': 0.7858522895888669, 'fc1_units': 256, 'dropout_rate': 0.23208101139012605, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.07377780112880625, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002989079417218885, 'batch_size': 128}
+2025-09-25 15:47:57.090 | INFO     | [Worker-3 / CPU] Epoch 1/5 | Train Acc: 0.3961, Train Loss: 1.6320 | Test Loss: 1.3040, Test Acc: 0.5261
+2025-09-25 15:47:57.090 | INFO     | [Worker-3 / CPU] Epoch 2/5 | Train Acc: 0.4816, Train Loss: 1.4262 | Test Loss: 1.2420, Test Acc: 0.5595
+2025-09-25 15:47:57.091 | INFO     | [Worker-3 / CPU] Epoch 3/5 | Train Acc: 0.5273, Train Loss: 1.3203 | Test Loss: 1.1943, Test Acc: 0.5763
+2025-09-25 15:47:57.091 | INFO     | [Worker-3 / CPU] Epoch 4/5 | Train Acc: 0.5950, Train Loss: 1.1430 | Test Loss: 1.0205, Test Acc: 0.6418
+2025-09-25 15:47:57.093 | INFO     | [Worker-3 / CPU] Epoch 5/5 | Train Acc: 0.6400, Train Loss: 1.0167 | Test Loss: 0.9253, Test Acc: 0.6791
+2025-09-25 15:47:57.093 | INFO     | [Worker-3 / CPU] Individual 38 -> Accuracy: 0.6791, Loss: 0.9253 | Duration: 29982.97s
+2025-09-25 15:51:35.926 | INFO     | [Worker-29 / CPU] Evaluating Individual 14/40 (5 epochs)
+2025-09-25 15:51:35.927 | INFO     | [Worker-29 / CPU] Hyperparameters: {'width_scale': 1.470475243374226, 'fc1_units': 256, 'dropout_rate': 0.3485793892758595, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03928486546968427, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00019879619367084225, 'batch_size': 64}
+2025-09-25 15:51:35.927 | INFO     | [Worker-29 / CPU] Epoch 1/5 | Train Acc: 0.4004, Train Loss: 1.6170 | Test Loss: 1.3265, Test Acc: 0.5030
+2025-09-25 15:51:35.927 | INFO     | [Worker-29 / CPU] Epoch 2/5 | Train Acc: 0.4214, Train Loss: 1.5793 | Test Loss: 1.3142, Test Acc: 0.5417
+2025-09-25 15:51:35.928 | INFO     | [Worker-29 / CPU] Epoch 3/5 | Train Acc: 0.4269, Train Loss: 1.5937 | Test Loss: 1.2109, Test Acc: 0.5638
+2025-09-25 15:51:35.928 | INFO     | [Worker-29 / CPU] Epoch 4/5 | Train Acc: 0.5297, Train Loss: 1.3204 | Test Loss: 1.0265, Test Acc: 0.6387
+2025-09-25 15:51:35.928 | INFO     | [Worker-29 / CPU] Epoch 5/5 | Train Acc: 0.6429, Train Loss: 1.0132 | Test Loss: 0.8434, Test Acc: 0.7019
+2025-09-25 15:51:35.928 | INFO     | [Worker-29 / CPU] Individual 14 -> Accuracy: 0.7019, Loss: 0.8434 | Duration: 30202.34s
+2025-09-25 15:56:49.068 | INFO     | [Worker-18 / CPU] Evaluating Individual 27/40 (5 epochs)
+2025-09-25 15:56:49.071 | INFO     | [Worker-18 / CPU] Hyperparameters: {'width_scale': 1.1193759839300625, 'fc1_units': 256, 'dropout_rate': 0.36765067761711984, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.010613537760689669, 'aug_intensity': 'LIGHT', 'weight_decay': 0.0001172189045648217, 'batch_size': 128}
+2025-09-25 15:56:49.072 | INFO     | [Worker-18 / CPU] Epoch 1/5 | Train Acc: 0.3747, Train Loss: 1.7350 | Test Loss: 1.4067, Test Acc: 0.5042
+2025-09-25 15:56:49.072 | INFO     | [Worker-18 / CPU] Epoch 2/5 | Train Acc: 0.5417, Train Loss: 1.2647 | Test Loss: 1.2348, Test Acc: 0.5717
+2025-09-25 15:56:49.072 | INFO     | [Worker-18 / CPU] Epoch 3/5 | Train Acc: 0.6172, Train Loss: 1.0791 | Test Loss: 1.0012, Test Acc: 0.6504
+2025-09-25 15:56:49.072 | INFO     | [Worker-18 / CPU] Epoch 4/5 | Train Acc: 0.6506, Train Loss: 0.9858 | Test Loss: 0.9624, Test Acc: 0.6596
+2025-09-25 15:56:49.073 | INFO     | [Worker-18 / CPU] Epoch 5/5 | Train Acc: 0.7148, Train Loss: 0.8113 | Test Loss: 0.7871, Test Acc: 0.7231
+2025-09-25 15:56:49.073 | INFO     | [Worker-18 / CPU] Individual 27 -> Accuracy: 0.7231, Loss: 0.7871 | Duration: 30515.15s
+2025-09-25 15:57:58.182 | INFO     | [Worker-25 / CPU] Evaluating Individual 26/40 (5 epochs)
+2025-09-25 15:57:58.182 | INFO     | [Worker-25 / CPU] Hyperparameters: {'width_scale': 1.2347153809753728, 'fc1_units': 256, 'dropout_rate': 0.35855988031565056, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.06728506797848942, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00011763501877763089, 'batch_size': 128}
+2025-09-25 15:57:58.182 | INFO     | [Worker-25 / CPU] Epoch 1/5 | Train Acc: 0.3773, Train Loss: 1.6843 | Test Loss: 1.3610, Test Acc: 0.4987
+2025-09-25 15:57:58.183 | INFO     | [Worker-25 / CPU] Epoch 2/5 | Train Acc: 0.5087, Train Loss: 1.3403 | Test Loss: 1.1385, Test Acc: 0.5853
+2025-09-25 15:57:58.183 | INFO     | [Worker-25 / CPU] Epoch 3/5 | Train Acc: 0.5762, Train Loss: 1.1706 | Test Loss: 1.0330, Test Acc: 0.6237
+2025-09-25 15:57:58.183 | INFO     | [Worker-25 / CPU] Epoch 4/5 | Train Acc: 0.6062, Train Loss: 1.0914 | Test Loss: 0.9569, Test Acc: 0.6650
+2025-09-25 15:57:58.183 | INFO     | [Worker-25 / CPU] Epoch 5/5 | Train Acc: 0.6386, Train Loss: 1.0112 | Test Loss: 0.8790, Test Acc: 0.6892
+2025-09-25 15:57:58.184 | INFO     | [Worker-25 / CPU] Individual 26 -> Accuracy: 0.6892, Loss: 0.8790 | Duration: 30584.36s
+2025-09-25 16:13:54.944 | INFO     | [Worker-31 / CPU] Evaluating Individual 0/40 (5 epochs)
+2025-09-25 16:13:54.945 | INFO     | [Worker-31 / CPU] Hyperparameters: {'width_scale': 1.4647326906219198, 'fc1_units': 256, 'dropout_rate': 0.47489946306388287, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.0407513016661662, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00046245869158333645, 'batch_size': 64}
+2025-09-25 16:13:54.946 | INFO     | [Worker-31 / CPU] Epoch 1/5 | Train Acc: 0.3856, Train Loss: 1.6563 | Test Loss: 1.3837, Test Acc: 0.5013
+2025-09-25 16:13:54.946 | INFO     | [Worker-31 / CPU] Epoch 2/5 | Train Acc: 0.3898, Train Loss: 1.6750 | Test Loss: 1.3948, Test Acc: 0.4928
+2025-09-25 16:13:54.946 | INFO     | [Worker-31 / CPU] Epoch 3/5 | Train Acc: 0.3722, Train Loss: 1.7220 | Test Loss: 1.4524, Test Acc: 0.4909
+2025-09-25 16:13:54.946 | INFO     | [Worker-31 / CPU] Epoch 4/5 | Train Acc: 0.4898, Train Loss: 1.4156 | Test Loss: 1.2811, Test Acc: 0.5522
+2025-09-25 16:13:55.065 | INFO     | [Worker-31 / CPU] Epoch 5/5 | Train Acc: 0.6125, Train Loss: 1.0913 | Test Loss: 0.9172, Test Acc: 0.6793
+2025-09-25 16:13:55.065 | INFO     | [Worker-31 / CPU] Individual 0 -> Accuracy: 0.6793, Loss: 0.9172 | Duration: 31543.00s
+2025-09-25 16:14:23.323 | INFO     | [Worker-21 / CPU] Evaluating Individual 30/40 (5 epochs)
+2025-09-25 16:14:23.324 | INFO     | [Worker-21 / CPU] Hyperparameters: {'width_scale': 1.0795896496112634, 'fc1_units': 1024, 'dropout_rate': 0.3593214063287707, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.011296504671054855, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00035952782857394383, 'batch_size': 128}
+2025-09-25 16:14:23.324 | INFO     | [Worker-21 / CPU] Epoch 1/5 | Train Acc: 0.3249, Train Loss: 1.8446 | Test Loss: 1.5351, Test Acc: 0.4508
+2025-09-25 16:14:23.325 | INFO     | [Worker-21 / CPU] Epoch 2/5 | Train Acc: 0.4607, Train Loss: 1.4646 | Test Loss: 1.2751, Test Acc: 0.5390
+2025-09-25 16:14:23.325 | INFO     | [Worker-21 / CPU] Epoch 3/5 | Train Acc: 0.5431, Train Loss: 1.2596 | Test Loss: 1.1328, Test Acc: 0.5900
+2025-09-25 16:14:23.325 | INFO     | [Worker-21 / CPU] Epoch 4/5 | Train Acc: 0.5834, Train Loss: 1.1481 | Test Loss: 1.1141, Test Acc: 0.6092
+2025-09-25 16:14:23.325 | INFO     | [Worker-21 / CPU] Epoch 5/5 | Train Acc: 0.6356, Train Loss: 1.0180 | Test Loss: 0.9159, Test Acc: 0.6822
+2025-09-25 16:14:23.325 | INFO     | [Worker-21 / CPU] Individual 30 -> Accuracy: 0.6822, Loss: 0.9159 | Duration: 31569.44s
+2025-09-25 16:27:20.989 | INFO     | [Worker-17 / CPU] Evaluating Individual 32/40 (5 epochs)
+2025-09-25 16:27:21.017 | INFO     | [Worker-17 / CPU] Hyperparameters: {'width_scale': 1.8452465824212172, 'fc1_units': 1024, 'dropout_rate': 0.4373769899483897, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.014692430743448275, 'aug_intensity': 'LIGHT', 'weight_decay': 0.0001485815539127532, 'batch_size': 128}
+2025-09-25 16:27:21.017 | INFO     | [Worker-17 / CPU] Epoch 1/5 | Train Acc: 0.4014, Train Loss: 1.6649 | Test Loss: 1.3356, Test Acc: 0.5223
+2025-09-25 16:27:21.018 | INFO     | [Worker-17 / CPU] Epoch 2/5 | Train Acc: 0.5582, Train Loss: 1.2491 | Test Loss: 1.1317, Test Acc: 0.6045
+2025-09-25 16:27:21.018 | INFO     | [Worker-17 / CPU] Epoch 3/5 | Train Acc: 0.6114, Train Loss: 1.0914 | Test Loss: 1.0548, Test Acc: 0.6321
+2025-09-25 16:27:21.018 | INFO     | [Worker-17 / CPU] Epoch 4/5 | Train Acc: 0.6546, Train Loss: 0.9826 | Test Loss: 0.9436, Test Acc: 0.6684
+2025-09-25 16:27:21.018 | INFO     | [Worker-17 / CPU] Epoch 5/5 | Train Acc: 0.6802, Train Loss: 0.9086 | Test Loss: 0.9586, Test Acc: 0.6680
+2025-09-25 16:27:21.019 | INFO     | [Worker-17 / CPU] Individual 32 -> Accuracy: 0.6680, Loss: 0.9586 | Duration: 32347.02s
+2025-09-25 16:27:30.902 | INFO     | [Worker-14 / CPU] Evaluating Individual 16/40 (5 epochs)
+2025-09-25 16:27:30.903 | INFO     | [Worker-14 / CPU] Hyperparameters: {'width_scale': 1.9377900481048607, 'fc1_units': 512, 'dropout_rate': 0.25163473254878355, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.07114605411078441, 'aug_intensity': 'STRONG', 'weight_decay': 0.00031763197612125037, 'batch_size': 128}
+2025-09-25 16:27:30.903 | INFO     | [Worker-14 / CPU] Epoch 1/5 | Train Acc: 0.4039, Train Loss: 1.6315 | Test Loss: 1.2860, Test Acc: 0.5319
+2025-09-25 16:27:30.903 | INFO     | [Worker-14 / CPU] Epoch 2/5 | Train Acc: 0.4454, Train Loss: 1.5317 | Test Loss: 1.2091, Test Acc: 0.5628
+2025-09-25 16:27:30.903 | INFO     | [Worker-14 / CPU] Epoch 3/5 | Train Acc: 0.4292, Train Loss: 1.5914 | Test Loss: 1.5026, Test Acc: 0.4756
+2025-09-25 16:27:30.903 | INFO     | [Worker-14 / CPU] Epoch 4/5 | Train Acc: 0.4894, Train Loss: 1.4396 | Test Loss: 1.0484, Test Acc: 0.6330
+2025-09-25 16:27:30.904 | INFO     | [Worker-14 / CPU] Epoch 5/5 | Train Acc: 0.6126, Train Loss: 1.0970 | Test Loss: 0.8734, Test Acc: 0.6939
+2025-09-25 16:27:30.904 | INFO     | [Worker-14 / CPU] Individual 16 -> Accuracy: 0.6939, Loss: 0.8734 | Duration: 32357.30s
+2025-09-25 16:54:09.368 | INFO     | [Worker-33 / CPU] Evaluating Individual 3/40 (5 epochs)
+2025-09-25 16:54:09.369 | INFO     | [Worker-33 / CPU] Hyperparameters: {'width_scale': 1.2743994300669712, 'fc1_units': 512, 'dropout_rate': 0.2615215645191139, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.011457990867431975, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00029574717020265596, 'batch_size': 64}
+2025-09-25 16:54:09.370 | INFO     | [Worker-33 / CPU] Epoch 1/5 | Train Acc: 0.3599, Train Loss: 1.7456 | Test Loss: 1.4254, Test Acc: 0.4814
+2025-09-25 16:54:09.370 | INFO     | [Worker-33 / CPU] Epoch 2/5 | Train Acc: 0.4928, Train Loss: 1.3947 | Test Loss: 1.1908, Test Acc: 0.5742
+2025-09-25 16:54:09.370 | INFO     | [Worker-33 / CPU] Epoch 3/5 | Train Acc: 0.5474, Train Loss: 1.2529 | Test Loss: 1.0933, Test Acc: 0.6137
+2025-09-25 16:54:09.370 | INFO     | [Worker-33 / CPU] Epoch 4/5 | Train Acc: 0.5885, Train Loss: 1.1522 | Test Loss: 1.0445, Test Acc: 0.6321
+2025-09-25 16:54:09.371 | INFO     | [Worker-33 / CPU] Epoch 5/5 | Train Acc: 0.6134, Train Loss: 1.0775 | Test Loss: 0.9450, Test Acc: 0.6736
+2025-09-25 16:54:09.371 | INFO     | [Worker-33 / CPU] Individual 3 -> Accuracy: 0.6736, Loss: 0.9450 | Duration: 33956.32s
+2025-09-25 16:58:49.102 | INFO     | [Worker-26 / CPU] Evaluating Individual 23/40 (5 epochs)
+2025-09-25 16:58:49.103 | INFO     | [Worker-26 / CPU] Hyperparameters: {'width_scale': 1.4435114002553888, 'fc1_units': 512, 'dropout_rate': 0.3083622824990361, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.016555986976138835, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00018450474365063748, 'batch_size': 64}
+2025-09-25 16:58:49.103 | INFO     | [Worker-26 / CPU] Epoch 1/5 | Train Acc: 0.4054, Train Loss: 1.6205 | Test Loss: 1.2467, Test Acc: 0.5518
+2025-09-25 16:58:49.103 | INFO     | [Worker-26 / CPU] Epoch 2/5 | Train Acc: 0.4998, Train Loss: 1.3774 | Test Loss: 1.1266, Test Acc: 0.6005
+2025-09-25 16:58:49.104 | INFO     | [Worker-26 / CPU] Epoch 3/5 | Train Acc: 0.5440, Train Loss: 1.2722 | Test Loss: 1.1024, Test Acc: 0.6019
+2025-09-25 16:58:49.104 | INFO     | [Worker-26 / CPU] Epoch 4/5 | Train Acc: 0.5673, Train Loss: 1.2195 | Test Loss: 1.0848, Test Acc: 0.6265
+2025-09-25 16:58:49.104 | INFO     | [Worker-26 / CPU] Epoch 5/5 | Train Acc: 0.6262, Train Loss: 1.0615 | Test Loss: 0.9550, Test Acc: 0.6694
+2025-09-25 16:58:49.104 | INFO     | [Worker-26 / CPU] Individual 23 -> Accuracy: 0.6694, Loss: 0.9550 | Duration: 34235.31s
+2025-09-25 17:06:07.620 | INFO     | [Worker-12 / CPU] Evaluating Individual 28/40 (5 epochs)
+2025-09-25 17:06:07.633 | INFO     | [Worker-12 / CPU] Hyperparameters: {'width_scale': 0.8061547399135244, 'fc1_units': 1024, 'dropout_rate': 0.3225482158971356, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.029780592930934584, 'aug_intensity': 'STRONG', 'weight_decay': 0.000172114975789409, 'batch_size': 64}
+2025-09-25 17:06:07.633 | INFO     | [Worker-12 / CPU] Epoch 1/5 | Train Acc: 0.3659, Train Loss: 1.7300 | Test Loss: 1.3542, Test Acc: 0.5155
+2025-09-25 17:06:07.634 | INFO     | [Worker-12 / CPU] Epoch 2/5 | Train Acc: 0.4920, Train Loss: 1.4002 | Test Loss: 1.2002, Test Acc: 0.5717
+2025-09-25 17:06:07.634 | INFO     | [Worker-12 / CPU] Epoch 3/5 | Train Acc: 0.5523, Train Loss: 1.2389 | Test Loss: 1.0675, Test Acc: 0.6219
+2025-09-25 17:06:07.634 | INFO     | [Worker-12 / CPU] Epoch 4/5 | Train Acc: 0.5922, Train Loss: 1.1390 | Test Loss: 0.9912, Test Acc: 0.6464
+2025-09-25 17:06:07.634 | INFO     | [Worker-12 / CPU] Epoch 5/5 | Train Acc: 0.6157, Train Loss: 1.0713 | Test Loss: 0.9576, Test Acc: 0.6628
+2025-09-25 17:06:07.635 | INFO     | [Worker-12 / CPU] Individual 28 -> Accuracy: 0.6628, Loss: 0.9576 | Duration: 34673.67s
+2025-09-25 17:32:53.043 | INFO     | [Worker-8 / CPU] Evaluating Individual 25/40 (5 epochs)
+2025-09-25 17:32:53.054 | INFO     | [Worker-8 / CPU] Hyperparameters: {'width_scale': 1.2472212126821554, 'fc1_units': 512, 'dropout_rate': 0.27691351648559515, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.05462460528477044, 'aug_intensity': 'STRONG', 'weight_decay': 0.00018015550811115, 'batch_size': 64}
+2025-09-25 17:32:53.054 | INFO     | [Worker-8 / CPU] Epoch 1/5 | Train Acc: 0.3998, Train Loss: 1.6390 | Test Loss: 1.3027, Test Acc: 0.5316
+2025-09-25 17:32:53.055 | INFO     | [Worker-8 / CPU] Epoch 2/5 | Train Acc: 0.5291, Train Loss: 1.3031 | Test Loss: 1.0774, Test Acc: 0.6127
+2025-09-25 17:32:53.055 | INFO     | [Worker-8 / CPU] Epoch 3/5 | Train Acc: 0.5919, Train Loss: 1.1432 | Test Loss: 0.9543, Test Acc: 0.6585
+2025-09-25 17:32:53.055 | INFO     | [Worker-8 / CPU] Epoch 4/5 | Train Acc: 0.6243, Train Loss: 1.0555 | Test Loss: 0.8997, Test Acc: 0.6818
+2025-09-25 17:32:53.056 | INFO     | [Worker-8 / CPU] Epoch 5/5 | Train Acc: 0.6467, Train Loss: 0.9894 | Test Loss: 0.9031, Test Acc: 0.6826
+2025-09-25 17:32:53.056 | INFO     | [Worker-8 / CPU] Individual 25 -> Accuracy: 0.6826, Loss: 0.9031 | Duration: 36279.26s
+2025-09-25 17:43:51.258 | INFO     | [Worker-30 / CPU] Evaluating Individual 34/40 (5 epochs)
+2025-09-25 17:43:51.261 | INFO     | [Worker-30 / CPU] Hyperparameters: {'width_scale': 1.1392470005511497, 'fc1_units': 256, 'dropout_rate': 0.3194094500795558, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.020582357105455477, 'aug_intensity': 'STRONG', 'weight_decay': 0.00017191128224556366, 'batch_size': 64}
+2025-09-25 17:43:51.261 | INFO     | [Worker-30 / CPU] Epoch 1/5 | Train Acc: 0.3488, Train Loss: 1.7675 | Test Loss: 1.4575, Test Acc: 0.4867
+2025-09-25 17:43:51.261 | INFO     | [Worker-30 / CPU] Epoch 2/5 | Train Acc: 0.4827, Train Loss: 1.4210 | Test Loss: 1.1870, Test Acc: 0.5788
+2025-09-25 17:43:51.261 | INFO     | [Worker-30 / CPU] Epoch 3/5 | Train Acc: 0.5450, Train Loss: 1.2567 | Test Loss: 1.1039, Test Acc: 0.6039
+2025-09-25 17:43:51.262 | INFO     | [Worker-30 / CPU] Epoch 4/5 | Train Acc: 0.5795, Train Loss: 1.1788 | Test Loss: 1.0077, Test Acc: 0.6470
+2025-09-25 17:43:51.262 | INFO     | [Worker-30 / CPU] Epoch 5/5 | Train Acc: 0.6073, Train Loss: 1.1043 | Test Loss: 0.9147, Test Acc: 0.6804
+2025-09-25 17:43:51.262 | INFO     | [Worker-30 / CPU] Individual 34 -> Accuracy: 0.6804, Loss: 0.9147 | Duration: 36937.34s
+2025-09-25 17:56:04.034 | INFO     | [Worker-34 / CPU] Evaluating Individual 5/40 (5 epochs)
+2025-09-25 17:56:04.035 | INFO     | [Worker-34 / CPU] Hyperparameters: {'width_scale': 1.375693002295646, 'fc1_units': 512, 'dropout_rate': 0.4812772930641356, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.037151407997753606, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00022165718172534215, 'batch_size': 64}
+2025-09-25 17:56:04.035 | INFO     | [Worker-34 / CPU] Epoch 1/5 | Train Acc: 0.4817, Train Loss: 1.4256 | Test Loss: 1.1192, Test Acc: 0.6027
+2025-09-25 17:56:04.036 | INFO     | [Worker-34 / CPU] Epoch 2/5 | Train Acc: 0.5138, Train Loss: 1.3754 | Test Loss: 1.1747, Test Acc: 0.5778
+2025-09-25 17:56:04.036 | INFO     | [Worker-34 / CPU] Epoch 3/5 | Train Acc: 0.5281, Train Loss: 1.3719 | Test Loss: 1.0473, Test Acc: 0.6438
+2025-09-25 17:56:04.036 | INFO     | [Worker-34 / CPU] Epoch 4/5 | Train Acc: 0.6196, Train Loss: 1.1087 | Test Loss: 0.9506, Test Acc: 0.6738
+2025-09-25 17:56:04.037 | INFO     | [Worker-34 / CPU] Epoch 5/5 | Train Acc: 0.6947, Train Loss: 0.8826 | Test Loss: 0.8387, Test Acc: 0.7170
+2025-09-25 17:56:04.037 | INFO     | [Worker-34 / CPU] Individual 5 -> Accuracy: 0.7170, Loss: 0.8387 | Duration: 37670.39s
+2025-09-25 17:56:10.351 | INFO     | [Worker-11 / CPU] Evaluating Individual 36/40 (5 epochs)
+2025-09-25 17:56:10.352 | INFO     | [Worker-11 / CPU] Hyperparameters: {'width_scale': 1.2852080755171706, 'fc1_units': 256, 'dropout_rate': 0.280315705293438, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.03133554856200794, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00017098537235308287, 'batch_size': 64}
+2025-09-25 17:56:10.352 | INFO     | [Worker-11 / CPU] Epoch 1/5 | Train Acc: 0.3979, Train Loss: 1.6367 | Test Loss: 1.3273, Test Acc: 0.5208
+2025-09-25 17:56:10.352 | INFO     | [Worker-11 / CPU] Epoch 2/5 | Train Acc: 0.5248, Train Loss: 1.3080 | Test Loss: 1.1623, Test Acc: 0.5846
+2025-09-25 17:56:10.352 | INFO     | [Worker-11 / CPU] Epoch 3/5 | Train Acc: 0.5852, Train Loss: 1.1573 | Test Loss: 1.0045, Test Acc: 0.6426
+2025-09-25 17:56:10.353 | INFO     | [Worker-11 / CPU] Epoch 4/5 | Train Acc: 0.6173, Train Loss: 1.0648 | Test Loss: 0.8982, Test Acc: 0.6840
+2025-09-25 17:56:10.353 | INFO     | [Worker-11 / CPU] Epoch 5/5 | Train Acc: 0.6446, Train Loss: 0.9959 | Test Loss: 0.8968, Test Acc: 0.6820
+2025-09-25 17:56:10.353 | INFO     | [Worker-11 / CPU] Individual 36 -> Accuracy: 0.6820, Loss: 0.8968 | Duration: 37676.40s
+2025-09-25 17:56:26.796 | INFO     | [Worker-19 / CPU] Evaluating Individual 35/40 (5 epochs)
+2025-09-25 17:56:26.797 | INFO     | [Worker-19 / CPU] Hyperparameters: {'width_scale': 1.4801351696635974, 'fc1_units': 512, 'dropout_rate': 0.42509312176000263, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0418635755530077, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00014355955710523694, 'batch_size': 64}
+2025-09-25 17:56:26.797 | INFO     | [Worker-19 / CPU] Epoch 1/5 | Train Acc: 0.3994, Train Loss: 1.6237 | Test Loss: 1.3100, Test Acc: 0.5148
+2025-09-25 17:56:26.797 | INFO     | [Worker-19 / CPU] Epoch 2/5 | Train Acc: 0.5305, Train Loss: 1.2901 | Test Loss: 1.1175, Test Acc: 0.5981
+2025-09-25 17:56:26.798 | INFO     | [Worker-19 / CPU] Epoch 3/5 | Train Acc: 0.5768, Train Loss: 1.1627 | Test Loss: 1.0257, Test Acc: 0.6346
+2025-09-25 17:56:26.798 | INFO     | [Worker-19 / CPU] Epoch 4/5 | Train Acc: 0.6183, Train Loss: 1.0658 | Test Loss: 0.9790, Test Acc: 0.6464
+2025-09-25 17:56:26.798 | INFO     | [Worker-19 / CPU] Epoch 5/5 | Train Acc: 0.6413, Train Loss: 0.9965 | Test Loss: 0.8369, Test Acc: 0.7056
+2025-09-25 17:56:26.799 | INFO     | [Worker-19 / CPU] Individual 35 -> Accuracy: 0.7056, Loss: 0.8369 | Duration: 37692.87s
+2025-09-25 17:57:01.296 | INFO     | [Worker-4 / CPU] Evaluating Individual 15/40 (5 epochs)
+2025-09-25 17:57:01.297 | INFO     | [Worker-4 / CPU] Hyperparameters: {'width_scale': 1.6660598167869582, 'fc1_units': 1024, 'dropout_rate': 0.3049428490122012, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.010321751287459435, 'aug_intensity': 'STRONG', 'weight_decay': 0.00021669065180649117, 'batch_size': 64}
+2025-09-25 17:57:01.298 | INFO     | [Worker-4 / CPU] Epoch 1/5 | Train Acc: 0.3786, Train Loss: 1.7138 | Test Loss: 1.3508, Test Acc: 0.5166
+2025-09-25 17:57:01.298 | INFO     | [Worker-4 / CPU] Epoch 2/5 | Train Acc: 0.4774, Train Loss: 1.4289 | Test Loss: 1.2041, Test Acc: 0.5784
+2025-09-25 17:57:01.299 | INFO     | [Worker-4 / CPU] Epoch 3/5 | Train Acc: 0.5432, Train Loss: 1.2696 | Test Loss: 1.0208, Test Acc: 0.6423
+2025-09-25 17:57:01.299 | INFO     | [Worker-4 / CPU] Epoch 4/5 | Train Acc: 0.5752, Train Loss: 1.1938 | Test Loss: 1.0509, Test Acc: 0.6255
+2025-09-25 17:57:01.300 | INFO     | [Worker-4 / CPU] Epoch 5/5 | Train Acc: 0.6203, Train Loss: 1.0754 | Test Loss: 0.9786, Test Acc: 0.6538
+2025-09-25 17:57:01.300 | INFO     | [Worker-4 / CPU] Individual 15 -> Accuracy: 0.6538, Loss: 0.9786 | Duration: 37727.68s
+2025-09-25 17:57:22.672 | INFO     | [Worker-40 / CPU] Evaluating Individual 4/40 (5 epochs)
+2025-09-25 17:57:22.675 | INFO     | [Worker-40 / CPU] Hyperparameters: {'width_scale': 1.5507641390748013, 'fc1_units': 1024, 'dropout_rate': 0.30534930731343335, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03805930937204305, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00027292494667388844, 'batch_size': 64}
+2025-09-25 17:57:22.675 | INFO     | [Worker-40 / CPU] Epoch 1/5 | Train Acc: 0.4307, Train Loss: 1.5408 | Test Loss: 1.1924, Test Acc: 0.5696
+2025-09-25 17:57:22.675 | INFO     | [Worker-40 / CPU] Epoch 2/5 | Train Acc: 0.4832, Train Loss: 1.4329 | Test Loss: 1.1990, Test Acc: 0.5724
+2025-09-25 17:57:22.675 | INFO     | [Worker-40 / CPU] Epoch 3/5 | Train Acc: 0.5116, Train Loss: 1.3784 | Test Loss: 1.0737, Test Acc: 0.6222
+2025-09-25 17:57:22.675 | INFO     | [Worker-40 / CPU] Epoch 4/5 | Train Acc: 0.5868, Train Loss: 1.1735 | Test Loss: 0.9793, Test Acc: 0.6590
+2025-09-25 17:57:22.676 | INFO     | [Worker-40 / CPU] Epoch 5/5 | Train Acc: 0.6907, Train Loss: 0.8850 | Test Loss: 0.7754, Test Acc: 0.7302
+2025-09-25 17:57:22.676 | INFO     | [Worker-40 / CPU] Individual 4 -> Accuracy: 0.7302, Loss: 0.7754 | Duration: 37749.54s
+2025-09-25 17:57:43.462 | INFO     | [Worker-7 / CPU] Evaluating Individual 9/40 (5 epochs)
+2025-09-25 17:57:43.463 | INFO     | [Worker-7 / CPU] Hyperparameters: {'width_scale': 1.7281320065895485, 'fc1_units': 1024, 'dropout_rate': 0.3321961645978159, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03475145839294272, 'aug_intensity': 'STRONG', 'weight_decay': 0.0002680068004554374, 'batch_size': 64}
+2025-09-25 17:57:43.463 | INFO     | [Worker-7 / CPU] Epoch 1/5 | Train Acc: 0.4042, Train Loss: 1.6225 | Test Loss: 1.2280, Test Acc: 0.5595
+2025-09-25 17:57:43.463 | INFO     | [Worker-7 / CPU] Epoch 2/5 | Train Acc: 0.4538, Train Loss: 1.5122 | Test Loss: 1.2345, Test Acc: 0.5660
+2025-09-25 17:57:43.464 | INFO     | [Worker-7 / CPU] Epoch 3/5 | Train Acc: 0.4740, Train Loss: 1.4850 | Test Loss: 1.3386, Test Acc: 0.5303
+2025-09-25 17:57:43.464 | INFO     | [Worker-7 / CPU] Epoch 4/5 | Train Acc: 0.5376, Train Loss: 1.3106 | Test Loss: 0.9905, Test Acc: 0.6543
+2025-09-25 17:57:43.464 | INFO     | [Worker-7 / CPU] Epoch 5/5 | Train Acc: 0.6570, Train Loss: 0.9746 | Test Loss: 0.8542, Test Acc: 0.6998
+2025-09-25 17:57:43.464 | INFO     | [Worker-7 / CPU] Individual 9 -> Accuracy: 0.6998, Loss: 0.8542 | Duration: 37770.08s
+2025-09-25 17:57:43.464 | INFO     |  --- Generation (1) report:  ---
+2025-09-25 17:57:43.465 | INFO     | Wall-Clock Time: 37776.02s
+2025-09-25 17:57:43.465 | INFO     | Worker Utilization: 68.27%
+2025-09-25 17:57:43.465 | INFO     | Total Worker Busy Time: 1057431.25s
+2025-09-25 17:57:43.465 | INFO     | Total Worker Idle Time (Overhead): 491385.53s
+2025-09-25 17:57:43.465 | INFO     | Best Fitness: 0.7435 | Loss: 0.7403
+2025-09-25 17:57:45.420 | INFO     | Generation 1/ (Fold 1) checkpointed successfully.
+2025-09-25 17:57:45.422 | INFO     | --- CALIBRATION - Generation 2/10 ---
+2025-09-25 18:00:38.260 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 33/40 (5 epochs)
+2025-09-25 18:00:38.263 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.5448245539590597, 'fc1_units': 256, 'dropout_rate': 0.49416678789714263, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.05834168479285178, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00011203572406032032, 'batch_size': 128}
+2025-09-25 18:00:38.421 | INFO     | [Worker-0 / GPU-0] Epoch 1/5 | Train Acc: 0.4321, Train Loss: 1.5565 | Test Loss: 1.2585, Test Acc: 0.5501
+2025-09-25 18:00:38.422 | INFO     | [Worker-0 / GPU-0] Epoch 2/5 | Train Acc: 0.5806, Train Loss: 1.1651 | Test Loss: 1.0315, Test Acc: 0.6343
+2025-09-25 18:00:38.422 | INFO     | [Worker-0 / GPU-0] Epoch 3/5 | Train Acc: 0.6376, Train Loss: 1.0180 | Test Loss: 0.9296, Test Acc: 0.6698
+2025-09-25 18:00:38.422 | INFO     | [Worker-0 / GPU-0] Epoch 4/5 | Train Acc: 0.6721, Train Loss: 0.9200 | Test Loss: 0.8674, Test Acc: 0.6914
+2025-09-25 18:00:38.422 | INFO     | [Worker-0 / GPU-0] Epoch 5/5 | Train Acc: 0.6955, Train Loss: 0.8600 | Test Loss: 0.7910, Test Acc: 0.7211
+2025-09-25 18:00:38.423 | INFO     | [Worker-0 / GPU-0] Individual 33 -> Accuracy: 0.7211, Loss: 0.7910 | Duration: 172.67s
+2025-09-25 18:01:53.744 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 2/40 (5 epochs)
+2025-09-25 18:01:53.745 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.0311526398987938, 'fc1_units': 512, 'dropout_rate': 0.373527312430919, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.06933552791113602, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00011170489737717891, 'batch_size': 256}
+2025-09-25 18:01:53.746 | INFO     | [Worker-1 / GPU-1] Epoch 1/5 | Train Acc: 0.4232, Train Loss: 1.5783 | Test Loss: 1.3010, Test Acc: 0.5407
+2025-09-25 18:01:53.746 | INFO     | [Worker-1 / GPU-1] Epoch 2/5 | Train Acc: 0.5511, Train Loss: 1.2378 | Test Loss: 1.3015, Test Acc: 0.5555
+2025-09-25 18:01:53.746 | INFO     | [Worker-1 / GPU-1] Epoch 3/5 | Train Acc: 0.5936, Train Loss: 1.1343 | Test Loss: 1.0690, Test Acc: 0.6195
+2025-09-25 18:01:53.747 | INFO     | [Worker-1 / GPU-1] Epoch 4/5 | Train Acc: 0.6182, Train Loss: 1.0828 | Test Loss: 0.9401, Test Acc: 0.6681
+2025-09-25 18:01:53.747 | INFO     | [Worker-1 / GPU-1] Epoch 5/5 | Train Acc: 0.7053, Train Loss: 0.8455 | Test Loss: 0.7740, Test Acc: 0.7358
+2025-09-25 18:01:53.747 | INFO     | [Worker-1 / GPU-1] Individual 2 -> Accuracy: 0.7358, Loss: 0.7740 | Duration: 248.31s
+2025-09-25 21:06:05.013 | INFO     | [Worker-29 / CPU] Evaluating Individual 39/40 (5 epochs)
+2025-09-25 21:06:05.014 | INFO     | [Worker-29 / CPU] Hyperparameters: {'width_scale': 1.9634398195980995, 'fc1_units': 512, 'dropout_rate': 0.49416678789714263, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.05834168479285178, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00013410760579343157, 'batch_size': 256}
+2025-09-25 21:06:05.014 | INFO     | [Worker-29 / CPU] Epoch 1/5 | Train Acc: 0.4290, Train Loss: 1.5634 | Test Loss: 1.3412, Test Acc: 0.5223
+2025-09-25 21:06:05.014 | INFO     | [Worker-29 / CPU] Epoch 2/5 | Train Acc: 0.5374, Train Loss: 1.2821 | Test Loss: 1.1283, Test Acc: 0.5939
+2025-09-25 21:06:05.015 | INFO     | [Worker-29 / CPU] Epoch 3/5 | Train Acc: 0.5579, Train Loss: 1.2435 | Test Loss: 1.2507, Test Acc: 0.5625
+2025-09-25 21:06:05.015 | INFO     | [Worker-29 / CPU] Epoch 4/5 | Train Acc: 0.5395, Train Loss: 1.3225 | Test Loss: 1.1077, Test Acc: 0.6090
+2025-09-25 21:06:05.015 | INFO     | [Worker-29 / CPU] Epoch 5/5 | Train Acc: 0.5702, Train Loss: 1.2349 | Test Loss: 1.0830, Test Acc: 0.6266
+2025-09-25 21:06:05.015 | INFO     | [Worker-29 / CPU] Individual 39 -> Accuracy: 0.6266, Loss: 1.0830 | Duration: 11299.29s
+2025-09-25 21:16:45.514 | INFO     | [Worker-23 / CPU] Evaluating Individual 21/40 (5 epochs)
+2025-09-25 21:16:45.515 | INFO     | [Worker-23 / CPU] Hyperparameters: {'width_scale': 0.8322207039102796, 'fc1_units': 256, 'dropout_rate': 0.373527312430919, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.06933552791113602, 'aug_intensity': 'LIGHT', 'weight_decay': 0.00011170489737717891, 'batch_size': 256}
+2025-09-25 21:16:45.515 | INFO     | [Worker-23 / CPU] Epoch 1/5 | Train Acc: 0.4139, Train Loss: 1.6091 | Test Loss: 1.3132, Test Acc: 0.5220
+2025-09-25 21:16:45.516 | INFO     | [Worker-23 / CPU] Epoch 2/5 | Train Acc: 0.5437, Train Loss: 1.2632 | Test Loss: 1.0902, Test Acc: 0.6143
+2025-09-25 21:16:45.516 | INFO     | [Worker-23 / CPU] Epoch 3/5 | Train Acc: 0.5910, Train Loss: 1.1500 | Test Loss: 1.1564, Test Acc: 0.6014
+2025-09-25 21:16:45.516 | INFO     | [Worker-23 / CPU] Epoch 4/5 | Train Acc: 0.6117, Train Loss: 1.1033 | Test Loss: 1.1891, Test Acc: 0.5885
+2025-09-25 21:16:45.517 | INFO     | [Worker-23 / CPU] Epoch 5/5 | Train Acc: 0.6914, Train Loss: 0.8799 | Test Loss: 0.8063, Test Acc: 0.7217
+2025-09-25 21:16:45.517 | INFO     | [Worker-23 / CPU] Individual 21 -> Accuracy: 0.7217, Loss: 0.8063 | Duration: 11940.00s

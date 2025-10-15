@@ -1,0 +1,215 @@
+2025-10-03 14:32:44.749 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 6873
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 16,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 3,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    0.75,
+                    3.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    768,
+                    1024
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_ONECYCLE",
+                    "SGD_COSINE",
+                    "ADAMW_COSINE",
+                    "ADAMW_ONECYCLE"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.001,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    1e-06,
+                    0.01
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    256,
+                    512,
+                    1024
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 2
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 3
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": false,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 0.2,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 5,
+                "fitness_goal": 0.81,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 70,
+            "training_epochs": 100,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 10,
+                "early_stop_epochs": 10,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-03 14:32:44.750 | INFO     | Logger initialized. Log file at logs/log_2025-10-03_12-32-43.log
+2025-10-03 14:32:44.751 | INFO     | --- Starting Nested Resampling With 2 Folds ---
+2025-10-03 14:32:45.614 | INFO     | --- Running Fold 1/2 ---
+2025-10-03 14:32:45.615 | INFO     | Initializing worker pool...
+2025-10-03 14:32:45.616 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-03 14:32:45.619 | INFO     | Worker pool initialized with 4 workers.
+2025-10-03 14:32:46.544 | INFO     | Calibration disabled. Starting main algorithm with random population.
+2025-10-03 14:32:46.546 | INFO     | --- Starting MAIN_ALGORITHM Phase ---
+2025-10-03 14:32:46.546 | INFO     | Generations: 70, Population: 24
+2025-10-03 14:32:46.546 | INFO     | --- MAIN_ALGORITHM - Generation 1/70 ---
+2025-10-03 14:35:30.438 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 2/24 (50 epochs)
+2025-10-03 14:35:30.439 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 2.726062716215027, 'fc1_units': 768, 'dropout_rate': 0.20578132812428235, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.007705387268130408, 'aug_intensity': 'STRONG', 'weight_decay': 0.0030289567424937524, 'batch_size': 512}
+2025-10-03 14:35:30.439 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to value 0.015410774536260816 for batch_size 512
+2025-10-03 14:35:30.439 | INFO     | [Worker-0 / GPU-0] Epoch 1/50 | Train Acc: 0.3836, Train Loss: 1.7005 | Test Loss: 1.3110, Test Acc: 0.5214
+2025-10-03 14:35:30.439 | INFO     | [Worker-0 / GPU-0] Epoch 2/50 | Train Acc: 0.5097, Train Loss: 1.3539 | Test Loss: 1.1131, Test Acc: 0.6022
+2025-10-03 14:35:30.439 | INFO     | [Worker-0 / GPU-0] Epoch 3/50 | Train Acc: 0.5637, Train Loss: 1.2142 | Test Loss: 1.0215, Test Acc: 0.6350
+2025-10-03 14:35:30.440 | INFO     | [Worker-0 / GPU-0] Epoch 4/50 | Train Acc: 0.5992, Train Loss: 1.1232 | Test Loss: 0.9481, Test Acc: 0.6633
+2025-10-03 14:35:30.440 | INFO     | [Worker-0 / GPU-0] Epoch 5/50 | Train Acc: 0.6253, Train Loss: 1.0578 | Test Loss: 0.8924, Test Acc: 0.6878
+2025-10-03 14:35:30.440 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 2: 'DataLoader' object has no attribute 'loaders'
+2025-10-03 14:35:33.538 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 1/24 (50 epochs)
+2025-10-03 14:35:33.538 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 2.8163816157490142, 'fc1_units': 768, 'dropout_rate': 0.36323724227324916, 'optimizer_schedule': 'ADAMW_ONECYCLE', 'base_lr': 0.004213283602783518, 'aug_intensity': 'STRONG', 'weight_decay': 0.002807979519122296, 'batch_size': 512}
+2025-10-03 14:35:33.538 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to value 0.005958482813180628 for batch_size 512
+2025-10-03 14:35:33.539 | INFO     | [Worker-1 / GPU-1] Epoch 1/50 | Train Acc: 0.3895, Train Loss: 1.6619 | Test Loss: 1.2275, Test Acc: 0.5534
+2025-10-03 14:35:33.539 | INFO     | [Worker-1 / GPU-1] Epoch 2/50 | Train Acc: 0.5264, Train Loss: 1.3098 | Test Loss: 1.0480, Test Acc: 0.6172
+2025-10-03 14:35:33.539 | INFO     | [Worker-1 / GPU-1] Epoch 3/50 | Train Acc: 0.5890, Train Loss: 1.1578 | Test Loss: 0.9786, Test Acc: 0.6472
+2025-10-03 14:35:33.539 | INFO     | [Worker-1 / GPU-1] Epoch 4/50 | Train Acc: 0.6254, Train Loss: 1.0524 | Test Loss: 0.8718, Test Acc: 0.6913
+2025-10-03 14:35:33.539 | INFO     | [Worker-1 / GPU-1] Epoch 5/50 | Train Acc: 0.6461, Train Loss: 0.9965 | Test Loss: 0.8368, Test Acc: 0.7025
+2025-10-03 14:35:33.539 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 1: 'DataLoader' object has no attribute 'loaders'
+2025-10-03 14:35:53.208 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 3/24 (50 epochs)
+2025-10-03 14:35:53.208 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 0.7525757181506039, 'fc1_units': 768, 'dropout_rate': 0.2161161286143052, 'optimizer_schedule': 'ADAMW_COSINE', 'base_lr': 0.046715984126040916, 'aug_intensity': 'STRONG', 'weight_decay': 8.045976941121087e-05, 'batch_size': 256}
+2025-10-03 14:35:53.208 | INFO     | [Worker-3 / GPU-3] Epoch 1/50 | Train Acc: 0.1159, Train Loss: 10.2371 | Test Loss: 2.2745, Test Acc: 0.1384
+2025-10-03 14:35:53.209 | INFO     | [Worker-3 / GPU-3] Epoch 2/50 | Train Acc: 0.1539, Train Loss: 2.2376 | Test Loss: 2.1357, Test Acc: 0.1887
+2025-10-03 14:35:53.209 | INFO     | [Worker-3 / GPU-3] Epoch 3/50 | Train Acc: 0.1776, Train Loss: 2.1672 | Test Loss: 2.0927, Test Acc: 0.2002
+2025-10-03 14:35:53.209 | INFO     | [Worker-3 / GPU-3] Epoch 4/50 | Train Acc: 0.1862, Train Loss: 2.1397 | Test Loss: 2.0785, Test Acc: 0.1911
+2025-10-03 14:35:53.209 | INFO     | [Worker-3 / GPU-3] Epoch 5/50 | Train Acc: 0.1875, Train Loss: 2.0952 | Test Loss: 1.9927, Test Acc: 0.2190
+2025-10-03 14:35:53.209 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 3: 'DataLoader' object has no attribute 'loaders'

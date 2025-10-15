@@ -1,0 +1,192 @@
+2025-10-10 18:32:02.563 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 123
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 8,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 4,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 32
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    0.75,
+                    2.0
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "fc1_units": {
+                "type": "enum",
+                "values": [
+                    128,
+                    256,
+                    512
+                ],
+                "description": "Number of neurons in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_COSINE",
+                    "SGD_ONECYCLE",
+                    "SGD_EXPONENTIAL"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.005,
+                    0.2
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    3e-05,
+                    0.001
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    64,
+                    128,
+                    256
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 3
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 4
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": true,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 0.8,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 6,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 70,
+            "training_epochs": 100,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 8,
+                "early_stop_epochs": 15,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-10 18:32:02.564 | INFO     | Logger initialized. Log file at logs/log_2025-10-10_16-31-59.log
+2025-10-10 18:32:02.564 | INFO     | --- Starting Nested Resampling With 3 Folds ---
+2025-10-10 18:32:03.425 | INFO     | --- Running Fold 1/3 ---
+2025-10-10 18:32:03.426 | INFO     | Initializing worker pool...
+2025-10-10 18:32:03.426 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-10 18:32:03.430 | INFO     | Worker pool initialized with 4 workers.
+2025-10-10 18:32:03.572 | INFO     | --- Starting CALIBRATION Phase ---
+2025-10-10 18:32:03.572 | INFO     | Generations: 10, Population: 48
+2025-10-10 18:32:03.572 | WARNING  | Progressive epochs are disabled! To enable progression minimal training epochs must be at least (20).
+2025-10-10 18:32:03.573 | INFO     | --- CALIBRATION - Generation 1/10 ---
+2025-10-10 18:32:08.093 | INFO     | Received signal 2, initiating graceful shutdown...
+2025-10-10 18:32:08.093 | INFO     | Cleaning up worker pool...
+2025-10-10 18:32:08.094 | INFO     | Sent 4/4 shutdown signals
+2025-10-10 18:32:22.733 | INFO     | Received signal 2, initiating graceful shutdown...
+2025-10-10 18:32:22.735 | INFO     | Program terminated gracefully.

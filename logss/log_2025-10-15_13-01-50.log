@@ -1,0 +1,273 @@
+2025-10-15 15:01:51.178 | INFO     | Configuration:
+{
+    "project": {
+        "name": "HPO Paper-Based Experiment",
+        "seed": 1236
+    },
+    "environment": {
+        "data_source": {
+            "dataset": "CIFAR-10",
+            "path": "./model_data"
+        },
+        "logging": {
+            "log_file": "logs/experiment.log",
+            "error_log_file": "logs/error.log",
+            "report_directory": "reports"
+        }
+    },
+    "checkpoint_config": {
+        "interval_per_gen": 1
+    },
+    "parallel_config": {
+        "execution": {
+            "evaluation_mode": "GPU",
+            "enable_parallel": true,
+            "gpu_workers": 4,
+            "cpu_workers": 0,
+            "gpu_cpu_performance_ratio": 16,
+            "dataloader_workers": {
+                "per_gpu": 8,
+                "per_cpu": 1
+            }
+        }
+    },
+    "neural_network_config": {
+        "input_shape": [
+            3,
+            32,
+            32
+        ],
+        "output_classes": 10,
+        "conv_blocks": 3,
+        "fixed_parameters": {
+            "activation_function": "relu",
+            "base_filters": 96
+        },
+        "hyperparameter_space": {
+            "width_scale": {
+                "type": "float",
+                "range": [
+                    1.0,
+                    1.5
+                ],
+                "description": "Scales the number of filters in convolutional layers"
+            },
+            "mixup_alpha": {
+                "type": "float",
+                "range": [
+                    0.0,
+                    0.4
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "dropout_rate": {
+                "type": "float",
+                "range": [
+                    0.2,
+                    0.5
+                ],
+                "description": "Dropout intensity in the first fully connected layer"
+            },
+            "optimizer_schedule": {
+                "type": "enum",
+                "values": [
+                    "SGD_COSINE",
+                    "SGD_ONECYCLE",
+                    "SGD_EXPONENTIAL"
+                ],
+                "description": "Optimizer type + Learning rate scheduler"
+            },
+            "base_lr": {
+                "type": "float",
+                "range": [
+                    0.005,
+                    0.1
+                ],
+                "scale": "log",
+                "description": "Base learning rate value, log scale"
+            },
+            "aug_intensity": {
+                "type": "enum",
+                "values": [
+                    "MEDIUM",
+                    "STRONG"
+                ],
+                "description": "Level of data augmentation"
+            },
+            "weight_decay": {
+                "type": "float",
+                "range": [
+                    0.0001,
+                    0.001
+                ],
+                "scale": "log",
+                "description": "L2 regularization coefficient, log scale"
+            },
+            "batch_size": {
+                "type": "enum",
+                "values": [
+                    128,
+                    256
+                ],
+                "description": "Training batch size"
+            }
+        }
+    },
+    "nested_validation_config": {
+        "enabled": true,
+        "outer_k_folds": 2
+    },
+    "genetic_algorithm_config": {
+        "genetic_operators": {
+            "active": [
+                "selection",
+                "crossover",
+                "mutation",
+                "elitism"
+            ],
+            "selection": {
+                "type": "tournament",
+                "tournament_size": 4
+            },
+            "crossover": {
+                "type": "uniform",
+                "crossover_prob": 0.8
+            },
+            "mutation": {
+                "mutation_prob_discrete": 0.15,
+                "mutation_prob_categorical": 0.15,
+                "mutation_sigma_continuous": 0.1,
+                "mutation_prob_continuous": 0.15
+            },
+            "elitism_percent": 0.1
+        },
+        "calibration": {
+            "enabled": false,
+            "population_size": 48,
+            "generations": 10,
+            "training_epochs": 20,
+            "data_subset_percentage": 1.0,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 9,
+            "stop_conditions": {
+                "max_generations": 10,
+                "early_stop_generations": 999,
+                "early_stop_epochs": 6,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 1440
+            }
+        },
+        "main_algorithm": {
+            "population_size": 24,
+            "generations": 5,
+            "training_epochs": 150,
+            "mutation_decay_rate": 0.98,
+            "stratification_bins": 3,
+            "stop_conditions": {
+                "max_generations": 70,
+                "early_stop_generations": 8,
+                "early_stop_epochs": 20,
+                "fitness_goal": 0.99,
+                "time_limit_minutes": 0
+            }
+        }
+    }
+}
+2025-10-15 15:01:51.179 | INFO     | Logger initialized. Log file at logs/log_2025-10-15_13-01-50.log
+2025-10-15 15:01:51.179 | INFO     | --- Starting Nested Resampling With 2 Folds ---
+2025-10-15 15:01:52.046 | INFO     | --- Running Fold 1/2 ---
+2025-10-15 15:01:52.047 | INFO     | Initializing worker pool...
+2025-10-15 15:01:52.047 | INFO     | Using GPU-Only scheduling strategy.
+2025-10-15 15:01:52.050 | INFO     | Worker pool initialized with 4 workers.
+2025-10-15 15:01:53.293 | INFO     | Calibration disabled. Starting main algorithm with random population.
+2025-10-15 15:01:53.295 | INFO     | --- Starting MAIN_ALGORITHM Phase ---
+2025-10-15 15:01:53.295 | INFO     | Generations: 5, Population: 24
+2025-10-15 15:01:53.295 | INFO     | --- MAIN_ALGORITHM - Generation 1/5 ---
+2025-10-15 15:02:33.830 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 0/24 (75 epochs)
+2025-10-15 15:02:33.831 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.4498161603394184, 'mixup_alpha': 0.07974843003841046, 'dropout_rate': 0.271134654100726, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.015258220437774667, 'aug_intensity': 'STRONG', 'weight_decay': 0.0001989379179165993, 'batch_size': 256}
+2025-10-15 15:02:33.831 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.030516 for batch_size 256
+2025-10-15 15:02:33.831 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 0: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:02:33.856 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 1/24 (75 epochs)
+2025-10-15 15:02:33.857 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.1192562696953412, 'mixup_alpha': 0.19216635585550473, 'dropout_rate': 0.3153905570960702, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.03927426802153135, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0003862056973996512, 'batch_size': 256}
+2025-10-15 15:02:33.857 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.078549 for batch_size 256
+2025-10-15 15:02:33.857 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 1: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:02:34.246 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 2/24 (75 epochs)
+2025-10-15 15:02:34.247 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.0414940498175629, 'mixup_alpha': 0.04631730660166496, 'dropout_rate': 0.2497580226560345, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0069838693550007686, 'aug_intensity': 'STRONG', 'weight_decay': 0.0003680450963556923, 'batch_size': 128}
+2025-10-15 15:02:34.247 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.006984 for batch_size 128
+2025-10-15 15:02:34.247 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 2: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:02:39.201 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 3/24 (75 epochs)
+2025-10-15 15:02:39.202 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.3147901313356287, 'mixup_alpha': 0.16114836058804208, 'dropout_rate': 0.21752571650372032, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.010304971768333152, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0003615018313772723, 'batch_size': 256}
+2025-10-15 15:02:39.202 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.020610 for batch_size 256
+2025-10-15 15:02:39.202 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 3: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:03:10.305 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 4/24 (75 epochs)
+2025-10-15 15:03:10.306 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.4981698606242633, 'mixup_alpha': 0.050205480266770366, 'dropout_rate': 0.33496335563750906, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.035030993918320104, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0005352886840466485, 'batch_size': 128}
+2025-10-15 15:03:10.306 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.035031 for batch_size 128
+2025-10-15 15:03:10.306 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 4: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:03:11.117 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 5/24 (75 epochs)
+2025-10-15 15:03:11.118 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.078891712178133, 'mixup_alpha': 0.2752228553683914, 'dropout_rate': 0.31112796973817736, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.0484940063881852, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0006740102385588646, 'batch_size': 128}
+2025-10-15 15:03:11.118 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.048494 for batch_size 128
+2025-10-15 15:03:11.118 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 5: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:03:12.057 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 6/24 (75 epochs)
+2025-10-15 15:03:12.057 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.4024607344438578, 'mixup_alpha': 0.249042383348699, 'dropout_rate': 0.2449944914070567, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.01763528615579986, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002744285159643252, 'batch_size': 128}
+2025-10-15 15:03:12.057 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.017635 for batch_size 128
+2025-10-15 15:03:12.057 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 6: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:03:18.873 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 7/24 (75 epochs)
+2025-10-15 15:03:18.873 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.2675603781161047, 'mixup_alpha': 0.340857516351996, 'dropout_rate': 0.4430977323739199, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.02879437119580372, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00015353193083872724, 'batch_size': 256}
+2025-10-15 15:03:18.874 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.057589 for batch_size 256
+2025-10-15 15:03:18.874 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 7: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:03:47.007 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 8/24 (75 epochs)
+2025-10-15 15:03:47.008 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.0560160732985828, 'mixup_alpha': 0.27924738242570096, 'dropout_rate': 0.32294854061235834, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.006149682171906986, 'aug_intensity': 'STRONG', 'weight_decay': 0.0005846896705589208, 'batch_size': 128}
+2025-10-15 15:03:47.008 | INFO     | [Worker-0 / GPU-0] Using base_lr 0.006150 for batch_size 128
+2025-10-15 15:03:47.009 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 8: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:03:48.053 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 9/24 (75 epochs)
+2025-10-15 15:03:48.053 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.045668421910453, 'mixup_alpha': 0.11459411896017638, 'dropout_rate': 0.38791018394558086, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.04001662846301065, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0003261309222771843, 'batch_size': 256}
+2025-10-15 15:03:48.054 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.080033 for batch_size 256
+2025-10-15 15:03:48.054 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 9: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:03:50.419 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 10/24 (75 epochs)
+2025-10-15 15:03:50.420 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.4316477856028196, 'mixup_alpha': 0.1606152634476058, 'dropout_rate': 0.40221336013474135, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.02517109051383438, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0009353264798641162, 'batch_size': 256}
+2025-10-15 15:03:50.420 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.050342 for batch_size 256
+2025-10-15 15:03:50.420 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 10: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:04:01.343 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 11/24 (75 epochs)
+2025-10-15 15:04:01.344 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.0077155497450918, 'mixup_alpha': 0.3645432524014326, 'dropout_rate': 0.3818727427722122, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.009141052011768604, 'aug_intensity': 'STRONG', 'weight_decay': 0.00011035759501941903, 'batch_size': 256}
+2025-10-15 15:04:01.344 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.018282 for batch_size 256
+2025-10-15 15:04:01.344 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 11: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:04:25.254 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 13/24 (75 epochs)
+2025-10-15 15:04:25.255 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.3292645111280574, 'mixup_alpha': 0.2684651864422589, 'dropout_rate': 0.46022874647615486, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.005269746864401545, 'aug_intensity': 'STRONG', 'weight_decay': 0.0007639336249604565, 'batch_size': 128}
+2025-10-15 15:04:25.255 | INFO     | [Worker-2 / GPU-2] Using base_lr 0.005270 for batch_size 128
+2025-10-15 15:04:25.255 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 13: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:04:26.171 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 12/24 (75 epochs)
+2025-10-15 15:04:26.172 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.4921890183037618, 'mixup_alpha': 0.28261392728828805, 'dropout_rate': 0.34544399002726667, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.02219997671647865, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0005412952594321313, 'batch_size': 256}
+2025-10-15 15:04:26.172 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.044400 for batch_size 256
+2025-10-15 15:04:26.172 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 12: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:04:36.611 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 14/24 (75 epochs)
+2025-10-15 15:04:36.612 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.3648427501787206, 'mixup_alpha': 0.11347658733907506, 'dropout_rate': 0.3986216092712277, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.03545031217080318, 'aug_intensity': 'STRONG', 'weight_decay': 0.0001371186528506038, 'batch_size': 128}
+2025-10-15 15:04:36.612 | INFO     | [Worker-1 / GPU-1] Using base_lr 0.035450 for batch_size 128
+2025-10-15 15:04:36.612 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 14: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:04:40.390 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 15/24 (75 epochs)
+2025-10-15 15:04:40.391 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.1662087470147018, 'mixup_alpha': 0.0713280226632838, 'dropout_rate': 0.26558867850247053, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.005147211511115964, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00035641045034102856, 'batch_size': 256}
+2025-10-15 15:04:40.391 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.010294 for batch_size 256
+2025-10-15 15:04:40.391 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 15: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:05:02.702 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 16/24 (75 epochs)
+2025-10-15 15:05:02.703 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.2976044958621256, 'mixup_alpha': 0.14237440855218372, 'dropout_rate': 0.39830207860706046, 'optimizer_schedule': 'SGD_ONECYCLE', 'base_lr': 0.007692200983975336, 'aug_intensity': 'STRONG', 'weight_decay': 0.0005131645959805813, 'batch_size': 256}
+2025-10-15 15:05:02.703 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.015384 for batch_size 256
+2025-10-15 15:05:02.703 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 16: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:05:02.951 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 17/24 (75 epochs)
+2025-10-15 15:05:02.951 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.2666852641012973, 'mixup_alpha': 0.29601884980918, 'dropout_rate': 0.43722435035458923, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.09023322901134753, 'aug_intensity': 'STRONG', 'weight_decay': 0.00018266036559181172, 'batch_size': 256}
+2025-10-15 15:05:02.951 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.180466 for batch_size 256
+2025-10-15 15:05:02.951 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 17: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:05:21.699 | INFO     | [Worker-3 / GPU-3] Evaluating Individual 19/24 (75 epochs)
+2025-10-15 15:05:21.700 | INFO     | [Worker-3 / GPU-3] Hyperparameters: {'width_scale': 1.4713809878929702, 'mixup_alpha': 0.31580862817236505, 'dropout_rate': 0.42349151598094276, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.01222387862648373, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0002930749057961145, 'batch_size': 256}
+2025-10-15 15:05:21.701 | INFO     | [Worker-3 / GPU-3] Scaled base_lr to 0.024448 for batch_size 256
+2025-10-15 15:05:21.701 | INFO     | [Worker-3 / GPU-3] Unexpected error for individual 19: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:05:22.647 | INFO     | [Worker-1 / GPU-1] Evaluating Individual 18/24 (75 epochs)
+2025-10-15 15:05:22.648 | INFO     | [Worker-1 / GPU-1] Hyperparameters: {'width_scale': 1.410290232499658, 'mixup_alpha': 0.28871774291987795, 'dropout_rate': 0.4227337477264934, 'optimizer_schedule': 'SGD_COSINE', 'base_lr': 0.007687457305754693, 'aug_intensity': 'STRONG', 'weight_decay': 0.00019219834675307027, 'batch_size': 256}
+2025-10-15 15:05:22.648 | INFO     | [Worker-1 / GPU-1] Scaled base_lr to 0.015375 for batch_size 256
+2025-10-15 15:05:22.648 | INFO     | [Worker-1 / GPU-1] Unexpected error for individual 18: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:05:40.874 | INFO     | [Worker-2 / GPU-2] Evaluating Individual 20/24 (75 epochs)
+2025-10-15 15:05:40.875 | INFO     | [Worker-2 / GPU-2] Hyperparameters: {'width_scale': 1.0574366288662889, 'mixup_alpha': 0.16650189578092958, 'dropout_rate': 0.48065734418803097, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.0194760268948338, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.00010973777239278972, 'batch_size': 256}
+2025-10-15 15:05:40.875 | INFO     | [Worker-2 / GPU-2] Scaled base_lr to 0.038952 for batch_size 256
+2025-10-15 15:05:40.875 | INFO     | [Worker-2 / GPU-2] Unexpected error for individual 20: 'CNN' object has no attribute 'conv_layers'
+2025-10-15 15:05:40.927 | INFO     | [Worker-0 / GPU-0] Evaluating Individual 21/24 (75 epochs)
+2025-10-15 15:05:40.927 | INFO     | [Worker-0 / GPU-0] Hyperparameters: {'width_scale': 1.0241735578040299, 'mixup_alpha': 0.15101435865810037, 'dropout_rate': 0.38364919993892027, 'optimizer_schedule': 'SGD_EXPONENTIAL', 'base_lr': 0.03770476578640681, 'aug_intensity': 'MEDIUM', 'weight_decay': 0.0005621121812750881, 'batch_size': 256}
+2025-10-15 15:05:40.927 | INFO     | [Worker-0 / GPU-0] Scaled base_lr to 0.075410 for batch_size 256
+2025-10-15 15:05:40.928 | INFO     | [Worker-0 / GPU-0] Unexpected error for individual 21: 'CNN' object has no attribute 'conv_layers'

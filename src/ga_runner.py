@@ -92,10 +92,10 @@ def run_ga_phase(
         )
         epoch_multiplier = 1.0
 
-        # if not enable_progressive_epochs:
-        #     logger.warning(
-        #         f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({MINIMUM_PROGRESSIVE_EPOCHS})."
-        #     )
+        if not enable_progressive_epochs:
+            logger.warning(
+                f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({MINIMUM_PROGRESSIVE_EPOCHS})."
+            )
 
         for gen in range(start_gen, generations + 1):
             performance_tracker.start_generation(gen, phase_type)
@@ -107,16 +107,16 @@ def run_ga_phase(
             )
 
             seq_prep_start = time.perf_counter()
-            # if enable_progressive_epochs:
-            #     progress = gen / generations
-            #     if progress <= 0.3:
-            #         epoch_multiplier = 0.5
-            #     elif progress <= 0.7:
-            #         epoch_multiplier = 0.75
-            #     else:
-            #         epoch_multiplier = 1.0
-            #
-            #     training_epochs = int(round(initial_epochs * epoch_multiplier))
+            if enable_progressive_epochs:
+                progress = gen / generations
+                if progress <= 0.3:
+                    epoch_multiplier = 0.5
+                elif progress <= 0.7:
+                    epoch_multiplier = 0.75
+                else:
+                    epoch_multiplier = 1.0
+
+                training_epochs = int(round(initial_epochs * epoch_multiplier))
 
             evaluator.set_training_epochs(training_epochs)
             seq_prep_time = time.perf_counter() - seq_prep_start
@@ -512,7 +512,7 @@ def run_optimization(
                 num_elites = min(
                     int(main_pop_size * 0.3), len(calibrated_population)
                 )
-                num_mutated = int(main_pop_size * 0.6)
+                num_mutated = int(main_pop_size * 0.5)
                 num_random = main_pop_size - num_elites - num_mutated
 
                 elites = calibrated_population[:num_elites]

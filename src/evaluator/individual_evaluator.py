@@ -18,6 +18,7 @@ from src.nn.train_and_eval import train_and_eval
 from src.nn.data_loader import get_dataset_loaders
 
 
+# TODO: add missing features to individual evaluator
 class IndividualEvaluator(Evaluator):
     """
     Evaluates a population sequentially in the main process.

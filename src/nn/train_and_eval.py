@@ -13,7 +13,7 @@ from src.nn.data_loader import update_train_augmentation
 from src.nn.model_saver import ModelSaver
 from src.nn.neural_network import get_network, get_optimizer_and_scheduler
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
-from src.utils.mixup import mixup_data, mixup_criterion
+from src.utils.mixup import mixup_data, mixup_criterion, mixup_schedule
 
 
 def train_epoch(
@@ -24,7 +24,7 @@ def train_epoch(
     device: torch.device,
     scaler: GradScaler = None,
     scheduler=None,
-    mixup_alpha: float = 0.4,
+    mixup_lambda: float = 0.0,
     epoch: int = 0,
     total_epochs: int = 100,
 ) -> tuple[float, float]:
@@ -50,7 +50,7 @@ def train_epoch(
     running_loss, correct, total = 0.0, 0, 0
     nan_batches = 0
 
-    lam_alpha = mixup_alpha * (epoch / total_epochs)
+    lam_alpha = 0.4
 
     for inputs, targets in loader:
         inputs, targets = inputs.to(device), targets.to(device)
@@ -213,12 +213,13 @@ def train_and_eval(
         final_test_loss = 0.0
         best_acc_so_far = 0.0
         epochs_without_improvement = 0
-        mixup_alpha = 0.4
+
+        base_mixup_alpha = 0.4
 
         update_train_augmentation(train_loader, AugmentationIntensity.NONE)
 
-        light_switch_epoch = int(0.05 * epochs)
-        strong_switch_epoch = int(0.30 * epochs)
+        light_switch_epoch = int(0.1 * epochs)
+        strong_switch_epoch = int(0.4 * epochs)
 
         for epoch in range(epochs):
             if epoch == light_switch_epoch:
@@ -231,6 +232,8 @@ def train_and_eval(
                     train_loader, chromosome.aug_intensity
                 )
 
+            lam_epoch = mixup_schedule(epoch, epochs, base_mixup_alpha, warmup_frac=0.2, cooldown_frac=0.2)
+
             train_loss, train_acc = train_epoch(
                 model,
                 train_loader,
@@ -239,7 +242,7 @@ def train_and_eval(
                 device,
                 scaler,
                 scheduler,
-                mixup_alpha,
+                lam_epoch,
                 epoch,
                 epochs,
             )

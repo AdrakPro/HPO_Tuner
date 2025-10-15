@@ -137,6 +137,16 @@ def worker_main(worker_config: WorkerConfig) -> None:
                         f"Using base_lr {chromosome.base_lr:.6f} for batch_size {chromosome.batch_size}"
                     )
 
+
+                # ZERO_PROB = 0.2
+                #
+                # if random.random() < ZERO_PROB:
+                #     chromosome.weight_decay = 0
+                #     log_buffer.append(
+                #         f"[Worker-{worker_config.worker_id} / {device_name}] "
+                #         f"Weight decay probability reached. Setting weight_decay to 0"
+                #     )
+
                 def epoch_logger(
                     epoch,
                     train_acc,
@@ -158,8 +168,8 @@ def worker_main(worker_config: WorkerConfig) -> None:
                         line += " / Early stopping triggered"
                     log_buffer.append(line)
 
-                if worker_config.fixed_batch_size is not None:
-                    chromosome.batch_size = worker_config.fixed_batch_size
+                # if worker_config.fixed_batch_size is not None:
+                #     chromosome.batch_size = worker_config.fixed_batch_size
 
                 with get_dataset_loaders(
                     batch_size=chromosome.batch_size,

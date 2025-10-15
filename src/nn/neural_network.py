@@ -8,7 +8,6 @@ from typing import Any, Dict, Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as functional
 from torch import optim
 from torch.optim.lr_scheduler import (
     CosineAnnealingLR,
@@ -54,6 +53,7 @@ class CNN(nn.Module):
         activation = ActivationFunction(
             neural_config["fixed_parameters"]["activation_function"]
         ).get_layer()
+        spatial_dim = neural_config["input_shape"][1]
 
         # CNN HYPERPARAMETERS
         conv_stride = 1
@@ -65,36 +65,36 @@ class CNN(nn.Module):
         out_channels = [base * (2**i) for i in range(conv_blocks)]
 
         layers = []
+        in_channels = current_channels
 
-        for i in range(conv_blocks):
-            layers.append(
-                nn.Conv2d(
-                    current_channels,
-                    out_channels[i],
-                    kernel_size=kernel_size,
-                    padding=padding,
-                    stride=conv_stride,
-                )
-            )
 
-            layers.append(nn.BatchNorm2d(out_channels[i]))
+        # Build convolutional blocks
+        for i, out_ch in enumerate(out_channels):
+            # Two conv layers per block
+            layers.append(nn.Conv2d(in_channels, out_ch, kernel_size, stride=conv_stride, padding=padding))
+            layers.append(activation)
+            layers.append(nn.Conv2d(out_ch, out_ch, kernel_size, stride=conv_stride, padding=padding))
             layers.append(activation)
 
-            if i < conv_blocks - 1:
-                layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+            # Dropout (increasing with depth)
+            drop_prob = min(chromosome.dropout_rate * (i / conv_blocks), chromosome.dropout_rate)
+            if drop_prob > 0:
+                layers.append(nn.Dropout2d(drop_prob))
 
-            current_channels = out_channels[i]
+            # Downsample every 2 blocks
+            if (i + 1) % 2 == 0:
+                layers.append(nn.Conv2d(out_ch, out_ch, kernel_size=3, stride=2, padding=1))
+            in_channels = out_ch
 
         self.conv_layers = nn.Sequential(*layers)
-
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # TODO: rename fc1 units to fc units
+
+        # Fully connected classifier
         self.classifier = nn.Sequential(
-            nn.Dropout(chromosome.dropout_rate),
-            nn.Linear(current_channels, chromosome.fc1_units),
+            nn.Linear(in_channels, chromosome.fc_units),
             activation,
             nn.Dropout(chromosome.dropout_rate),
-            nn.Linear(chromosome.fc1_units, output_classes),
+            nn.Linear(chromosome.fc_units, output_classes),
         )
 
         # Initialize weights

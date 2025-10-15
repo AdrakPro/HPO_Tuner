@@ -137,7 +137,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
                         f"Using base_lr {chromosome.base_lr:.6f} for batch_size {chromosome.batch_size}"
                     )
 
-
                 # ZERO_PROB = 0.2
                 #
                 # if random.random() < ZERO_PROB:
@@ -180,7 +179,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     train_indices=task.train_indices,
                     test_indices=task.test_indices,
                 ) as (train_loader, test_loader):
-
                     accuracy, loss = train_and_eval(
                         chromosome=chromosome,
                         neural_config=task.neural_network_config,

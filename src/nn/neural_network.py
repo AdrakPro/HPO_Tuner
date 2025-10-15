@@ -69,12 +69,16 @@ class CNN(nn.Module):
 
         for i in range(conv_blocks):
             is_downsample_block = i in downsample_indices
-            out_channels = int(base_filters * filter_multiplier * chromosome.width_scale)
+            out_channels = int(
+                base_filters * filter_multiplier * chromosome.width_scale
+            )
 
-            # Add standard convolutional layers for the block
+            # Convolutional layers for the block
             for _ in range(convs_per_block - 1):
                 layers.append(
-                    nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+                    nn.Conv2d(
+                        in_channels, out_channels, kernel_size=3, padding=1
+                    )
                 )
                 layers.append(activation)
                 in_channels = out_channels
@@ -83,7 +87,11 @@ class CNN(nn.Module):
             stride = 2 if is_downsample_block else 1
             layers.append(
                 nn.Conv2d(
-                    in_channels, out_channels, kernel_size=3, stride=stride, padding=1
+                    in_channels,
+                    out_channels,
+                    kernel_size=3,
+                    stride=stride,
+                    padding=1,
                 )
             )
             layers.append(activation)
@@ -106,6 +114,7 @@ class CNN(nn.Module):
         )
 
         self._initialize_weights()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
         x = self.classifier(x)

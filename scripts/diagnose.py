@@ -1,6 +1,7 @@
 import re
 import sys
 
+
 def main(log_file):
     LOW_ACC_THRESHOLD = 0.6
     OVERFIT_DIFF_THRESHOLD = 0.05
@@ -37,14 +38,28 @@ def main(log_file):
                     final_train_acc = final_test_acc
 
                 # Compute max overfit
-                max_overfit = max([t - v for t, v in zip(train_accs, test_accs)]) if train_accs else 0
+                max_overfit = (
+                    max([t - v for t, v in zip(train_accs, test_accs)])
+                    if train_accs
+                    else 0
+                )
                 final_overfit = final_train_acc - final_test_acc
 
                 # Categorize
-                if final_train_acc < LOW_ACC_THRESHOLD and final_test_acc < LOW_ACC_THRESHOLD:
+                if (
+                    final_train_acc < LOW_ACC_THRESHOLD
+                    and final_test_acc < LOW_ACC_THRESHOLD
+                ):
                     underfits.append((final_train_acc, final_test_acc))
                 elif final_overfit > OVERFIT_DIFF_THRESHOLD:
-                    overfits.append((final_train_acc, final_test_acc, final_overfit, max_overfit))
+                    overfits.append(
+                        (
+                            final_train_acc,
+                            final_test_acc,
+                            final_overfit,
+                            max_overfit,
+                        )
+                    )
                 else:
                     oks.append((final_train_acc, final_test_acc))
 
@@ -57,7 +72,9 @@ def main(log_file):
 
     print(f"Overfits: {len(overfits)}")
     for t_acc, v_acc, diff, max_diff in overfits:
-        print(f"  Train: {t_acc:.3f}, Test: {v_acc:.3f}, Final Overfit: {diff:.3f}, Max Overfit: {max_diff:.3f}")
+        print(
+            f"  Train: {t_acc:.3f}, Test: {v_acc:.3f}, Final Overfit: {diff:.3f}, Max Overfit: {max_diff:.3f}"
+        )
 
     print(f"\nUnderfits: {len(underfits)}")
     for t_acc, v_acc in underfits:
@@ -66,6 +83,7 @@ def main(log_file):
     print(f"\nOK runs: {len(oks)}")
     for t_acc, v_acc in oks:
         print(f"  Train: {t_acc:.3f}, Test: {v_acc:.3f}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

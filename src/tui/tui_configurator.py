@@ -680,17 +680,19 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     _print_header("GENETIC OPTIMIZATION OF CNN")
     prompt = "[1] Create new configuration\n[2] Load last configuration file\n[3] Load configuration from a file\n[4] Exit\n> "
     error_msg = "Invalid choice. Please enter 1, 2, 3 or 4."
-    choice = _prompt_for_validated_input(
-        prompt, lambda x: x in ["1", "2", "3", "4"], error_msg
-    )
+    # choice = _prompt_for_validated_input(
+    #     prompt, lambda x: x in ["1", "2", "3", "4"], error_msg
+    # )
 
-    if choice == "4":
-        console.print("Exiting program...")
-        return None
-    if choice == "2":
-        return load_newest_config(default_config, CONFIG_DIR)
-    elif choice == "3":
-        return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
+    # if choice == "4":
+    #     console.print("Exiting program...")
+    #     return None
+    # if choice == "2":
+    #     return load_newest_config(default_config, CONFIG_DIR)
+    # elif choice == "3":
+    #     return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
+
+    # return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
 
     logger.info("New configuration started", file_only=True)
 

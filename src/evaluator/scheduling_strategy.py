@@ -86,6 +86,7 @@ class SchedulingStrategy(ABC):
                 session_log_filename=session_log_filename,
                 num_dataloader_workers=dl_workers_per_cpu,
                 fixed_batch_size=fixed_batch_size,
+                total_cpu_workers=num_cpu_workers
             )
             p = ctx.Process(target=worker_main, args=(w_config,))
             p.start()

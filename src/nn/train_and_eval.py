@@ -226,7 +226,13 @@ def train_and_eval(
                     train_loader, chromosome.aug_intensity
                 )
 
-            lam_epoch = mixup_schedule(epoch, epochs, chromosome.mixup_alpha, warmup_frac=0.4, cooldown_frac=0.2)
+            lam_epoch = mixup_schedule(
+                epoch,
+                epochs,
+                chromosome.mixup_alpha,
+                warmup_frac=0.4,
+                cooldown_frac=0.2,
+            )
 
             train_loss, train_acc = train_epoch(
                 model,

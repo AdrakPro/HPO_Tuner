@@ -10,14 +10,14 @@ def get_default_config() -> Dict[str, Any]:
     return {
         "project": {"name": "HPO Paper-Based Experiment", "seed": 321},
         # Checkpoints
-        "checkpoint_config": {"interval_per_gen": 0},
+        "checkpoint_config": {"interval_per_gen": 1},
         # Parallel execution and scheduling
         "parallel_config": {
             "execution": {
                 "evaluation_mode": "HYBRID",  # Options: "CPU", "GPU", "HYBRID"
                 "enable_parallel": True,
-                "gpu_workers": 4,
-                "cpu_workers": 23,
+                "gpu_workers": 1,
+                "cpu_workers": 1,
                 "dataloader_workers": {
                     "per_gpu": 3,
                     "per_cpu": 1,
@@ -86,7 +86,7 @@ def get_default_config() -> Dict[str, Any]:
             },
         },
         # Nested validation
-        "nested_validation_config": {"enabled": True, "outer_k_folds": 2},
+        "nested_validation_config": {"enabled": True, "outer_k_folds": 1},
         # Genetic algorithm configuration
         "genetic_algorithm_config": {
             "genetic_operators": {
@@ -107,7 +107,7 @@ def get_default_config() -> Dict[str, Any]:
                 "elitism_percent": 0.1,
             },
             "calibration": {
-                "enabled": True,
+                "enabled": False,
                 "population_size": 27,
                 "generations": 1,
                 "training_epochs": 1,
@@ -123,15 +123,15 @@ def get_default_config() -> Dict[str, Any]:
                 },
             },
             "main_algorithm": {
-                "population_size": 27,
+                "population_size": 20,
                 "generations": 1,
-                "training_epochs": 1,
+                "training_epochs": 100,
                 "mutation_decay_rate": 0.98,
                 "stratification_bins": 3,
                 "stop_conditions": {
                     "max_generations": 90,
                     "early_stop_generations": 1,
-                    "early_stop_epochs": 20,
+                    "early_stop_epochs": 200,
                     "fitness_goal": 0.99,
                     "time_limit_minutes": 0,
                 },

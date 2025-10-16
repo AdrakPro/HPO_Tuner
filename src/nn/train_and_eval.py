@@ -271,6 +271,7 @@ def train_and_eval(
             else:
                 epochs_without_improvement += 1
 
+            early_stop_epochs = 200
             if epochs_without_improvement >= early_stop_epochs:
                 if epoch_callback is not None:
                     epoch_callback(

@@ -6,7 +6,7 @@ distributing the evaluation workload (e.g., CPU only, GPU only, Hybrid).
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import torch
 import torch.multiprocessing as mp
@@ -40,61 +40,6 @@ class SchedulingStrategy(ABC):
             A list of the started multiprocessing.Process objects.
         """
         pass
-
-    @staticmethod
-    def _spawn_processes(
-        ctx,
-        task_queue: mp.Queue,
-        result_queue: mp.Queue,
-        session_log_filename: str,
-        num_gpu_workers: int = 0,
-        num_cpu_workers: int = 0,
-        dl_workers_per_gpu: int = 1,
-        dl_workers_per_cpu: int = 1,
-        fixed_batch_size: Optional[int] = None,
-        gpu_worker_offset: int = 0,
-    ) -> List[mp.Process]:
-        """Helper to spawn and start worker processes."""
-        workers = []
-        total_workers = num_gpu_workers + num_cpu_workers
-
-        if total_workers == 0:
-            return []
-
-        # Spawn GPU workers
-        for i in range(num_gpu_workers):
-            w_config = WorkerConfig(
-                worker_id=i + gpu_worker_offset,
-                device=i,
-                task_queue=task_queue,
-                result_queue=result_queue,
-                session_log_filename=session_log_filename,
-                num_dataloader_workers=dl_workers_per_gpu,
-                fixed_batch_size=fixed_batch_size,
-            )
-
-            p = ctx.Process(target=worker_main, args=(w_config,))
-            p.start()
-            workers.append(p)
-
-        # Spawn CPU workers
-        for i in range(num_cpu_workers):
-            w_config = WorkerConfig(
-                worker_id=i + num_gpu_workers + gpu_worker_offset,
-                device="cpu",
-                task_queue=task_queue,
-                result_queue=result_queue,
-                session_log_filename=session_log_filename,
-                num_dataloader_workers=dl_workers_per_cpu,
-                fixed_batch_size=fixed_batch_size,
-                total_cpu_workers=num_cpu_workers
-            )
-            p = ctx.Process(target=worker_main, args=(w_config,))
-            p.start()
-            workers.append(p)
-
-        return workers
-
 
 class CPUOnlyStrategy(SchedulingStrategy):
     """Schedules all tasks to be run on CPU workers."""
@@ -292,3 +237,50 @@ class HybridStrategy(SchedulingStrategy):
             "cpu_task_queue": cpu_task_queue,
         }
 
+def _spawn_processes(
+    ctx: Any,
+    result_queue: mp.Queue,
+    session_log_filename: str,
+    task_queue: mp.Queue,
+    num_gpu_workers: int = 0,
+    num_cpu_workers: int = 0,
+    dl_workers_per_gpu: int = 1,
+    dl_workers_per_cpu: int = 1,
+    fixed_batch_size: Optional[int] = None,
+    gpu_worker_offset: int = 0,
+) -> List[mp.Process]:
+    """Helper to spawn and start worker processes."""
+    workers = []
+
+    # Spawn GPU workers
+    for i in range(num_gpu_workers):
+        w_config = WorkerConfig(
+            worker_id=i + gpu_worker_offset,
+            device=i,
+            task_queue=task_queue,
+            result_queue=result_queue,
+            session_log_filename=session_log_filename,
+            num_dataloader_workers=dl_workers_per_gpu,
+            fixed_batch_size=fixed_batch_size,
+        )
+        p = ctx.Process(target=worker_main, args=(w_config,))
+        p.start()
+        workers.append(p)
+
+    # Spawn CPU workers
+    for i in range(num_cpu_workers):
+        w_config = WorkerConfig(
+            worker_id=i + num_gpu_workers + gpu_worker_offset,
+            device="cpu",
+            task_queue=task_queue,
+            result_queue=result_queue,
+            session_log_filename=session_log_filename,
+            num_dataloader_workers=dl_workers_per_cpu,
+            fixed_batch_size=fixed_batch_size,
+            total_cpu_workers=num_cpu_workers,
+        )
+        p = ctx.Process(target=worker_main, args=(w_config,))
+        p.start()
+        workers.append(p)
+
+    return workers

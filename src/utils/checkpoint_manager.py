@@ -34,7 +34,8 @@ class _CheckpointManager:
     def __init__(
         self,
     ):
-        self.checkpoint_dir = "checkpoints"
+        task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+        self.checkpoint_dir = f"/lustre/pd01/hpc-adamak7184-1759856296/checkpoints/{task_id}"
         self.filepath = os.path.join(self.checkpoint_dir, "ga_checkpoint.pkl")
         self.temp_filepath = f"{self.filepath}.tmp"
         os.makedirs(self.checkpoint_dir, exist_ok=True)

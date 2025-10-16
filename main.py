@@ -47,10 +47,11 @@ def main():
             if not config:
                 return
 
-            log_dir = "/lustre/pd01/hpc-adamak7184-1759856296"
+            task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+            log_dir = f"/lustre/pd01/hpc-adamak7184-1759856296/logs/{task_id}"
             ensure_dir_exists(log_dir)
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
-            session_log_filename = os.path.join(log_dir, f"log_{timestamp}.log")
+            session_log_filename = os.path.join(log_dir, f"log_{task_id}_{timestamp}.log")
 
             logger.add_file_sink(session_log_filename)
 

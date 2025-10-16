@@ -7,7 +7,7 @@ import os
 import queue
 import signal
 import time
-from typing import Union
+from typing import Union, Any, Callable, Tuple
 
 import torch
 

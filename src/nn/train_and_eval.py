@@ -1,8 +1,9 @@
 from typing import Any, Dict, Tuple
-
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.profiler
 from torch.amp import GradScaler, autocast
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
@@ -25,6 +26,7 @@ def train_epoch(
     lam_alpha: float,
     scaler: GradScaler = None,
     scheduler=None,
+    profiler: torch.profiler.profile = None,
 ) -> tuple[float, float]:
     """
     Train the model for one epoch.
@@ -36,6 +38,7 @@ def train_epoch(
         optimizer: Optimizer.
         device: Device to run computations on.
         scaler: Scaler supporting Mixed Precision
+        profiler: Optional PyTorch profiler instance.
 
     Returns:
         Tuple of average loss and accuracy for the epoch.
@@ -116,6 +119,9 @@ def train_epoch(
 
         if scheduler is not None and isinstance(scheduler, OneCycleLR):
             scheduler.step()
+            
+        if profiler:
+            profiler.step()
 
         # Metrics
         running_loss += loss.item() * inputs.size(0)
@@ -196,6 +202,8 @@ def train_and_eval(
     Returns:
         Tuple of (final_test_accuracy, final_test_loss).
     """
+    
+    profiling_enabled = os.environ.get("ENABLE_PROFILER") == "1"
 
     try:
         model: nn.Module = get_network(chromosome, neural_config).to(device)
@@ -214,6 +222,23 @@ def train_and_eval(
 
         light_switch_epoch = int(0.1 * epochs)
         strong_switch_epoch = int(0.4 * epochs)
+        
+        # --- Profiler Setup ---
+        profiler = None
+        if profiling_enabled:
+            logger.info(f"Profiler enabled for PID: {os.getpid()}. Output will be in profile_{os.getpid()}.txt")
+            activities = [torch.profiler.ProfilerActivity.CPU]
+            if device.type == "cuda":
+                activities.append(torch.profiler.ProfilerActivity.CUDA)
+            
+            profiler = torch.profiler.profile(
+                activities=activities,
+                schedule=torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1),
+                record_shapes=True,
+                profile_memory=True,
+                with_stack=True,
+            )
+            profiler.__enter__() # Manually enter context
 
         for epoch in range(epochs):
             if epoch == light_switch_epoch:
@@ -243,6 +268,7 @@ def train_and_eval(
                 lam_epoch,
                 scaler,
                 scheduler,
+                profiler, # Pass profiler to train_epoch
             )
             test_loss, test_acc = evaluate(
                 model, test_loader, criterion, device
@@ -288,6 +314,17 @@ def train_and_eval(
                         f"due to no improvement for {early_stop_epochs} epochs."
                     )
                 break
+        
+        # --- Profiler Teardown ---
+        if profiling_enabled and profiler:
+            profiler.__exit__(None, None, None) # Manually exit context
+            # Sort by self_cpu_time_total to see the biggest offenders first
+            profile_result = profiler.key_averages().table(sort_by="self_cpu_time_total", row_limit=50)
+            output_filename = f"profile_{os.getpid()}.txt"
+            with open(output_filename, "w") as f:
+                f.write(profile_result)
+            logger.info(f"Profiler results saved to {output_filename}")
+
 
         if is_final:
             saver = ModelSaver("model")

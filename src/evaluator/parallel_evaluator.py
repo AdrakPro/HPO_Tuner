@@ -28,7 +28,8 @@ def _task_stealer(
     num_gpu_workers: int,
     num_cpu_workers: int,
     stop_event: threading.Event,
-    wakeup_event: threading.Event
+    wakeup_event: threading.Event,
+    pending_cpu_tasks: threading.Semaphore
 ):
     """
     Runs in a background thread. Moves surplus tasks from the GPU queue
@@ -39,19 +40,23 @@ def _task_stealer(
     # Threshold with a safety buffer. Steal only if there's a significant surplus.
     # This prevents stealing the last few tasks, reserving them for GPUs.
     stealing_threshold = num_gpu_workers + num_cpu_workers
-
     while not stop_event.is_set():
         wakeup_event.wait(timeout=300.0)
 
         if stop_event.is_set(): break
 
         try:
-            if (gpu_queue.qsize() > stealing_threshold and cpu_queue.qsize() < num_cpu_workers):
-                task = gpu_queue.get(block=False)
-                cpu_queue.put(task)
-                logger.info(f"[TaskStealer] Moved task for individual {task.index} to CPU queue.", file_only=True)
-        except (queue.Empty, OSError):
-            # This is expected if the queue is empty, just continue.
+            if pending_cpu_tasks.acquire(blocking=False):
+                if (gpu_queue.qsize() > stealing_threshold):
+                    try:
+                        task = gpu_queue.get(block=False)
+                        cpu_queue.put(task)
+                        logger.info(f"[TaskStealer] Moved task for individual {task.index} to CPU queue.", file_only=True)
+                    except queue.Empty:
+                        pending_cpu_tasks.release()
+                else:
+                    pending_cpu_tasks.release()
+        except (OSError):
             pass
         except Exception as e:
             logger.error(f"[TaskStealer] Unexpected error: {e}")
@@ -126,6 +131,8 @@ class ParallelEvaluator(Evaluator):
             
             self._stop_stealer_event = threading.Event()
             self._stealer_wakeup_event = threading.Event()
+            self._pending_cpu_tasks = threading.Semaphore(self.num_cpu_workers)
+
             self._stealer_thread = threading.Thread(
                 target=_task_stealer,
                 args=(
@@ -135,6 +142,7 @@ class ParallelEvaluator(Evaluator):
                     self.execution_config.get("cpu_workers", 0),
                     self._stop_stealer_event,
                     self._stealer_wakeup_event,
+                    self._pending_cpu_tasks,
                 ),
                 daemon=True,
             )
@@ -186,25 +194,24 @@ class ParallelEvaluator(Evaluator):
         
         random.shuffle(tasks)
 
-        # Logika wstępnego wypełniania kolejek
         if isinstance(self.strategy, HybridStrategy) and self.num_cpu_workers > 0:
-            # Oblicz, ile zadań wstępnie załadować do CPU
             num_to_preload = min(len(tasks), self.num_cpu_workers)
             
-            # Wypełnij kolejkę CPU
             logger.info(f"Pre-loading CPU queue with {num_to_preload} tasks.")
             for i in range(num_to_preload):
-                task = tasks[i]
-                self._pending_tasks[task.index] = task
-                self.cpu_task_queue.put(task)
+                if self._pending_cpu_tasks.acquire(blocking=False):
+                    task = tasks[i]
+                    self._pending_tasks[task.index] = task
+                    self.cpu_task_queue.put(task)
+                else:
+                    logger.warning("Could not acquire CPU semaphore for pre-loading.")
+                    break
             
-            # Pozostałe zadania umieść w kolejce GPU
             remaining_tasks = tasks[num_to_preload:]
             for task in remaining_tasks:
                 self._pending_tasks[task.index] = task
                 self.gpu_task_queue.put(task)
         else:
-            # Działanie standardowe dla strategii innych niż Hybrid
             target_queue = self.task_queues[0]
             for task in tasks:
                 self._pending_tasks[task.index] = task
@@ -217,6 +224,7 @@ class ParallelEvaluator(Evaluator):
                     result: Result = self.result_queue.get(timeout=1.0)
 
                     if result.worker_type == 'cpu' and self._stealer_wakeup_event:
+                        self._pending_cpu_tasks.release()
                         self._stealer_wakeup_event.set()
 
                     self._process_result(result, stop_conditions)

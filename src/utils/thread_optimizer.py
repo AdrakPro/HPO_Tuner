@@ -5,45 +5,77 @@ Thread optimization for PyTorch to prevent oversubscription on multi-core system
 import os
 import torch
 from src.logger.logger import logger
-
+from math import floor
+from typing import Tuple
 
 class ThreadOptimizer:
     """
     Optimizes thread usage for PyTorch and numerical libraries
     to prevent oversubscription on systems with many CPU cores.
     """
+    @staticmethod
+    def get_total_cores() -> int:
+        """Gets the total number of available CPU cores."""
+        return 7 
 
     @staticmethod
-    def optimize_worker_threads(
-        worker_id: int,
-        total_workers: int,
-        total_system_cores: int = 128,
-        reserved_cores: int = 8,
-    ) -> int:
+    def calculate_worker_threads(
+        total_cpu_workers: int,
+        total_gpu_workers: int,
+        threads_per_gpu_worker: int = 2,
+    ) -> Tuple[int, int]:
         """
-        Calculate and set optimal thread configuration for a worker.
+        Calculates the optimal number of threads for CPU and GPU workers.
 
         Args:
-            worker_id: ID of the worker
-            total_workers: Total number of workers
-            total_system_cores: Total CPU cores in the system
-            reserved_cores: Cores to reserve for system/GPU operations
+            total_cpu_workers: The number of CPU-bound worker processes.
+            total_gpu_workers: The number of GPU-bound worker processes.
+            threads_per_gpu_worker: The number of CPU threads to allocate per GPU worker.
 
         Returns:
-            Dictionary with thread configuration
+            A tuple of (threads_for_each_cpu_worker, threads_for_each_gpu_worker).
         """
-        # Calculate available cores for workers
-        available_cores = total_system_cores - reserved_cores
-        cores_per_worker = max(1, available_cores // total_workers)
+        total_cores = ThreadOptimizer.get_total_cores()
+        logger.info(f"System has {total_cores} total CPU cores.")
 
-        # Limit to reasonable maximum (16 cores per worker is plenty)
-        cores_per_worker = min(cores_per_worker, 16)
+        # Reserve a core for the OS and main process if we have enough cores
+        reserved_cores = 1 if total_cores > 4 else 0
+
+        available_cores = total_cores - reserved_cores
+        cores_for_gpu_workers = total_gpu_workers * threads_per_gpu_worker
+
+        # Ensure we don't overallocate to GPU workers
+        if cores_for_gpu_workers > available_cores:
+            actual_gpu_threads = max(1, floor(available_cores / total_gpu_workers) if total_gpu_workers > 0 else 0)
+        else:
+            actual_gpu_threads = threads_per_gpu_worker
+
+        cores_for_gpu_workers = total_gpu_workers * actual_gpu_threads
+
+        # Remaining cores are for CPU workers
+        cpu_pool_cores = available_cores - cores_for_gpu_workers
+
+        if total_cpu_workers > 0 and cpu_pool_cores > 0:
+            cpu_worker_threads = max(1, floor(cpu_pool_cores / total_cpu_workers))
+        else:
+            cpu_worker_threads = 1  # Default to 1 if no cores are left or no workers
 
         logger.info(
-            f"Worker {worker_id} thread optimization: {cores_per_worker} threads/worker "
-            f"({total_workers} workers sharing {available_cores} cores)"
+            f"Thread allocation: CPU_workers={total_cpu_workers} @ {cpu_worker_threads} threads | "
+            f"GPU_workers={total_gpu_workers} @ {actual_gpu_threads} threads."
         )
 
+        return cpu_worker_threads, actual_gpu_threads
+
+    @staticmethod
+    def set_omp_threads(num_threads: int):
+        """Sets the standard OpenMP/MKL environment variables for thread count."""
+        str_threads = str(num_threads)
+        os.environ["OMP_NUM_THREADS"] = str_threads
+        os.environ["MKL_NUM_THREADS"] = str_threads
+        os.environ["NUMEXPR_NUM_THREADS"] = str_threads
+        os.environ["OPENBLAS_NUM_THREADS"] = str_threads
+        torch.set_num_threads(num_threads)
         return cores_per_worker
 
     @staticmethod
@@ -59,51 +91,3 @@ class ThreadOptimizer:
                 torch.backends.cuda.matmul.allow_tf32 = False
                 torch.backends.cudnn.allow_tf32 = False
 
-    @staticmethod
-    def get_optimal_batch_size(
-        device_type: str, model_parameter_count: int
-    ) -> int:
-        """
-        Calculate optimal batch size based on device and model size.
-
-        Args:
-            device_type: 'cuda' or 'cpu'
-            model_parameter_count: Number of parameters in the model
-
-        Returns:
-            Recommended batch size
-        """
-        if device_type == "cuda":
-            # A100 can handle large batches efficiently
-            if model_parameter_count < 1_000_000:  # Small model
-                return 1024
-            elif model_parameter_count < 10_000_000:  # Medium model
-                return 512
-            else:  # Large model
-                return 256
-        else:
-            # CPU benefits from smaller batches due to memory bandwidth
-            if model_parameter_count < 1_000_000:
-                return 128
-            elif model_parameter_count < 10_000_000:
-                return 64
-            else:
-                return 32
-
-    @staticmethod
-    def get_system_threading_info() -> dict:
-        """Get current threading configuration for diagnostics."""
-        return {
-            "omp_num_threads": os.environ.get("OMP_NUM_THREADS", "Not set"),
-            "mkl_num_threads": os.environ.get("MKL_NUM_THREADS", "Not set"),
-            "pytorch_threads": torch.get_num_threads(),
-            "cuda_available": torch.cuda.is_available(),
-            "cuda_device_count": (
-                torch.cuda.device_count() if torch.cuda.is_available() else 0
-            ),
-            "tf32_enabled": (
-                torch.backends.cuda.matmul.allow_tf32
-                if torch.cuda.is_available()
-                else False
-            ),
-        }

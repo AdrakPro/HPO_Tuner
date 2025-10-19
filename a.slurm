@@ -4,10 +4,10 @@
 #SBATCH --error=test_blad_fold_%a.err
 #SBATCH --partition=lem-gpu-normal
 #SBATCH --nodes=1
-#SBATCH --time=03:00:00
+#SBATCH --time=05:00:00
 #SBATCH --gres=gpu:hopper:1
 #SBATCH --ntasks 1
-#SBATCH --cpus-per-task=7
+#SBATCH --cpus-per-task=8
 
 # ===============================
 #   Konfiguracja i informacje

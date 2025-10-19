@@ -28,6 +28,7 @@ def _task_stealer(
     num_gpu_workers: int,
     num_cpu_workers: int,
     stop_event: threading.Event,
+    wakeup_event: threading.Event
 ):
     """
     Runs in a background thread. Moves surplus tasks from the GPU queue
@@ -40,9 +41,12 @@ def _task_stealer(
     stealing_threshold = num_gpu_workers + num_cpu_workers
 
     while not stop_event.is_set():
+        wakeup_event.wait(timeout=300.0)
+
+        if stop_event.is_set(): break
+
         try:
-            # NEW LOGIC: Steal only if CPU queue is empty AND there's a surplus on GPU queue.
-            if cpu_queue.empty() and gpu_queue.qsize() > stealing_threshold:
+            if (gpu_queue.qsize() > stealing_threshold and cpu_queue.qsize() < num_cpu_workers):
                 task = gpu_queue.get(block=False)
                 cpu_queue.put(task)
                 logger.info(f"[TaskStealer] Moved task for individual {task.index} to CPU queue.", file_only=True)
@@ -52,7 +56,8 @@ def _task_stealer(
         except Exception as e:
             logger.error(f"[TaskStealer] Unexpected error: {e}")
 
-        time.sleep(15)
+        wakeup_event.clear()
+
     logger.info("Task stealer thread stopped.")
 
 
@@ -101,6 +106,7 @@ class ParallelEvaluator(Evaluator):
         self.task_queues: List[mp.Queue] = []
         self._stealer_thread: Optional[threading.Thread] = None
         self._stop_stealer_event: Optional[threading.Event] = None
+        self._stealer_wakeup_event: Optional[threading.Event] = None
         
         logger.info("Initializing worker pool...")
         launch_results = self.strategy.launch_workers(
@@ -119,6 +125,7 @@ class ParallelEvaluator(Evaluator):
             self.task_queues = [self.gpu_task_queue, self.cpu_task_queue]
             
             self._stop_stealer_event = threading.Event()
+            self._stealer_wakeup_event = threading.Event()
             self._stealer_thread = threading.Thread(
                 target=_task_stealer,
                 args=(
@@ -127,6 +134,7 @@ class ParallelEvaluator(Evaluator):
                     self.execution_config.get("gpu_workers", 0),
                     self.execution_config.get("cpu_workers", 0),
                     self._stop_stealer_event,
+                    self._stealer_wakeup_event,
                 ),
                 daemon=True,
             )
@@ -207,6 +215,10 @@ class ParallelEvaluator(Evaluator):
             while len(results_for_generation) < len(population) and not self._shutting_down:
                 try:
                     result: Result = self.result_queue.get(timeout=1.0)
+
+                    if result.worker_type == 'cpu' and self._stealer_wakeup_event:
+                        self._stealer_wakeup_event.set()
+
                     self._process_result(result, stop_conditions)
                     results_for_generation.append(result)
 
@@ -238,6 +250,8 @@ class ParallelEvaluator(Evaluator):
 
         if self._stealer_thread and self._stop_stealer_event:
             self._stop_stealer_event.set()
+            if self._stealer_wakeup_event:
+                self._stealer_wakeup_event.set()
             self._stealer_thread.join(timeout=5.0)
 
         for q in self.task_queues:

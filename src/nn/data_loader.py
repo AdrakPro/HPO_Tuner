@@ -42,6 +42,14 @@ def get_num_workers(num_workers_from_config: int) -> int:
     #     return 0
     return num_workers_from_config
 
+def dataloader_worker_init_fn(worker_id: int):
+    """
+    Sets the number of threads for a dataloader worker to 1.
+    This prevents thread over-subscription when the main worker process
+    is already multi-threaded, which is crucial for data loading performance.
+    """
+    torch.set_num_threads(1)
+
 
 class DataLoaderManager:
     """A context manager to ensure DataLoader workers are properly shut down."""
@@ -138,28 +146,20 @@ def get_dataset_loaders(
 
     num_workers = get_num_workers(num_dataloader_workers)
     enable_persistent_workers = num_workers > 0
+    loader_args = {
+        "batch_size": batch_size,
+        "num_workers": num_workers,
+        "pin_memory": is_gpu,
+        "persistent_workers": enable_persistent_workers,
+    }
 
-    train_loader = DataLoader(
-        train_set,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=is_gpu,
-        persistent_workers=enable_persistent_workers,
-        prefetch_factor=(4 if num_workers > 0 else None),
-        multiprocessing_context=("spawn" if num_workers > 0 else None),
-    )
+    if enable_persistent_workers:
+        loader_args["worker_init_fn"] = dataloader_worker_init_fn
+        loader_args["prefetch_factor"] = 4
+        loader_args["multiprocessing_context"] = "spawn"
 
-    test_loader = DataLoader(
-        test_set,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=is_gpu,
-        persistent_workers=enable_persistent_workers,
-        prefetch_factor=4 if num_workers > 0 else None,
-        multiprocessing_context="spawn" if num_workers > 0 else None,
-    )
+    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+    test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
     return DataLoaderManager(train_loader, test_loader, is_gpu_context=is_gpu)
 

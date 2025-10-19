@@ -43,15 +43,25 @@ def worker_main(worker_config: WorkerConfig) -> None:
     """
     Top-level worker function, so it can be pickled by multiprocessing.
     """
-    cores_per_worker = 1
-
+    
+    os.environ["OMP_SCHEDULE"] = "STATIC"
+    os.environ["OMP_PROC_BIND"] = "CLOSE"
+    a = 2
+    b = 2
     if worker_config.device == "cpu":
-        os.environ["OMP_NUM_THREADS"] = str(cores_per_worker)
-        os.environ["MKL_NUM_THREADS"] = str(cores_per_worker)
-        os.environ["NUMEXPR_NUM_THREADS"] = str(cores_per_worker)
-        os.environ["OPENBLAS_NUM_THREADS"] = str(cores_per_worker)
+        os.environ["OMP_NUM_THREADS"] = str(a)
+        os.environ["MKL_NUM_THREADS"] = str(a)
+        os.environ["NUMEXPR_NUM_THREADS"] = str(a)
+        os.environ["OPENBLAS_NUM_THREADS"] = str(a)
 
-        torch.set_num_threads(cores_per_worker)
+        torch.set_num_threads(a)
+    else:
+        os.environ["OMP_NUM_THREADS"] = str(b)
+        os.environ["MKL_NUM_THREADS"] = str(b)
+        os.environ["NUMEXPR_NUM_THREADS"] = str(b)
+        os.environ["OPENBLAS_NUM_THREADS"] = str(b)
+
+        torch.set_num_threads(b)
 
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -203,6 +213,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     duration_seconds=duration,
                     status="SUCCESS",
                     log_lines=log_buffer,
+                    worker_type=worker_config.type
                 )
 
             except (CudaOutOfMemoryError, NumericalInstabilityError) as e:
@@ -217,6 +228,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     status="FAILURE",
                     error_message=str(e),
                     log_lines=log_buffer,
+                    worker_type=worker_config.type
                 )
             except Exception as e:
                 log_buffer.append(
@@ -230,6 +242,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     status="FAILURE",
                     error_message=str(e),
                     log_lines=log_buffer,
+                    worker_type=worker_config.type
                 )
 
             worker_config.result_queue.put(result)

@@ -1,10 +1,10 @@
 --- TESTOWE ZADANIE TABLICOWE ---
 Zadanie tablicowe , fold 
-Węzeł: r10-13
-Data: Thu Oct 16 09:09:10 PM CEST 2025
+Węzeł: r10-9
+Data: Fri Oct 17 02:38:59 PM CEST 2025
 Katalog roboczy: /home/adamak7184/tmp/genetyk/HPO_Tuner
 ==================================
-Looking in links: /mnt/lscratch/slurm/4165100/tmpyjjst0g_
+Looking in links: /mnt/lscratch/slurm/4167015/tmpq_d_1zmx
 Requirement already satisfied: pip in ./.venv/lib/python3.12/site-packages (25.2)
 Requirement already satisfied: pip in ./.venv/lib/python3.12/site-packages (25.2)
 Requirement already satisfied: setuptools in ./.venv/lib/python3.12/site-packages (80.9.0)

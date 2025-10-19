@@ -123,7 +123,7 @@ def get_default_config() -> Dict[str, Any]:
                 },
             },
             "main_algorithm": {
-                "population_size": 20,
+                "population_size": 1000,
                 "generations": 1,
                 "training_epochs": 100,
                 "mutation_decay_rate": 0.98,

@@ -2,7 +2,7 @@
 Data structures for parallel execution.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Union, Tuple
 import multiprocessing as mp
 
@@ -20,6 +20,9 @@ class WorkerConfig:
     total_cpu_workers: Optional[int] = None
     fixed_batch_size: Optional[int] = None
 
+    @property
+    def type(self) -> str:
+        return 'cpu' if str(self.device) == 'cpu' else 'gpu'
 
 @dataclass
 class Task:
@@ -48,3 +51,4 @@ class Result:
     status: str  # "SUCCESS", "FAILURE", "CANCELLED"
     log_lines: List[str | Tuple[str, str]]
     error_message: Optional[str] = None
+    worker_type: str = "unknown"

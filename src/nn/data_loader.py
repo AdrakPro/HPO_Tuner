@@ -122,10 +122,10 @@ def get_dataset_loaders(
     if train_indices is not None and test_indices is not None:
         # Cross-validation fold. The "test set" is a holdout part of the original training set
         full_train_set_with_train_transforms = datasets.CIFAR10(
-            root=data_dir, train=True, download=True, transform=transform_train
+            root=data_dir, train=True, download=False, transform=transform_train
         )
         full_train_set_with_test_transforms = datasets.CIFAR10(
-            root=data_dir, train=True, download=True, transform=transform_test
+            root=data_dir, train=True, download=False, transform=transform_test
         )
 
         train_set = Subset(full_train_set_with_train_transforms, train_indices)
@@ -140,7 +140,9 @@ def get_dataset_loaders(
         )
 
         if subset_percentage < 1.0:
-            subset_size = int(len(train_set) * subset_percentage)
+            num_samples = len(train_set)
+            calculated_size = max(1, int(num_samples * subset_percentage))
+            subset_size = min(num_samples, calculated_size)
             indices = random.sample(range(len(train_set)), subset_size)
             train_set = Subset(train_set, indices)
 

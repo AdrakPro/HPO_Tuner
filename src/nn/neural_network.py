@@ -194,11 +194,12 @@ def get_optimizer_and_scheduler(
         return optimizer, scheduler
 
     warmup_epochs = max(1, int(0.05 * epochs))
+    main_scheduler_epochs = max(1, epochs - warmup_epochs)
 
     # Main scheduler
     if chromosome.optimizer_schedule.is_cosine:
         main_scheduler = CosineAnnealingLR(
-            optimizer, T_max=epochs - warmup_epochs  # Account for warmup
+            optimizer, T_max=main_scheduler_epochs
         )
     else:
         main_scheduler = ExponentialLR(optimizer, gamma=EXP_DECAY)

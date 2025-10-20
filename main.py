@@ -16,6 +16,26 @@ from src.utils.checkpoint_manager import GaState, checkpoint_manager
 from src.utils.file_helper import ensure_dir_exists
 from src.utils.signal_manager import signal_manager
 
+from torchvision import datasets
+
+def prepare_dataset():
+    """
+    Downloads the CIFAR-10 dataset to the './model_data' directory if it doesn't exist.
+    This should be called once from the main process before any workers are spawned
+    to prevent race conditions and deadlocks during download.
+    """
+    logger.info("Verifying CIFAR-10 dataset...")
+    try:
+        # Instantiate both train and test sets with download=True.
+        # This will download the files if they are missing and do nothing if they exist.
+        datasets.CIFAR10(root="./model_data", train=True, download=True)
+        datasets.CIFAR10(root="./model_data", train=False, download=True)
+        logger.info("Dataset is present and ready.")
+    except Exception as e:
+        logger.error(f"Fatal error: Failed to download or verify the dataset: {e}")
+        logger.error("Please check your network connection and directory permissions.")
+        # This is a fatal error, so we should exit.
+        raise SystemExit(1)
 
 def main():
     try:
@@ -29,6 +49,7 @@ def main():
         logger.info("Main received SIGINT, shutting down gracefully...")
         signal_manager.handle_signal(signum, frame)
 
+    prepare_dataset()
     signal_manager.initialize()
 
     tui = TUI()
@@ -48,7 +69,7 @@ def main():
                 return
 
             task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
-            log_dir = f"/lustre/pd01/hpc-adamak7184-1759856296/logs/{task_id}"
+            log_dir = "logs" 
             ensure_dir_exists(log_dir)
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
             session_log_filename = os.path.join(log_dir, f"log_{task_id}_{timestamp}.log")

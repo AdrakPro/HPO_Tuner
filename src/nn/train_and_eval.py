@@ -1,4 +1,5 @@
 from typing import Any, Dict, Tuple
+import traceback
 import os
 import torch
 import torch.nn as nn
@@ -52,6 +53,9 @@ def train_epoch(
     nan_batches = 0
 
     for inputs, targets in loader:
+        if scheduler is not None and isinstance(scheduler, OneCycleLR):
+            scheduler.step()
+
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
 
@@ -117,9 +121,6 @@ def train_epoch(
         else:
             optimizer.step()
 
-        if scheduler is not None and isinstance(scheduler, OneCycleLR):
-            scheduler.step()
-            
         if profiler:
             profiler.step()
 
@@ -132,8 +133,11 @@ def train_epoch(
             + (1 - lam) * predicted.eq(targets_b).sum().item()
         )
 
-    epoch_loss = running_loss / total if total > 0 else float("inf")
-    epoch_acc = correct / total if total > 0 else 0.0
+    if total == 0:
+        return float("inf"), 0.0
+
+    epoch_loss = running_loss / total 
+    epoch_acc = correct / total
     return epoch_loss, epoch_acc
 
 
@@ -169,6 +173,10 @@ def evaluate(
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
+
+    if total == 0:
+        return float("inf"), 0.0
+
     avg_loss = running_loss / total
     accuracy = correct / total
     return avg_loss, accuracy
@@ -202,8 +210,15 @@ def train_and_eval(
     Returns:
         Tuple of (final_test_accuracy, final_test_loss).
     """
-    
+
+    if len(train_loader) == 0:
+        logger.warning("Train loader is empty. Skipping training and returning 0 fitness.")
+        return 0.0, float("inf")
+
+
     profiling_enabled = os.environ.get("ENABLE_PROFILER") == "1"
+    profiler = None
+    
 
     try:
         model: nn.Module = get_network(chromosome, neural_config).to(device)
@@ -224,7 +239,6 @@ def train_and_eval(
         strong_switch_epoch = int(0.4 * epochs)
         
         # --- Profiler Setup ---
-        profiler = None
         if profiling_enabled:
             logger.info(f"Profiler enabled for PID: {os.getpid()}. Output will be in profile_{os.getpid()}.txt")
             activities = [torch.profiler.ProfilerActivity.CPU]
@@ -316,17 +330,6 @@ def train_and_eval(
                 break
         
         # --- Profiler Teardown ---
-        if profiling_enabled and profiler:
-            profiler.__exit__(None, None, None) # Manually exit context
-            # Sort by self_cpu_time_total to see the biggest offenders first
-            profile_result = profiler.key_averages().table(sort_by="self_cpu_time_total", row_limit=50)
-            output_filename = f"profile_{os.getpid()}.txt"
-            with open(output_filename, "w") as f:
-                f.write(profile_result)
-            logger.info(f"Profiler results saved to {output_filename}")
-
-
-        if is_final:
             saver = ModelSaver("model")
             callback_msg = saver.save(model)
             if callback_msg:
@@ -353,5 +356,17 @@ def train_and_eval(
         )
         raise
     except Exception as e:
-        logger.error(f"An unexpected error occurred in train_and_eval: {e}")
+        b_str = traceback.format_exc()
+        logger.error(f"An unexpected error occurred in train_and_eval: {e} -> {b_str}")
         raise
+    finally:
+        if profiling_enabled and profiler:
+            logger.info("Function exit or interrupt detected. Saving profiler data...")
+            profiler.__exit__(None, None, None) # Manually exit context
+            
+            # Sort by self_cpu_time_total to see the biggest offenders first
+            profile_result = profiler.key_averages().table(sort_by="self_cpu_time_total", row_limit=50)
+            output_filename = f"logs/profile_{os.getpid()}.txt"
+            with open(output_filename, "w") as f:
+                f.write(profile_result)
+            logger.info(f"Profiler results saved to {output_filename}")	        

@@ -7,11 +7,15 @@ import os
 import queue
 import signal
 import time
-from typing import Union, Any, Callable, Tuple
+from typing import Union
+
+# --- CHANGE START: Import the logging module ---
+# We need this module to create a logger instance inside the worker process.
+import logging
+# --- CHANGE END ---
 
 import torch
 
-from src.logger.logger import logger
 from src.model.chromosome import Chromosome, OptimizerSchedule
 from src.model.parallel import Result, WorkerConfig
 from src.nn.data_loader import get_dataset_loaders
@@ -30,7 +34,7 @@ def init_device(device_id: Union[str, int]) -> torch.device:
 
     if isinstance(device_id, int):
         if not torch.cuda.is_available():
-            logger.error(f"CUDA not available for GPU worker {device_id}.")
+            # This will now be written to the log file by the worker's logger
             return torch.device("cpu")
         else:
             torch.cuda.set_device(device_id)
@@ -43,25 +47,27 @@ def worker_main(worker_config: WorkerConfig) -> None:
     """
     Top-level worker function, so it can be pickled by multiprocessing.
     """
-    
     os.environ["OMP_SCHEDULE"] = "STATIC"
     os.environ["OMP_PROC_BIND"] = "CLOSE"
-    a = 2
-    b = 2
+
     if worker_config.device == "cpu":
-        os.environ["OMP_NUM_THREADS"] = str(a)
-        os.environ["MKL_NUM_THREADS"] = str(a)
-        os.environ["NUMEXPR_NUM_THREADS"] = str(a)
-        os.environ["OPENBLAS_NUM_THREADS"] = str(a)
+        num_threads = 6
+        # Pin the CPU worker to 6 cores (e.g., 0 through 5)
+        cores_to_use = set(range(num_threads))
+    else: # For GPU worker
+        num_threads = 2
+        # Pin the GPU worker to 2 cores (e.g., 0 and 1)
+        cores_to_use = set(range(num_threads))
 
-        torch.set_num_threads(a)
-    else:
-        os.environ["OMP_NUM_THREADS"] = str(b)
-        os.environ["MKL_NUM_THREADS"] = str(b)
-        os.environ["NUMEXPR_NUM_THREADS"] = str(b)
-        os.environ["OPENBLAS_NUM_THREADS"] = str(b)
+    try:
+        pid = os.getpid()
+        os.sched_setaffinity(pid, cores_to_use)
+        print(f"Worker process {pid} (Device: {worker_config.device}, ID: {worker_config.worker_id}) pinned to CPUs: {os.sched_getaffinity(pid)}")
+    except (AttributeError, FileNotFoundError):
+        print("CPU affinity not supported on this system.")
+    except Exception as e:
+        print(f"Warning: Could not set worker affinity for PID {pid}: {e}")
 
-        torch.set_num_threads(b)
 
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -73,6 +79,36 @@ def worker_main(worker_config: WorkerConfig) -> None:
         else "CPU"
     )
 
+    # --- CHANGE START: Set up a dedicated logger for this worker ---
+    # This replaces the queue-based logging system.
+    # It creates a new logger that writes directly to a dynamically constructed log file path.
+    # This is ONLY safe for a single worker process.
+    worker_logger = logging.getLogger(f"worker_{worker_config.worker_id}")
+    worker_logger.setLevel(logging.INFO)
+    worker_logger.propagate = False
+    
+    if not worker_logger.hasHandlers():
+        # Construct the log file path as requested.
+        log_dir = "logs"
+        username = "AdrakPro"
+        timestamp = "2025-10-21_09-35-44" # Formatted from '2025-10-21 09:35:44'
+        
+        # Ensure the directory exists.
+        os.makedirs(log_dir, exist_ok=True)
+        
+        log_filename = os.path.join(log_dir, f"{username}_{timestamp}.log")
+        
+        file_handler = logging.FileHandler(log_filename)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%Y-%m-%d %H:%M:%S')
+        file_handler.setFormatter(formatter)
+        worker_logger.addHandler(file_handler)
+    # --- CHANGE END ---
+
+    # --- CHANGE START: Check for CUDA availability using the new logger ---
+    if isinstance(worker_config.device, int) and not torch.cuda.is_available():
+        worker_logger.error(f"CUDA not available for GPU worker {worker_config.device}.")
+    # --- CHANGE END ---
+
     # Restore signal handler after imports are complete
     signal.signal(signal.SIGINT, original_sigint_handler)
 
@@ -83,13 +119,19 @@ def worker_main(worker_config: WorkerConfig) -> None:
             if task is None:  # Sentinel to stop
                 break
 
-            log_buffer = [
-                f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
-                (
-                    f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}",
-                    "file_only",
-                ),
-            ]
+            # This buffer is for the final summary attached to the Result object
+            summary_log_buffer = []
+
+            # --- CHANGE START: Use the worker_logger directly ---
+            # Replaces the old `log_message` function that used a queue.
+            worker_logger.info(
+                f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)"
+            )
+            # For file-only logs, we just log it. The main logger isn't involved.
+            worker_logger.info(
+                f"[Worker-{worker_config.worker_id} / {device_name}] Hyperparameters: {task.individual_hyperparams}"
+            )
+            # --- CHANGE END ---
 
             try:
                 start_time = time.perf_counter()
@@ -119,31 +161,24 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
                     chromosome.base_lr = scaled_lr
 
+                    # --- CHANGE START: Use worker_logger for all log messages ---
                     if scaled_lr < original_lr * scale_factor:
-                        log_buffer.append(
+                        worker_logger.info(
                             f"[Worker-{worker_config.worker_id} / {device_name}] "
                             f"Scaled base_lr from {original_lr:.6f} to {original_lr * scale_factor:.6f}, "
                             f"but CAPPED at {scaled_lr:.6f} for batch_size {chromosome.batch_size}"
                         )
                     else:
-                        log_buffer.append(
+                        worker_logger.info(
                             f"[Worker-{worker_config.worker_id} / {device_name}] "
                             f"Scaled base_lr to {chromosome.base_lr:.6f} for batch_size {chromosome.batch_size}"
                         )
                 else:
-                    log_buffer.append(
+                    worker_logger.info(
                         f"[Worker-{worker_config.worker_id} / {device_name}] "
                         f"Using base_lr {chromosome.base_lr:.6f} for batch_size {chromosome.batch_size}"
                     )
-
-                # ZERO_PROB = 0.2
-                #
-                # if random.random() < ZERO_PROB:
-                #     chromosome.weight_decay = 0
-                #     log_buffer.append(
-                #         f"[Worker-{worker_config.worker_id} / {device_name}] "
-                #         f"Weight decay probability reached. Setting weight_decay to 0"
-                #     )
+                    # --- CHANGE END ---
 
                 def epoch_logger(
                     epoch,
@@ -154,8 +189,9 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     early_stop=False,
                     final_msg=None,
                 ):
+                    # --- CHANGE START: The epoch callback now uses the worker_logger ---
                     if final_msg:
-                        log_buffer.append(
+                        worker_logger.info(
                             f"[Worker-{worker_config.worker_id} / {device_name}] {final_msg}"
                         )
                         return
@@ -164,10 +200,8 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
                     if early_stop:
                         line += " / Early stopping triggered"
-                    log_buffer.append(line)
-
-                # if worker_config.fixed_batch_size is not None:
-                #     chromosome.batch_size = worker_config.fixed_batch_size
+                    worker_logger.info(line)
+                    # --- CHANGE END ---
 
                 with get_dataset_loaders(
                     batch_size=chromosome.batch_size,
@@ -192,18 +226,22 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
                 duration = time.perf_counter() - start_time
 
-                log_buffer.append(
-                    f"[Worker-{worker_config.worker_id} / {device_name}] Individual {task.index} -> "
-                    f"Accuracy: {accuracy:.4f}, Loss: {loss:.4f} | Duration: {duration:.2f}s"
-                )
+                summary_msg = (f"[Worker-{worker_config.worker_id} / {device_name}] Individual {task.index} -> "
+                               f"Accuracy: {accuracy:.4f}, Loss: {loss:.4f} | Duration: {duration:.2f}s")
+                # --- CHANGE START: Log the summary message and also add to buffer ---
+                worker_logger.info(summary_msg)
+                summary_log_buffer.append(summary_msg)
+                # --- CHANGE END ---
 
                 if device.type == "cuda":
                     gpu_usage = (
                         torch.cuda.max_memory_allocated(device) / 1024**3
                     )
-                    log_buffer.append(
-                        f"[Worker-{worker_config.worker_id} / {device_name}] GPU memory used: {gpu_usage:.2f} GB"
-                    )
+                    gpu_msg = f"[Worker-{worker_config.worker_id} / {device_name}] GPU memory used: {gpu_usage:.2f} GB"
+                    # --- CHANGE START: Log GPU message and also add to buffer ---
+                    worker_logger.info(gpu_msg)
+                    summary_log_buffer.append(gpu_msg)
+                    # --- CHANGE END ---
                     torch.cuda.reset_peak_memory_stats(device)
 
                 result = Result(
@@ -212,14 +250,16 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     loss=loss,
                     duration_seconds=duration,
                     status="SUCCESS",
-                    log_lines=log_buffer,
+                    # The Result object still contains the final summary lines
+                    log_lines=summary_log_buffer,
                     worker_type=worker_config.type
                 )
 
             except (CudaOutOfMemoryError, NumericalInstabilityError) as e:
-                log_buffer.append(
-                    f"[Worker-{worker_config.worker_id} / {device_name}] Controlled failure for individual {task.index}: {e}"
-                )
+                error_msg = f"[Worker-{worker_config.worker_id} / {device_name}] Controlled failure for individual {task.index}: {e}"
+                # --- CHANGE START: Log errors directly ---
+                worker_logger.error(error_msg)
+                # --- CHANGE END ---
                 result = Result(
                     index=task.index,
                     fitness=0.0,
@@ -227,13 +267,14 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     duration_seconds=0.0,
                     status="FAILURE",
                     error_message=str(e),
-                    log_lines=log_buffer,
+                    log_lines=[error_msg],
                     worker_type=worker_config.type
                 )
             except Exception as e:
-                log_buffer.append(
-                    f"[Worker-{worker_config.worker_id} / {device_name}] Unexpected error for individual {task.index}: {e}"
-                )
+                error_msg = f"[Worker-{worker_config.worker_id} / {device_name}] Unexpected error for individual {task.index}: {e}"
+                # --- CHANGE START: Log errors directly ---
+                worker_logger.error(error_msg, exc_info=True) # exc_info adds traceback
+                # --- CHANGE END ---
                 result = Result(
                     index=task.index,
                     fitness=0.0,
@@ -241,7 +282,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     duration_seconds=0.0,
                     status="FAILURE",
                     error_message=str(e),
-                    log_lines=log_buffer,
+                    log_lines=[error_msg],
                     worker_type=worker_config.type
                 )
 
@@ -253,6 +294,14 @@ def worker_main(worker_config: WorkerConfig) -> None:
             break
         except SystemExit:
             break
+
+    # --- CHANGE START: Clean up the logger handler ---
+    # This is good practice to release the file handle.
+    if worker_logger and worker_logger.hasHandlers():
+        for handler in worker_logger.handlers[:]:
+            handler.close()
+            worker_logger.removeHandler(handler)
+    # --- CHANGE END ---
 
     # Reset signal handler
     signal.signal(signal.SIGINT, original_sigint_handler)

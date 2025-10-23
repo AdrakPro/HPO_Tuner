@@ -52,7 +52,7 @@ class CPUOnlyStrategy(SchedulingStrategy):
         dl_config = exec_config["dataloader_workers"]
         dl_per_cpu = dl_config["per_cpu"]
 
-        return self._spawn_processes(
+        return _spawn_processes(
             ctx=kwargs["ctx"],
             task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
@@ -88,7 +88,7 @@ class GPUOnlyStrategy(SchedulingStrategy):
         dl_config = exec_config["dataloader_workers"]
         dl_per_gpu = dl_config["per_gpu"]
 
-        return self._spawn_processes(
+        return _spawn_processes(
             ctx=kwargs["ctx"],
             task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
@@ -125,7 +125,7 @@ class SimpleHybridStrategy(SchedulingStrategy):
         dl_per_gpu = dl_config["per_gpu"]
         dl_per_cpu = dl_config["per_cpu"]
 
-        return self._spawn_processes(
+        return _spawn_processes(
             ctx=kwargs["ctx"],
             task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],

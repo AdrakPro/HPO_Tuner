@@ -187,6 +187,10 @@ class IndividualEvaluator(Evaluator):
         """Updates the subset percentage."""
         self.subset_percentage = subset_percentage
 
+    def set_task_id(self, task_id: TaskID) -> None:
+        """Updates the progress bar task ID for the evaluator."""
+        self.task_id = task_id
+
     def cleanup_workers(self):
         """No-op for the individual evaluator."""
         pass

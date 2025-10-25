@@ -22,7 +22,7 @@ def create_stratified_k_folds(
         A list of tuples, where each tuple contains (train_indices, test_indices)
         for one fold.
     """
-    full_train_set = CIFAR10(root=data_dir, train=True, download=True)
+    full_train_set = CIFAR10(root=data_dir, train=True, download=False)
     targets = np.array(full_train_set.targets)
 
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)

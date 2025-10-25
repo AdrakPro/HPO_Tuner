@@ -15,29 +15,25 @@ from src.tui.tui_screen import TUI
 from src.utils.checkpoint_manager import GaState, checkpoint_manager
 from src.utils.file_helper import ensure_dir_exists
 from src.utils.signal_manager import signal_manager
-
+from torch import set_num_threads, set_num_interop_threads
 from torchvision import datasets
 
-def prepare_dataset():
-    """
-    Downloads the CIFAR-10 dataset to the './model_data' directory if it doesn't exist.
-    This should be called once from the main process before any workers are spawned
-    to prevent race conditions and deadlocks during download.
-    """
-    logger.info("Verifying CIFAR-10 dataset...")
-    try:
-        # Instantiate both train and test sets with download=True.
-        # This will download the files if they are missing and do nothing if they exist.
-        datasets.CIFAR10(root="./model_data", train=True, download=True)
-        datasets.CIFAR10(root="./model_data", train=False, download=True)
-        logger.info("Dataset is present and ready.")
-    except Exception as e:
-        logger.error(f"Fatal error: Failed to download or verify the dataset: {e}")
-        logger.error("Please check your network connection and directory permissions.")
-        # This is a fatal error, so we should exit.
-        raise SystemExit(1)
+def prepare_cifar10_data():
+    base = os.environ.get("SLURM_JOB_ID")
+    array_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+    tmpdir = f"/mnt/lscratch/slurm/{base}/{array_id}"
+    os.makedirs(tmpdir, exist_ok=True)
+
+    logger.warning(f"Downloading CIFAR-10 to {tmpdir} ...")
+    datasets.CIFAR10(root=tmpdir, train=True, download=True)
+    datasets.CIFAR10(root=tmpdir, train=False, download=True)
+    logger.info("CIFAR-10 downloading completed.")
 
 def main():
+    a = 1
+    set_num_threads(a)
+    set_num_interop_threads(a)
+
     try:
         # Ensure spawn (fork isn't supported for CUDA)
         if sys.platform != "win32":
@@ -49,7 +45,6 @@ def main():
         logger.info("Main received SIGINT, shutting down gracefully...")
         signal_manager.handle_signal(signum, frame)
 
-    prepare_dataset()
     signal_manager.initialize()
 
     tui = TUI()
@@ -80,6 +75,7 @@ def main():
 
         with tui:
             logger.info(f"Logger initialized. Log file at {session_log_filename}")
+            prepare_cifar10_data()
             run_nested_resampling(config, tui, session_log_filename, loaded_state)
             logger.info("Optimization complete.")
 

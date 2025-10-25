@@ -1,15 +1,11 @@
-"""
-Contains the core logic for a single worker process.
-This code is executed by each process in the multiprocessing pool.
-"""
-
 import os
 import queue
 import signal
 import time
 from typing import Union, Any, Callable, Tuple
 
-import torch
+from torch import device, set_num_threads, set_num_interop_threads
+from torch import cuda
 
 from src.logger.logger import logger
 from src.model.chromosome import Chromosome, OptimizerSchedule
@@ -22,21 +18,21 @@ from src.utils.thread_optimizer import (
 )
 
 
-def init_device(device_id: Union[str, int]) -> torch.device:
+def init_device(device_id: Union[str, int]) -> device:
     """
     Initialize torch device for a worker.
     """
     ThreadOptimizer.enable_tf32()
 
     if isinstance(device_id, int):
-        if not torch.cuda.is_available():
+        if not cuda.is_available():
             logger.error(f"CUDA not available for GPU worker {device_id}.")
-            return torch.device("cpu")
+            return device("cpu")
         else:
-            torch.cuda.set_device(device_id)
-            return torch.device(f"cuda:{device_id}")
+            cuda.set_device(device_id)
+            return device(f"cuda:{device_id}")
     else:
-        return torch.device("cpu")
+        return device("cpu")
 
 
 def worker_main(worker_config: WorkerConfig) -> None:
@@ -44,30 +40,18 @@ def worker_main(worker_config: WorkerConfig) -> None:
     Top-level worker function, so it can be pickled by multiprocessing.
     """
     
-    os.environ["OMP_SCHEDULE"] = "STATIC"
-    os.environ["OMP_DYNAMIC"] = "FALSE"
-    os.environ["OMP_PROC_BIND"] = "CLOSE"
-    a = 12
+    a = 8 
     b = 2
+    set_num_interop_threads(1)
     if worker_config.device == "cpu":
-        os.environ["OMP_NUM_THREADS"] = str(a)
-        os.environ["MKL_NUM_THREADS"] = str(a)
-        os.environ["NUMEXPR_NUM_THREADS"] = str(a)
-        os.environ["OPENBLAS_NUM_THREADS"] = str(a)
-
-        torch.set_num_threads(a)
+        set_num_threads(a)
     else:
-        os.environ["OMP_NUM_THREADS"] = str(b)
-        os.environ["MKL_NUM_THREADS"] = str(b)
-        os.environ["NUMEXPR_NUM_THREADS"] = str(b)
-        os.environ["OPENBLAS_NUM_THREADS"] = str(b)
-
-        torch.set_num_threads(b)
+        set_num_threads(b)
 
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    device = init_device(worker_config.device)
+    dev = init_device(worker_config.device)
     device_name = (
         f"GPU-{worker_config.device}"
         if isinstance(worker_config.device, int)
@@ -173,7 +157,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                 with get_dataset_loaders(
                     batch_size=chromosome.batch_size,
                     aug_intensity=chromosome.aug_intensity,
-                    is_gpu=device.type == "cuda",
+                    is_gpu=dev.type == "cuda",
                     num_dataloader_workers=worker_config.num_dataloader_workers,
                     subset_percentage=task.subset_percentage,
                     train_indices=task.train_indices,
@@ -184,7 +168,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                         neural_config=task.neural_network_config,
                         epochs=task.training_epochs,
                         early_stop_epochs=task.early_stop_epochs,
-                        device=device,
+                        device=dev,
                         train_loader=train_loader,
                         test_loader=test_loader,
                         is_final=task.is_final,
@@ -198,14 +182,14 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     f"Accuracy: {accuracy:.4f}, Loss: {loss:.4f} | Duration: {duration:.2f}s"
                 )
 
-                if device.type == "cuda":
+                if dev.type == "cuda":
                     gpu_usage = (
-                        torch.cuda.max_memory_allocated(device) / 1024**3
+                        cuda.max_memory_allocated(dev) / 1024**3
                     )
                     log_buffer.append(
                         f"[Worker-{worker_config.worker_id} / {device_name}] GPU memory used: {gpu_usage:.2f} GB"
                     )
-                    torch.cuda.reset_peak_memory_stats(device)
+                    cuda.reset_peak_memory_stats(dev)
 
                 result = Result(
                     index=task.index,

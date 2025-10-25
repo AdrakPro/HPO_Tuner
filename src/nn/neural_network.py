@@ -56,7 +56,7 @@ class CNN(nn.Module):
 
         # CNN HYPERPARAMETERS
         convs_per_block = 1
-        num_downsample_layers = 1
+        num_downsample_layers = 2
         num_segments = num_downsample_layers + 1
         downsample_indices = {
             math.floor((i + 1) * conv_blocks / num_segments) - 1

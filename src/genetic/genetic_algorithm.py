@@ -52,13 +52,14 @@ class GeneticAlgorithm:
     def tournament_selection(
         self, population: List[Any], fitness: List[float]
     ) -> Any:
-        tournament_size: int = self.config["selection"]["tournament_size"]
+        pop_len = len(population)
+        tournament_size = math.floor(math.sqrt(pop_len))  
 
-        if tournament_size > len(population):
-            tournament_size = len(population)
+        if tournament_size < 1:
+            tournament_size = 1
 
         selected_indices = random.sample(
-            range(len(population)), tournament_size
+            range(pop_len), tournament_size
         )
         best_idx = max(selected_indices, key=lambda i: fitness[i])
 

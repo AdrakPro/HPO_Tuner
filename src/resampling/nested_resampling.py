@@ -24,7 +24,6 @@ def run_nested_resampling(
     nested_config = config["nested_validation_config"]
     outer_k_folds = nested_config["outer_k_folds"]
 
-    # --- NOWA, KLUCZOWA LOGIKA: Wykrywanie trybu pracy ---
     fold_to_run_str = os.environ.get("SLURM_ARRAY_TASK_ID")
     is_slurm_array_job = fold_to_run_str is not None
 
@@ -34,7 +33,6 @@ def run_nested_resampling(
             logger.info(
                 f"Running as SLURM array task. Executing ONLY Fold {fold_index + 1}/{outer_k_folds}."
             )
-            # Uruchom tylko jeden, konkretny fold
             _run_single_fold(
                 config, tui, session_log_filename, loaded_state, fold_index
             )
@@ -43,7 +41,6 @@ def run_nested_resampling(
                 f"Invalid SLURM_ARRAY_TASK_ID: {fold_to_run_str}. Could not run fold."
             )
     else:
-        # Tryb lokalny/sekwencyjny: Uruchom wszystkie foldy po kolei
         logger.info(
             "Not a SLURM array job. Running all folds sequentially."
         )
@@ -58,7 +55,6 @@ def run_nested_resampling(
         start_fold = 0
 
         if loaded_state and loaded_state.outer_fold_k != -1:
-            # Logika wznawiania (bez zmian)
             start_fold = loaded_state.outer_fold_k
             if (
                 loaded_state.phase == "main_algorithm"
@@ -107,7 +103,10 @@ def _run_single_fold(
     tui.update_fold_status(fold_index + 1, outer_k_folds)
     logger.info(f"--- Running Fold {fold_index + 1}/{outer_k_folds} ---")
 
-    data_dir = "./model_data"
+    base = os.environ.get("SLURM_JOB_ID")
+    array_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+    data_dir = f"/mnt/lscratch/slurm/{base}/{array_id}"
+    os.makedirs(data_dir, exist_ok=True)
     seed = config["project"]["seed"]
     fold_indices_list = create_stratified_k_folds(data_dir, outer_k_folds, seed)
     
@@ -118,7 +117,6 @@ def _run_single_fold(
     train_idx, test_idx = fold_indices_list[fold_index]
     ga_config = config["genetic_algorithm_config"]
     
-    # FIXED_BATCH_SIZE jest teraz pobierany z konfiguracji lub domyślnie None
     fixed_batch_size = ga_config.get("fixed_batch_size_for_cal", 64)
 
     with create_evaluator(

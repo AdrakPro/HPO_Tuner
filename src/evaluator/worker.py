@@ -1,11 +1,14 @@
 import os
+from datetime import datetime
 import queue
 import signal
 import time
-from typing import Union, Any, Callable, Tuple
+from typing import Union, Any, Callable, Tuple, List
 
 from torch import device, set_num_threads, set_num_interop_threads
 from torch import cuda
+import logging
+from logging.handlers import QueueHandler
 
 from src.logger.logger import logger
 from src.model.chromosome import Chromosome, OptimizerSchedule
@@ -13,10 +16,19 @@ from src.model.parallel import Result, WorkerConfig
 from src.nn.data_loader import get_dataset_loaders
 from src.nn.train_and_eval import train_and_eval
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
-from src.utils.thread_optimizer import (
-    ThreadOptimizer,
-)
+from src.utils.thread_optimizer import ThreadOptimizer
 
+def pin_worker_to_cores(core_ids: List[int]):
+    """Pins the current process to the specified core IDs."""
+    if not core_ids:
+        print(f"PID {os.getpid()}: Warning - No core IDs provided for pinning.")
+        return
+    try:
+        os.sched_setaffinity(0, core_ids)
+        # Optional: Log success, but can be noisy
+        # print(f"[{datetime.now().isoformat()}][PID {os.getpid()}] Successfully pinned to cores: {core_ids}")
+    except Exception as e:
+        print(f"[{datetime.now().isoformat()}][PID {os.getpid()}] WARNING - Failed to pin to cores {core_ids}: {e}")
 
 def init_device(device_id: Union[str, int]) -> device:
     """
@@ -26,7 +38,6 @@ def init_device(device_id: Union[str, int]) -> device:
 
     if isinstance(device_id, int):
         if not cuda.is_available():
-            logger.error(f"CUDA not available for GPU worker {device_id}.")
             return device("cpu")
         else:
             cuda.set_device(device_id)
@@ -39,17 +50,18 @@ def worker_main(worker_config: WorkerConfig) -> None:
     """
     Top-level worker function, so it can be pickled by multiprocessing.
     """
-    
-    a = 8 
-    b = 2
-    set_num_interop_threads(1)
-    if worker_config.device == "cpu":
-        set_num_threads(a)
-    else:
-        set_num_threads(b)
-
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    #os.environ["OMP_DYNAMIC"] = "FALSE"
+
+    if worker_config.type == "gpu":
+        num_threads = 1
+    else:
+        num_threads = 12
+
+    set_num_threads(num_threads)
+    set_num_interop_threads(1)
 
     dev = init_device(worker_config.device)
     device_name = (
@@ -61,12 +73,45 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Restore signal handler after imports are complete
     signal.signal(signal.SIGINT, original_sigint_handler)
 
+    local_logger = logging.getLogger(f"worker-{worker_config.worker_id}")
+    local_logger.setLevel(logging.INFO)
+    if getattr(worker_config, "log_queue", None) is not None:
+        try:
+            qh = QueueHandler(worker_config.log_queue)
+            if local_logger.handlers:
+                for h in list(local_logger.handlers):
+                    local_logger.removeHandler(h)
+            local_logger.addHandler(qh)
+        except Exception:
+            local_logger = logger  # fallback to module logger
+    else:
+        local_logger = logger
+
+    def _emit_log(entry):
+        """
+        Accept either a string or a tuple (string, 'file_only'). If file_only is set, we only
+        keep it in the result.log_lines and skip emitting to the file (preserves original intent).
+        """
+        if isinstance(entry, tuple) and len(entry) >= 2 and entry[1] == "file_only":
+            return
+        try:
+            local_logger.info(entry)
+        except Exception:
+            pass  # do not crash worker because logging failed
+
     while True:
         try:
             task = worker_config.task_queue.get(timeout=1.0)
 
             if task is None:  # Sentinel to stop
                 break
+
+            def buffer_and_emit(log_time, entry):
+                if isinstance(entry, tuple) and len(entry) >= 2 and entry[1] == "file_only":
+                    return
+                m = f"{log_time} {entry}"
+                log_buffer.append(m)
+                _emit_log(m)
 
             log_buffer = [
                 f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
@@ -75,7 +120,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     "file_only",
                 ),
             ]
-
             try:
                 start_time = time.perf_counter()
                 chromosome = Chromosome.from_dict(task.individual_hyperparams)
@@ -149,11 +193,14 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
                     if early_stop:
                         line += " / Early stopping triggered"
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    buffer_and_emit(now,line)
+
+                    line = ""
                     log_buffer.append(line)
 
                 # if worker_config.fixed_batch_size is not None:
                 #     chromosome.batch_size = worker_config.fixed_batch_size
-
                 with get_dataset_loaders(
                     batch_size=chromosome.batch_size,
                     aug_intensity=chromosome.aug_intensity,

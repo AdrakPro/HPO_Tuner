@@ -4,10 +4,14 @@
 #SBATCH --error=test_blad_fold_%a.err
 #SBATCH --partition=lem-gpu-normal
 #SBATCH --nodes=1
-#SBATCH --time=05:00:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --time=96:00:00
+#SBATCH --gres=gpu:hopper:4,storage:local:4G,storage:shm:16G
 #SBATCH --ntasks 1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=64
+#SBATCH --exclusive
+#SBATCH --mem=36G
+#SBATCH --array=0-1
+#SBATCH --nodelist=r16-12,r16-14
 
 # ===============================
 #   Konfiguracja i informacje
@@ -23,7 +27,7 @@ echo "=================================="
 #   Moduły
 # ===============================
 source /usr/local/sbin/modules.sh
-module load Python/3.12.3-GCCcore-13.3.0 CUDA/12.8.0
+module load Python/3.11.5-GCCcore-13.2.0 CUDA/12.1.1
 
 # ===============================
 #   Środowisko wirtualne
@@ -63,6 +67,12 @@ else
     echo "⚠️  Brak pliku requirements.txt — pomijam instalację."
 fi
 
+export OMP_DYNAMIC="FALSE"
+export KMP_BLOCKTIME="1"
+export KMP_AFFINITY="granularity=fine,compact,1,0"
+export ONEDNN_MAX_CPU_ISA="AVX512_CORE_AMX"
+
+ulimit -n 65535
 # ===============================
 #   Uruchomienie eksperymentu
 # ===============================

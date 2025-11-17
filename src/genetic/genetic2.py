@@ -1,12 +1,8 @@
 import math
-import json
 import random
 from copy import deepcopy
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
-
-import numpy as np  # <-- CHANGED: Added for LHS
-from scipy.stats import qmc  # <-- CHANGED: Added for LHS
 
 from src.logger.logger import logger
 
@@ -53,18 +49,17 @@ class GeneticAlgorithm:
         else:
             self.active_operators = set()  # Will be chosen per generation
 
-    # ... (tournament_selection, uniform_crossover, mutate, elitism, set_adaptive_mutation) ...
-    # ... (These functions are unchanged) ...
     def tournament_selection(
         self, population: List[Any], fitness: List[float]
     ) -> Any:
-        tournament_size: int = self.config["selection"]["tournament_size"]
+        pop_len = len(population)
+        tournament_size = math.floor(math.sqrt(pop_len))  
 
-        if tournament_size > len(population):
-            tournament_size = len(population)
+        if tournament_size < 1:
+            tournament_size = 1
 
         selected_indices = random.sample(
-            range(len(population)), tournament_size
+            range(pop_len), tournament_size
         )
         best_idx = max(selected_indices, key=lambda i: fitness[i])
 
@@ -212,26 +207,24 @@ class GeneticAlgorithm:
 
         return new_pop[:pop_size]
 
-
-    def initial_population(  # <-- CHANGED: Removed 'strat_bins' parameter
-        self, pop_size: int, print_warning: bool = True
+    def initial_population(
+        self, pop_size: int, strat_bins: int = 5, print_warning: bool = True
     ) -> List[Dict]:
         """
-        Generate a diverse initial population.
-        1. Guarantees coverage for all categorical/discrete values.
-        2. Fills the remaining population using Latin Hypercube Sampling (LHS)
-           for all continuous values to ensure broad, even exploration.
-        """  # <-- CHANGED: Docstring updated
+        Generate a diverse initial population with stratification for continuous values.
+        Ensures each categorical/discrete value appears at least once if possible.
+        Throws a warning if pop_size is too small to guarantee categorical/discrete diversity.
+        For continuous genes, divides the range into strat_bins and samples at least one value per bin.
+        """
         population: List[Dict[str, Any]] = []
 
-        # 1. Guarantee categorical/discrete coverage
+        # Guarantee categorical/discrete coverage
         guaranteed_individuals: List[Dict[str, Any]] = []
 
         for gene, info in self.chromosome_space.items():
             if info["type"] in [DataType.DISCRETE, DataType.CATEGORICAL]:
                 for v in info["values"]:
-                    # Use the simplified generator
-                    individual = self._generate_individual(  # <-- CHANGED
+                    individual = self._generate_individual(
                         forced_gene=gene, forced_value=v
                     )
                     guaranteed_individuals.append(individual)
@@ -246,103 +239,74 @@ class GeneticAlgorithm:
             )
 
         population.extend(guaranteed_individuals)
-        
-        # De-duplicate guaranteed individuals (in case of overlap)
-        existing_population = {json.dumps(ind, sort_keys=True): ind for ind in population} # <-- CHANGED
-        population = list(existing_population.values()) # <-- CHANGED
 
-        # ---
-        # <-- CHANGED: Removed the old "Stratification for continuous genes" loop.
-        # ---
+        # Stratification for continuous genes
+        stratified_individuals: List[Dict[str, Any]] = []
+        for gene, info in self.chromosome_space.items():
+            if info["type"] == DataType.CONTINUOUS:
+                if info.get("scale") == "log":
+                    log_min = math.log10(info["min"])
+                    log_max = math.log10(info["max"])
+                    bin_edges = [
+                        log_min + i * (log_max - log_min) / strat_bins
+                        for i in range(strat_bins + 1)
+                    ]
+                else:
+                    bin_edges = [
+                        info["min"]
+                        + i * (info["max"] - info["min"]) / strat_bins
+                        for i in range(strat_bins + 1)
+                    ]
 
-        # <-- CHANGED: START of new LHS block
-        # 2. Fill remaining population with Latin Hypercube Sampling
-        num_remaining = pop_size - len(population)
-        
-        if num_remaining > 0:
-            # Identify all continuous genes
-            continuous_genes = {
-                gene: info
-                for gene, info in self.chromosome_space.items()
-                if info["type"] == DataType.CONTINUOUS
-            }
-            num_dimensions = len(continuous_genes)
-            
-            if num_dimensions > 0:
-                # 1. Initialize LHS sampler
-                sampler_seed = random.randint(0, 2**32 - 1)
-                sampler = qmc.LatinHypercube(d=num_dimensions, seed=sampler_seed, optimization="random-cd")
+                for i in range(strat_bins):
+                    bin_range = (float(bin_edges[i]), float(bin_edges[i + 1]))
+                    individual = self._generate_individual(
+                        strat_gene=gene, bin_range=bin_range
+                    )
+                    stratified_individuals.append(individual)
 
-                # 2. Get N unit-scaled samples (values 0.0 to 1.0)
-                unit_samples = sampler.random(n=num_remaining)
+        # Add stratified individuals, avoiding duplicates
+        population.extend(stratified_individuals)
+        existing_population = {str(ind): ind for ind in population}
+        population = list(existing_population.values())
 
-                # 3. Rescale samples and create individuals
-                lhs_individuals = []
-                gene_names = list(continuous_genes.keys())
-                
-                for i in range(num_remaining):
-                    # Start with a random individual for categorical genes
-                    individual = self._generate_individual()
-                    sample_row = unit_samples[i]
-
-                    # Overwrite continuous genes with the rescaled LHS values
-                    for j, gene in enumerate(gene_names):
-                        info = continuous_genes[gene]
-                        unit_val = sample_row[j]  # The 0-1 value for this gene
-
-                        # Rescale from [0, 1] to the gene's [min, max] range
-                        if info.get("scale") == "log":
-                            log_min = math.log10(info["min"])
-                            log_max = math.log10(info["max"])
-                            scaled_log = log_min + unit_val * (log_max - log_min)
-                            value = 10 ** scaled_log
-                        else:
-                            value = info["min"] + unit_val * (info["max"] - info["min"])
-
-                        individual[gene] = float(value)
-                    
-                    lhs_individuals.append(individual)
-                
-                population.extend(lhs_individuals)
-            
-            else:
-                # No continuous genes, just fill with random
-                pass # The fill-up loop below will handle this
-        # <-- CHANGED: END of new LHS block
-        
-
-        # Add individuals (guaranteed + LHS) and de-duplicate again
-        existing_population = {str(ind): ind for ind in population} # <-- CHANGED
-        population = list(existing_population.values()) # <-- CHANGED
-
-        # 3. Fill up to pop_size with random individuals (if needed)
+        # Fill up to pop_size with random individuals, avoiding duplicates
         while len(population) < pop_size:
             individual = self._generate_individual()
             if str(individual) not in existing_population:
                 population.append(individual)
                 existing_population[str(individual)] = individual
 
-        # 4. Shuffle to avoid bias before truncating
+        # Shuffle to avoid systematic bias before truncating
         random.shuffle(population)
 
-        # Return exactly pop_size
         return population[:pop_size]
 
     def _generate_individual(
         self,
         forced_gene: Optional[str] = None,
         forced_value: Optional[Any] = None,
-    ) -> Dict[str, Any]: # <-- CHANGED: Removed strat_gene and bin_range
+        strat_gene: Optional[str] = None,
+        bin_range: Optional[Tuple[float, float]] = None,
+    ) -> Dict[str, Any]:
         """
-        Generate an individual, optionally forcing a value for a specific gene.
-        """ # <-- CHANGED: Docstring simplified
+        Generate an individual, optionally forcing a value for a specific gene,
+        or stratifying a specific gene within a bin_range.
+        """
         individual: Dict[str, Any] = {}
         for gene, info in self.chromosome_space.items():
             if forced_gene is not None and gene == forced_gene:
                 individual[gene] = self._sample_gene_value(
                     info, forced_value=forced_value
                 )
-            # <-- CHANGED: Removed the 'elif (strat_gene...' block
+            elif (
+                strat_gene is not None
+                and gene == strat_gene
+                and bin_range is not None
+            ):
+                individual[gene] = self._sample_gene_value(
+                    info, bin_range=bin_range
+                )
             else:
                 individual[gene] = self._sample_gene_value(info)
         return individual
@@ -351,27 +315,34 @@ class GeneticAlgorithm:
     def _sample_gene_value(
         info: Dict[str, Any],
         forced_value: Optional[Any] = None,
-    ): # <-- CHANGED: Removed 'bin_range'
+        bin_range: Optional[Tuple[float, float]] = None,
+    ):
         """
         Helper for sampling a value for a gene.
         If forced_value is provided, use it.
+        If bin_range is provided (for continuous stratification), sample within bin_range.
         Otherwise, sample according to type.
-        """ # <-- CHANGED: Docstring simplified
-        
+        """
         if forced_value is not None:
             return forced_value
-            
         if info["type"] in [DataType.DISCRETE, DataType.CATEGORICAL]:
             return random.choice(info["values"])
         elif info["type"] == DataType.CONTINUOUS:
             if info.get("scale") == "log":
                 log_min = math.log10(info["min"])
                 log_max = math.log10(info["max"])
-                # <-- CHANGED: Removed 'if bin_range...'
-                return float(10 ** random.uniform(log_min, log_max))
+
+                if bin_range is not None:
+                    return float(
+                        10 ** random.uniform(bin_range[0], bin_range[1])
+                    )
+                else:
+                    return float(10 ** random.uniform(log_min, log_max))
             else:
-                # <-- CHANGED: Removed 'if bin_range...'
-                return float(random.uniform(info["min"], info["max"]))
+                if bin_range is not None:
+                    return float(random.uniform(bin_range[0], bin_range[1]))
+                else:
+                    return float(random.uniform(info["min"], info["max"]))
         raise ValueError(f"Unknown gene type: {info['type']}")
 
 

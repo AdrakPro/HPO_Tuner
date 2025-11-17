@@ -16,6 +16,7 @@ def run_nested_resampling(
     tui: TUI,
     session_log_filename: str,
     loaded_state: Optional[GaState],
+    log_queue=None,
 ):
     """
     Manages the nested resampling process.
@@ -34,7 +35,7 @@ def run_nested_resampling(
                 f"Running as SLURM array task. Executing ONLY Fold {fold_index + 1}/{outer_k_folds}."
             )
             _run_single_fold(
-                config, tui, session_log_filename, loaded_state, fold_index
+                config, tui, session_log_filename, loaded_state, fold_index, log_queue
             )
         except (ValueError, IndexError):
             logger.error(
@@ -75,6 +76,7 @@ def run_nested_resampling(
                 session_log_filename,
                 current_fold_loaded_state,
                 k,
+                log_queue
             )
             if final_fitness is not None:
                 all_fold_scores.append(final_fitness)
@@ -94,6 +96,7 @@ def _run_single_fold(
     session_log_filename: str,
     loaded_state: Optional[GaState],
     fold_index: int,
+    log_queue=None,
 ) -> (Optional[float], Optional[float], Optional[dict]):
     """
     Helper function to encapsulate the logic for running a single fold.
@@ -129,6 +132,7 @@ def _run_single_fold(
         train_indices=train_idx,
         test_indices=test_idx,
         fixed_batch_size=fixed_batch_size,
+        log_queue=log_queue,
     ) as evaluator:
         best_individual, final_fitness, final_loss = run_optimization(
             config=config,

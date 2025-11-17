@@ -29,6 +29,7 @@ def create_evaluator(
     train_indices: Optional[np.ndarray] = None,
     test_indices: Optional[np.ndarray] = None,
     fixed_batch_size: Optional[int] = None,
+    log_queue=None,
 ) -> Evaluator:
     """
     Selects and creates the appropriate evaluator (sequential or parallel)
@@ -72,6 +73,7 @@ def create_evaluator(
             test_indices=test_indices,
         )
 
+
     return ParallelEvaluator(
         config=config,
         training_epochs=training_epochs,
@@ -83,4 +85,5 @@ def create_evaluator(
         train_indices=train_indices,
         test_indices=test_indices,
         fixed_batch_size=fixed_batch_size,
+        log_queue=log_queue,
     )

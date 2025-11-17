@@ -17,7 +17,6 @@ from src.nn.neural_network import get_network, get_optimizer_and_scheduler
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
 from src.utils.mixup import mixup_data, mixup_criterion, mixup_schedule
 
-
 def train_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -222,10 +221,13 @@ def train_and_eval(
 
     try:
         model: nn.Module = get_network(chromosome, neural_config).to(device)
-        criterion: nn.Module = nn.CrossEntropyLoss(label_smoothing=0.05)
+        criterion: nn.Module = nn.CrossEntropyLoss()
         optimizer, scheduler = get_optimizer_and_scheduler(
             model, chromosome, train_loader, epochs
         )
+        if device.type == "cpu":
+            import intel_extension_for_pytorch as ipex
+            model, optimizer = ipex.optimize(model, optimizer=optimizer)
         scaler = torch.amp.GradScaler() if device.type == "cuda" else None
 
         final_test_acc = 0.0
@@ -305,13 +307,22 @@ def train_and_eval(
                     f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
                 )
 
+
+            if epoch + 1 == 5 and profiling_enabled and profiler:
+                profiler.__exit__(None, None, None) # Manually exit context
+
+                profile_result = profiler.key_averages().table(sort_by="cuda_time_total", row_limit=50)
+                output_filename = f"/lustre/pd01/hpc-adamak7184-1759856296/profile.txt"
+                with open(output_filename, "w") as f:
+                    f.write(profile_result)
+
             if test_acc > best_acc_so_far:
                 best_acc_so_far = test_acc
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
 
-            early_stop_epochs = 200
+            early_stop_epochs = 15 
             if epochs_without_improvement >= early_stop_epochs:
                 if epoch_callback is not None:
                     epoch_callback(
@@ -330,8 +341,9 @@ def train_and_eval(
                 break
         
         # --- Profiler Teardown ---
-            saver = ModelSaver("model")
-            callback_msg = saver.save(model)
+            #saver = ModelSaver("model")
+            #callback_msg = saver.save(model)
+            callback_msg = "" 
             if callback_msg:
                 if epoch_callback is not None:
                     epoch_callback(
@@ -366,7 +378,7 @@ def train_and_eval(
             
             # Sort by self_cpu_time_total to see the biggest offenders first
             profile_result = profiler.key_averages().table(sort_by="self_cpu_time_total", row_limit=50)
-            output_filename = f"logs/profile_{os.getpid()}.txt"
+            output_filename = f"/lustre/pd01/hpc-adamak7184-1759856296/profile.txt"
             with open(output_filename, "w") as f:
                 f.write(profile_result)
             logger.info(f"Profiler results saved to {output_filename}")	        

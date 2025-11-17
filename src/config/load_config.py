@@ -5,8 +5,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from src.logger.logger import logger
-from src.model.chromosome import AugmentationIntensity, OptimizerSchedule
-from src.nn.neural_network import ActivationFunction
+from src.model.chromosome import AugmentationIntensity, OptimizerSchedule, ActivationFn
 from src.utils.enum_helper import get_enum_names, get_enum_values
 
 
@@ -92,7 +91,7 @@ def _validate_neural_network_config(config: Dict[str, Any]):
     # --- Fixed parameter validation ---
     fixed_params = config["fixed_parameters"]
     activation_function = fixed_params["activation_function"].lower()
-    allowed = get_enum_values(ActivationFunction)
+    allowed = get_enum_values(ActivationFn)
     if activation_function not in allowed:
         raise ValueError(
             f"Allowed 'activation_function' are {allowed}', but received: '{fixed_params['activation_function']}'."

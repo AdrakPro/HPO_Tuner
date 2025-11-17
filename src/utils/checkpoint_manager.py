@@ -93,11 +93,11 @@ class _CheckpointManager:
                 state: GaState = pickle.load(f)
 
             rng_state = state.rng_state
-            random.setstate(rng_state["python_random"])
-            torch.set_rng_state(rng_state["torch_random"])
+            #random.setstate(rng_state["python_random"])
+            #torch.set_rng_state(rng_state["torch_random"])
 
-            if torch.cuda.is_available() and rng_state.get("torch_cuda_random"):
-                torch.cuda.set_rng_state_all(rng_state["torch_cuda_random"])
+            #if torch.cuda.is_available() and rng_state.get("torch_cuda_random"):
+            #    torch.cuda.set_rng_state_all(rng_state["torch_cuda_random"])
 
             if not hasattr(state, "outer_fold_k"):
                 logger.warning(

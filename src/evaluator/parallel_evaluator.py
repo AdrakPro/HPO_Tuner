@@ -9,6 +9,7 @@ import threading
 from collections import deque
 import random
 from typing import Any, Dict, List, Optional, Callable, Tuple
+import math
 
 import numpy as np
 import torch
@@ -21,50 +22,6 @@ from src.logger.logger import logger
 from src.model.evaluator_interface import Evaluator
 from src.model.parallel import Result, Task
 from src.utils.signal_manager import signal_manager
-
-def _task_stealer(
-    gpu_queue: mp.Queue,
-    cpu_queue: mp.Queue,
-    num_gpu_workers: int,
-    num_cpu_workers: int,
-    stop_event: threading.Event,
-    wakeup_event: threading.Event,
-    pending_cpu_tasks: threading.Semaphore
-):
-    """
-    Runs in a background thread. Moves surplus tasks from the GPU queue
-    to the CPU queue to balance the load, but only if the CPU queue is empty.
-    """
-    logger.info("Task stealer thread started.")
-
-    # Threshold with a safety buffer. Steal only if there's a significant surplus.
-    # This prevents stealing the last few tasks, reserving them for GPUs.
-    stealing_threshold = num_gpu_workers + num_cpu_workers
-    while not stop_event.is_set():
-        wakeup_event.wait(timeout=300.0)
-
-        if stop_event.is_set(): break
-
-        try:
-            if pending_cpu_tasks.acquire(blocking=False):
-                if (gpu_queue.qsize() > stealing_threshold):
-                    try:
-                        task = gpu_queue.get(block=False)
-                        cpu_queue.put(task)
-                        logger.info(f"[TaskStealer] Moved task for individual {task.index} to CPU queue.", file_only=True)
-                    except queue.Empty:
-                        pending_cpu_tasks.release()
-                else:
-                    pending_cpu_tasks.release()
-        except (OSError):
-            pass
-        except Exception as e:
-            logger.error(f"[TaskStealer] Unexpected error: {e}")
-
-        wakeup_event.clear()
-
-    logger.info("Task stealer thread stopped.")
-
 
 class ParallelEvaluator(Evaluator):
     """
@@ -83,7 +40,9 @@ class ParallelEvaluator(Evaluator):
         train_indices: Optional[np.ndarray],
         test_indices: Optional[np.ndarray],
         fixed_batch_size: Optional[int] = None,
+        log_queue = None,
     ):
+        self.log_queue = log_queue
         self.training_epochs = training_epochs
         self.early_stop_epochs = early_stop_epochs
         self.subset_percentage = subset_percentage
@@ -120,6 +79,7 @@ class ParallelEvaluator(Evaluator):
             execution_config=self.execution_config,
             session_log_filename=session_log_filename,
             fixed_batch_size=fixed_batch_size,
+            log_queue=self.log_queue
         )
         self._workers: List[mp.Process] = launch_results["workers"]
 
@@ -134,16 +94,7 @@ class ParallelEvaluator(Evaluator):
             self._pending_cpu_tasks = threading.Semaphore(self.num_cpu_workers)
 
             self._stealer_thread = threading.Thread(
-                target=_task_stealer,
-                args=(
-                    self.gpu_task_queue,
-                    self.cpu_task_queue,
-                    self.execution_config.get("gpu_workers", 0),
-                    self.execution_config.get("cpu_workers", 0),
-                    self._stop_stealer_event,
-                    self._stealer_wakeup_event,
-                    self._pending_cpu_tasks,
-                ),
+                target=self._task_stealer,
                 daemon=True,
             )
             self._stealer_thread.start()
@@ -163,6 +114,95 @@ class ParallelEvaluator(Evaluator):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.cleanup_workers()
+
+    def _task_stealer(self):
+        """
+        Background thread that moves tasks to the CPU queue based on a
+        normalized workload comparison using a speed ratio. This makes the logic
+        independent of absolute task durations.
+        """
+        logger.info("Task stealer thread started.")
+        
+        speed_ratio = 7.0
+        wakeup_timeout = 5.0
+        min_gpu_threshold = self.num_gpu_workers * speed_ratio 
+
+        while not self._stop_stealer_event.is_set():
+            self._stealer_wakeup_event.wait(timeout=wakeup_timeout)
+
+            if self._stop_stealer_event.is_set(): break
+
+            try:
+                if self.num_gpu_workers == 0 or self.num_cpu_workers == 0:
+                    self._stealer_wakeup_event.clear()
+                    continue
+
+                gpu_qsize = self.gpu_task_queue.qsize()
+                cpu_qsize = self.cpu_task_queue.qsize()
+
+                # --- NEW: Ratio-Based Workload Calculation ---
+                # Calculate a "normalized" workload for each queue.
+                # The CPU workload is scaled by the speed_ratio to make it comparable to the GPU workload.
+                normalized_cpu_workload = (cpu_qsize / self.num_cpu_workers) * speed_ratio
+                normalized_gpu_workload = (gpu_qsize / self.num_gpu_workers)
+                # Prevent race condition or stale state 1.5 CPU > 1.5 GPU gave true
+                move_cost_buffer = (1 / self.num_cpu_workers) * speed_ratio
+
+                # --- Stealing Condition ---
+                if (normalized_gpu_workload - normalized_cpu_workload) > move_cost_buffer and gpu_qsize > min_gpu_threshold:
+                    
+                    available_cpu_slots = self.num_cpu_workers - cpu_qsize
+                    if available_cpu_slots > 0:
+                        
+                        # --- NEW: Ratio-Based tasks_to_move Calculation ---
+                        # We want to find N (tasks_to_move) such that the workloads become equal:
+                        # ((cpu_qsize + N) / num_cpu) * ratio == ((gpu_qsize - N) / num_gpu)
+                        # Solving for N gives the formula below.
+                        numerator = (normalized_gpu_workload - normalized_cpu_workload) * self.num_gpu_workers * self.num_cpu_workers
+                        denominator = (speed_ratio * self.num_gpu_workers) + self.num_cpu_workers
+                        
+                        tasks_needed_to_balance = math.ceil(numerator / denominator)
+
+                        tasks_to_move = min(
+                            tasks_needed_to_balance,
+                            gpu_qsize - min_gpu_threshold,
+                            available_cpu_slots
+                        )
+
+                        if tasks_to_move > 0:
+                            moved_count = 0
+                            for _ in range(int(tasks_to_move)):
+                                if self._pending_cpu_tasks.acquire(blocking=False):
+                                    try:
+
+                                        task = self.gpu_task_queue.get(block=False)
+                                        self.cpu_task_queue.put(task)
+                                        moved_count += 1
+                                    except queue.Empty:
+                                        self._pending_cpu_tasks.release()
+                                        break
+                                    except Exception as e:
+                                        self._pending_cpu_tasks.release()
+                                        logger.error(f"[TaskStealer] Error during task move: {e}")
+                                        break
+                                else:
+                                    break
+                            
+                            if moved_count > 0:
+                                logger.info(
+                                    f"[TaskStealer] Moved {moved_count} task(s) to CPU. "
+                                    f"New Workloads - CPU: {((cpu_qsize + moved_count) / self.num_cpu_workers) * speed_ratio:.2f}, "
+                                    f"GPU: {((gpu_qsize - moved_count) / self.num_gpu_workers):.2f}"
+                                )
+
+            except (OSError, ValueError) as e:
+                logger.warning(f"[TaskStealer] Queue error: {e}")
+            except Exception as e:
+                logger.error(f"[TaskStealer] Unexpected error: {e}")
+
+            self._stealer_wakeup_event.clear()
+
+        logger.info("Task stealer thread stopped.")
 
     def evaluate_population(
         self,
@@ -195,7 +235,7 @@ class ParallelEvaluator(Evaluator):
         random.shuffle(tasks)
 
         if isinstance(self.strategy, HybridStrategy) and self.num_cpu_workers > 0:
-            num_to_preload = min(len(tasks), self.num_cpu_workers)
+            num_to_preload = min(len(tasks), self.num_cpu_workers) 
             
             logger.info(f"Pre-loading CPU queue with {num_to_preload} tasks.")
             for i in range(num_to_preload):

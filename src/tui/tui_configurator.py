@@ -20,8 +20,7 @@ from src.config.load_config import (
     prompt_and_save_json_config,
 )
 from src.logger.logger import logger
-from src.model.chromosome import AugmentationIntensity, OptimizerSchedule
-from src.nn.neural_network import ActivationFunction
+from src.model.chromosome import AugmentationIntensity, OptimizerSchedule, ActivationFn
 from src.utils.enum_helper import get_enum_names, get_enum_values
 from src.utils.file_helper import ensure_dir_exists
 
@@ -404,7 +403,7 @@ def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
             "target": fixed_param_updates,
         },
         "activation_function": {
-            "prompt": f"Activation function. Allowed: {get_enum_values(ActivationFunction)}",
+            "prompt": f"Activation function. Allowed: {get_enum_values(ActivationFn)}",
             "default": fixed_defaults.get("activation_function", "relu"),
             "target": fixed_param_updates,
         },

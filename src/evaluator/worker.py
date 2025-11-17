@@ -1,16 +1,13 @@
 import os
-from datetime import datetime
 import queue
 import signal
 import time
 from typing import Union, Any, Callable, Tuple, List
+import traceback
 
 from torch import device, set_num_threads, set_num_interop_threads
 from torch import cuda
-import logging
-from logging.handlers import QueueHandler
 
-from src.logger.logger import logger
 from src.model.chromosome import Chromosome, OptimizerSchedule
 from src.model.parallel import Result, WorkerConfig
 from src.nn.data_loader import get_dataset_loaders
@@ -53,15 +50,48 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Ignore SIGINT during imports to prevent KeyboardInterrupt during initialization
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+    assigned_cores = getattr(worker_config, "core_ids", [])
+    worker_type = getattr(worker_config, "type", "unknown")
+    device_spec = getattr(worker_config, "device", "cpu")
+    device_info = f"CPU" if worker_type == "cpu" else f"GPU device={device_spec}"
+
+    # print(f"[{start_time_iso}][PID {my_pid}] STARTING | Type: {worker_type} | Device: {device_info} | Target Cores: {assigned_cores}")
+
+    if assigned_cores:
+        pin_worker_to_cores(assigned_cores)
+    # else:
+        # print(f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: No core_ids provided, not pinning.")
+
+    num_dataloader_workers = getattr(worker_config, 'num_dataloader_workers', 1)
+    num_cores_assigned = len(assigned_cores) if assigned_cores else os.cpu_count() or 1
+
+    if worker_type == "gpu":
+        num_compute_threads = 1
+    elif worker_type == "cpu":
+        #num_compute_threads = max(1, num_cores_assigned - 1 - num_dataloader_workers)
+        num_compute_threads = 14
+    else:
+        num_compute_threads = 1
+
+    actual_torch_threads = max(1, num_compute_threads)
+    try:
+        set_num_interop_threads(1)
+        set_num_threads(actual_torch_threads)
+        # print(f"[{datetime.now().isoformat()}][PID {my_pid}] Set torch interop=1, intraop={actual_torch_threads}")
+    except Exception as e:
+        print(f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: Failed to set PyTorch threads: {e}")
+
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     #os.environ["OMP_DYNAMIC"] = "FALSE"
 
-    if worker_config.type == "gpu":
-        num_threads = 1
-    else:
-        num_threads = 12
-
-    set_num_threads(num_threads)
-    set_num_interop_threads(1)
+   # if worker_config.type == "gpu":
+   #     num_threads = 1
+   # else:
+   #     num_threads = 12
+   # 
+   # set_num_threads(num_threads)
+   # set_num_interop_threads(1)
 
     dev = init_device(worker_config.device)
     device_name = (
@@ -73,31 +103,31 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Restore signal handler after imports are complete
     signal.signal(signal.SIGINT, original_sigint_handler)
 
-    local_logger = logging.getLogger(f"worker-{worker_config.worker_id}")
-    local_logger.setLevel(logging.INFO)
-    if getattr(worker_config, "log_queue", None) is not None:
-        try:
-            qh = QueueHandler(worker_config.log_queue)
-            if local_logger.handlers:
-                for h in list(local_logger.handlers):
-                    local_logger.removeHandler(h)
-            local_logger.addHandler(qh)
-        except Exception:
-            local_logger = logger  # fallback to module logger
-    else:
-        local_logger = logger
-
-    def _emit_log(entry):
-        """
-        Accept either a string or a tuple (string, 'file_only'). If file_only is set, we only
-        keep it in the result.log_lines and skip emitting to the file (preserves original intent).
-        """
-        if isinstance(entry, tuple) and len(entry) >= 2 and entry[1] == "file_only":
-            return
-        try:
-            local_logger.info(entry)
-        except Exception:
-            pass  # do not crash worker because logging failed
+    #local_logger = logging.getLogger(f"worker-{worker_config.worker_id}")
+    #local_logger.setLevel(logging.INFO)
+    #if getattr(worker_config, "log_queue", None) is not None:
+    #    try:
+    #        qh = QueueHandler(worker_config.log_queue)
+    #        if local_logger.handlers:
+    #            for h in list(local_logger.handlers):
+    #                local_logger.removeHandler(h)
+    #        local_logger.addHandler(qh)
+    #    except Exception:
+    #        local_logger = logger  # fallback to module logger
+    #else:
+    #    local_logger = logger
+    #
+    #def _emit_log(entry):
+    #    """
+    #    Accept either a string or a tuple (string, 'file_only'). If file_only is set, we only
+    #    keep it in the result.log_lines and skip emitting to the file (preserves original intent).
+    #    """
+    #    if isinstance(entry, tuple) and len(entry) >= 2 and entry[1] == "file_only":
+    #        return
+    #    try:
+    #        local_logger.info(entry)
+    #    except Exception:
+    #        pass  # do not crash worker because logging failed
 
     while True:
         try:
@@ -109,9 +139,8 @@ def worker_main(worker_config: WorkerConfig) -> None:
             def buffer_and_emit(log_time, entry):
                 if isinstance(entry, tuple) and len(entry) >= 2 and entry[1] == "file_only":
                     return
-                m = f"{log_time} {entry}"
-                log_buffer.append(m)
-                _emit_log(m)
+                log_buffer.append(entry)
+                #_emit_log(m)
 
             log_buffer = [
                 f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
@@ -193,10 +222,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
                     if early_stop:
                         line += " / Early stopping triggered"
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    buffer_and_emit(now,line)
 
-                    line = ""
                     log_buffer.append(line)
 
                 # if worker_config.fixed_batch_size is not None:
@@ -263,8 +289,9 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     worker_type=worker_config.type
                 )
             except Exception as e:
+                tb_str = traceback.format_exc()
                 log_buffer.append(
-                    f"[Worker-{worker_config.worker_id} / {device_name}] Unexpected error for individual {task.index}: {e}"
+                    f"[Worker-{worker_config.worker_id} / {device_name}] Unexpected error for individual {task.index}: {e} -> {tb_str}"
                 )
                 result = Result(
                     index=task.index,

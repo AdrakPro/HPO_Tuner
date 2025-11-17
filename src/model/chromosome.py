@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, auto
+import torch.nn as nn
 
 
 class OptimizerSchedule(Enum):
@@ -33,6 +34,20 @@ class AugmentationIntensity(Enum):
     STRONG = auto()
 
 
+class ActivationFn(Enum):
+    RELU = auto()
+    LEAKY_RELU = auto()
+    GELU = auto()
+
+    def get_layer(self) -> nn.Module:
+        if self == ActivationFn.RELU:
+            return nn.ReLU(inplace=True)
+        elif self == ActivationFn.LEAKY_RELU:
+            return nn.LeakyReLU(negative_slope=0.1, inplace=True)
+        elif self == ActivationFn.GELU:
+            return nn.GELU()
+
+
 @dataclass
 class Chromosome:
     width_scale: float
@@ -43,6 +58,7 @@ class Chromosome:
     aug_intensity: AugmentationIntensity
     weight_decay: float
     batch_size: int
+    activation_fn: ActivationFn
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -53,10 +69,13 @@ class Chromosome:
         data_copy = data.copy()
         try:
             data_copy["optimizer_schedule"] = OptimizerSchedule[
-                data_copy["optimizer_schedule"]
+                data_copy["optimizer_schedule"].upper()
             ]
             data_copy["aug_intensity"] = AugmentationIntensity[
-                data_copy["aug_intensity"]
+                data_copy["aug_intensity"].upper()
+            ]
+            data_copy["activation_fn"] = ActivationFn[
+                data_copy["activation_fn"].upper()
             ]
         except KeyError as e:
             raise ValueError(f"Invalid enum value provided in dictionary: {e}")

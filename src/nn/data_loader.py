@@ -11,7 +11,7 @@ from typing import Optional, Union
 
 import numpy as np
 import torch.cuda
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, Dataset
 from torchvision import datasets, transforms
 from torch import set_num_threads, set_num_interop_threads
 
@@ -48,10 +48,11 @@ def dataloader_worker_init_fn(worker_id: int):
     This prevents thread over-subscription when the main worker process
     is already multi-threaded, which is crucial for data loading performance.
     """
-    a = 1
-    set_num_threads(a)
-    set_num_interop_threads(a)
-
+    num_dl_threads = 1
+    
+    set_num_threads(num_dl_threads)
+    set_num_interop_threads(num_dl_threads)
+    
 def safe_collate_fn(batch):
     """Skip None samples returned by the dataset."""
     batch = [b for b in batch if b is not None]
@@ -98,25 +99,41 @@ class DataLoaderManager:
         """Properly cleanup DataLoader workers and resources."""
         for loader in self.loaders:
             try:
-                if hasattr(loader, "dataset") and hasattr(
-                    loader.dataset, "close"
-                ):
-                    loader.dataset.close()
-
                 if hasattr(loader, "_iterator"):
+                    del loader._iterator
                     loader._iterator = None
 
-                if hasattr(loader, "sampler") and hasattr(
-                    loader.sampler, "close"
-                ):
-                    loader.sampler.close()
+                dataset = getattr(loader, "dataset", None)
+                if isinstance(dataset, Subset) and hasattr(dataset, "dataset"):
+                    dataset.dataset = None
 
             except Exception as e:
-                logger.warning(f"Error cleaning up DataLoader: {e}")
+                logger.warning(f"Error during DataLoader cleanup: {e}")
 
         self.loaders.clear()
         gc.collect()
 
+
+class DatasetWrapper(Dataset):
+    """
+    A wrapper to apply a specific transform to a Subset of a Dataset.
+    """
+    def __init__(self, dataset, transform=None):
+        self.dataset = dataset
+        self.transform = transform
+
+    def __getitem__(self, index):
+        # Get the data from the underlying dataset (which is a Subset)
+        data, target = self.dataset[index]
+
+        # Apply the specific transform for this wrapper
+        if self.transform:
+            data = self.transform(data)
+
+        return data, target
+
+    def __len__(self):
+        return len(self.dataset)
 
 def get_dataset_loaders(
     batch_size: int,
@@ -135,14 +152,15 @@ def get_dataset_loaders(
     transform_train, transform_test = get_transforms(aug_intensity)
 
     train_set_cls = SafeCIFAR10
-    test_set_cls = SafeCIFAR10
 
     # Load datasets
     if train_indices is not None and test_indices is not None:
-        full_train = train_set_cls(root=data_dir, train=True, download=False, transform=transform_train)
-        full_test = test_set_cls(root=data_dir, train=True, download=False, transform=transform_test)
-        train_set = Subset(full_train, train_indices)
-        test_set = Subset(full_test, test_indices)
+        base_dataset = train_set_cls(root=data_dir, train=True, download=False, transform=None)
+        train_subset = Subset(base_dataset, train_indices)
+        test_subset = Subset(base_dataset, test_indices)
+
+        train_set = DatasetWrapper(train_subset, transform=transform_train)
+        test_set = DatasetWrapper(test_subset, transform=transform_test)
     else:
         train_set = train_set_cls(root=data_dir, train=True, download=False, transform=transform_train)
         test_set = test_set_cls(root=data_dir, train=False, download=False, transform=transform_test)
@@ -159,7 +177,7 @@ def get_dataset_loaders(
         "num_workers": num_workers,
         "pin_memory": is_gpu,
         "worker_init_fn": dataloader_worker_init_fn,
-        "collate_fn": safe_collate_fn,
+        #"collate_fn": safe_collate_fn,
         "multiprocessing_context": "spawn",
         "persistent_workers": True,  # safer for multiprocessing
         "prefetch_factor": 4,

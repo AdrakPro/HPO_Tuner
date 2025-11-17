@@ -461,9 +461,8 @@ def run_optimization(
                 fitness_scores_cal = loaded_state.fitness_scores
             else:
                 initial_pop_size = ga_config[CAL_PHASE]["population_size"]
-                cal_strat_bins = ga_config[CAL_PHASE]["stratification_bins"]
                 initial_population_cal = ga.initial_population(
-                    initial_pop_size, cal_strat_bins
+                    initial_pop_size 
                 )
 
             calibrated_population, best_fitness, best_loss, _ = run_ga_phase(
@@ -503,7 +502,6 @@ def run_optimization(
             fitness_scores_main = loaded_state.fitness_scores
         else:
             main_pop_size = ga_config[MAIN_PHASE]["population_size"]
-            main_strat_bins = ga_config[MAIN_PHASE]["stratification_bins"]
 
             if calibrated_population:
                 logger.info(
@@ -540,7 +538,6 @@ def run_optimization(
                 if num_random > 0:
                     random_individuals = ga.initial_population(
                         num_random,
-                        strat_bins=main_strat_bins,
                         print_warning=False,
                     )
                     main_starting_population.extend(random_individuals)
@@ -552,7 +549,7 @@ def run_optimization(
                     "Calibration disabled. Starting main algorithm with random population."
                 )
                 main_starting_population = ga.initial_population(
-                    main_pop_size, main_strat_bins
+                    main_pop_size 
                 )
 
         final_population, best_fitness, best_loss, should_stop = run_ga_phase(

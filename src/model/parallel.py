@@ -19,6 +19,8 @@ class WorkerConfig:
     num_dataloader_workers: int
     total_cpu_workers: Optional[int] = None
     fixed_batch_size: Optional[int] = None
+    core_ids: Optional[List[int]] = None
+    log_queue: mp.Queue = None
 
     @property
     def type(self) -> str:

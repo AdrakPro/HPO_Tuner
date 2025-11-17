@@ -17,6 +17,24 @@ from src.utils.file_helper import ensure_dir_exists
 from src.utils.signal_manager import signal_manager
 from torch import set_num_threads, set_num_interop_threads
 from torchvision import datasets
+import logging
+import multiprocessing
+from logging.handlers import QueueListener
+
+def start_logging_listener_in_main(log_file_path: str):
+    """
+    Sets up the central multiprocessing log queue/listener for worker logging.
+    Returns:
+        log_queue: The multiprocessing.Queue for log records.
+        listener: The QueueListener instance (call .stop() when done).
+    """
+    log_queue = multiprocessing.Queue(-1)
+    file_handler = logging.FileHandler(log_file_path, mode="a", encoding="utf-8")
+    formatter = logging.Formatter("%(message)s")
+    file_handler.setFormatter(formatter)
+    listener = QueueListener(log_queue, file_handler)
+    listener.start()
+    return log_queue, listener
 
 def prepare_cifar10_data():
     base = os.environ.get("SLURM_JOB_ID")
@@ -24,16 +42,12 @@ def prepare_cifar10_data():
     tmpdir = f"/mnt/lscratch/slurm/{base}/{array_id}"
     os.makedirs(tmpdir, exist_ok=True)
 
-    logger.warning(f"Downloading CIFAR-10 to {tmpdir} ...")
+    logger.info(f"Downloading CIFAR-10 to {tmpdir} ...")
     datasets.CIFAR10(root=tmpdir, train=True, download=True)
     datasets.CIFAR10(root=tmpdir, train=False, download=True)
     logger.info("CIFAR-10 downloading completed.")
 
 def main():
-    a = 1
-    set_num_threads(a)
-    set_num_interop_threads(a)
-
     try:
         # Ensure spawn (fork isn't supported for CUDA)
         if sys.platform != "win32":
@@ -73,11 +87,20 @@ def main():
 
         logger.add_tui_sink(tui.get_loguru_sink())
 
+        #log_queue, listener = start_logging_listener_in_main(session_log_filename)
+
         with tui:
             logger.info(f"Logger initialized. Log file at {session_log_filename}")
             prepare_cifar10_data()
-            run_nested_resampling(config, tui, session_log_filename, loaded_state)
+            run_nested_resampling(config, tui, session_log_filename, loaded_state, log_queue=None)
             logger.info("Optimization complete.")
+
+        #listener.stop()
+        #log_queue.close()
+        #log_queue.join_thread()
+
+
+            
 
     except KeyboardInterrupt:
         logger.info("User terminated the program.")

@@ -55,12 +55,12 @@ class TUI:
         )
 
     def __enter__(self):
-        # self.live.start()
+        self.live.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Handles graceful shutdown of the TUI."""
-        # self.live.stop()
+        self.live.stop()
         if exc_type is KeyboardInterrupt:
             return True
 
@@ -128,9 +128,7 @@ class TUI:
             for name, details in hyperparams.items()
         )
         config_right_details = (
-            f"[bold]Conv Blocks[/]: {nn_cfg.get('conv_blocks')}\n"
             f"[bold]Base Filters[/]: {fixed_params.get('base_filters')}\n"
-            f"[bold]Activation[/]: {fixed_params.get('activation_function')}\n\n"
             f"[bold]Hyperparameters to Tune:[/]\n{hyper_str}"
         )
 

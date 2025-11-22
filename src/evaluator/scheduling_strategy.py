@@ -18,8 +18,12 @@ from src.model.parallel import WorkerConfig
 
 # TODO make this configurable
 # --- Configuration Constants ---
-TOTAL_CORES = 64
-CORES_PER_NODE = 16
+ENABLE_NUMA_SUPPORT = False
+
+TOTAL_CORES = 8
+CORES_PER_NUMA_NODE = 1
+CORES_FOR_CPU_WORKER = 1
+CORES_FOR_GPU_WORKER = 1
 GPU_TO_NODE_MAP = {0: 1, 1: 0, 2: 3, 3: 2}
 
 
@@ -63,7 +67,7 @@ class CPUOnlyStrategy(SchedulingStrategy):
 
         workers = _spawn_processes(
             ctx=kwargs["ctx"],
-            task_queue=kwargs["task_queue"],
+            task_queue=task_queue,
             result_queue=kwargs["result_queue"],
             num_cpu_workers=num_cpu_workers,
             session_log_filename=kwargs["session_log_filename"],
@@ -182,7 +186,7 @@ class NumaCoreAllocator:
     def __init__(
         self,
         total_cores: int = TOTAL_CORES,
-        cores_per_node: int = CORES_PER_NODE,
+        cores_per_node: int = CORES_PER_NUMA_NODE,
     ):
         self.total_cores = total_cores
         self.assigned_mask = [False] * total_cores
@@ -199,6 +203,9 @@ class NumaCoreAllocator:
         Attempts to allocate 'count' cores from 'node_id'.
         Returns list of core_ids on success, or None on failure.
         """
+        if not ENABLE_NUMA_SUPPORT:
+            return None
+
         if node_id not in self.node_cores:
             logger.error(f"Invalid NUMA Node ID: {node_id}")
             return None
@@ -247,14 +254,10 @@ def _spawn_processes(
     gpu_worker_offset: int = 0,
 ) -> List[mp.Process]:
     """
-    Spawns GPU and CPU workers with NUMA-aware core pinning.
+    Spawns GPU and CPU workers with optional NUMA-aware core pinning.
     """
     workers = []
     allocator = NumaCoreAllocator()
-
-    # TODO make this configurable
-    CORES_FOR_CPU_WORKER = 14
-    CORES_FOR_GPU_WORKER = 2
 
     if num_gpu_workers <= 0 and num_cpu_workers <= 0:
         return workers
@@ -267,27 +270,33 @@ def _spawn_processes(
 
         for i in range(num_gpu_workers):
             device_id = i
-
-            if device_id not in GPU_TO_NODE_MAP:
-                logger.error(f"No NUMA mapping for GPU {device_id}. Skipping.")
-                continue
-
-            node_id = GPU_TO_NODE_MAP[device_id]
-
-            core_ids = allocator.allocate(
-                node_id, CORES_FOR_GPU_WORKER, from_end=True
-            )
-
-            if not core_ids:
-                logger.warning(
-                    f"Failed to allocate cores for GPU {device_id} on Node {node_id}."
-                )
-                continue
-
             worker_id = device_id + gpu_worker_offset
-            logger.info(
-                f"  Worker-{worker_id} (GPU-{device_id}) -> Node {node_id} (Cores {core_ids})"
-            )
+            core_ids = None
+
+            if ENABLE_NUMA_SUPPORT:
+                if device_id not in GPU_TO_NODE_MAP:
+                    logger.error(
+                        f"No NUMA mapping for GPU {device_id}. Skipping."
+                    )
+                    continue
+
+                node_id = GPU_TO_NODE_MAP[device_id]
+                core_ids = allocator.allocate(
+                    node_id, CORES_FOR_GPU_WORKER, from_end=True
+                )
+
+                if not core_ids:
+                    logger.warning(
+                        f"Failed to allocate cores for GPU {device_id} on Node {node_id}."
+                    )
+                else:
+                    logger.info(
+                        f"  Worker-{worker_id} (GPU-{device_id}) -> Node {node_id} (Cores {core_ids})"
+                    )
+            else:
+                logger.info(
+                    f"  Worker-{worker_id} (GPU-{device_id}) -> Auto-scheduled (Affinity disabled)"
+                )
 
             w_config = WorkerConfig(
                 worker_id=worker_id,
@@ -311,22 +320,28 @@ def _spawn_processes(
         node_ids = sorted(allocator.node_cores.keys())
 
         for i in range(num_cpu_workers):
-            node_id = node_ids[i % len(node_ids)]
-
-            core_ids = allocator.allocate(
-                node_id, CORES_FOR_CPU_WORKER, from_end=False
-            )
-
-            if not core_ids:
-                logger.warning(
-                    f"Failed to allocate cores for CPU Worker {i} on Node {node_id}."
-                )
-                continue
-
             worker_id = i
-            logger.info(
-                f"  Worker-{worker_id} (CPU) -> Node {node_id} (Cores {core_ids})"
-            )
+            core_ids = None
+
+            if ENABLE_NUMA_SUPPORT and node_ids:
+                node_id = node_ids[i % len(node_ids)]
+                core_ids = allocator.allocate(
+                    node_id, CORES_FOR_CPU_WORKER, from_end=False
+                )
+
+                if not core_ids:
+                    logger.warning(
+                        f"Failed to allocate cores for CPU Worker {i} on Node {node_id}. Skipping worker."
+                    )
+                    continue
+                else:
+                    logger.info(
+                        f"  Worker-{worker_id} (CPU) -> Node {node_id} (Cores {core_ids})"
+                    )
+            else:
+                logger.info(
+                    f"  Worker-{worker_id} (CPU) -> Auto-scheduled (Affinity disabled)"
+                )
 
             w_config = WorkerConfig(
                 worker_id=worker_id,

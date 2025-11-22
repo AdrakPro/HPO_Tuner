@@ -71,6 +71,7 @@ export OMP_DYNAMIC="FALSE"
 export KMP_BLOCKTIME="1"
 export KMP_AFFINITY="granularity=fine,compact,1,0"
 export ONEDNN_MAX_CPU_ISA="AVX512_CORE_AMX"
+export DATA_DIR="$(pwd)"
 
 ulimit -n 65535
 # ===============================

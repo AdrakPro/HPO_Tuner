@@ -29,11 +29,7 @@ def get_default_config() -> Dict[str, Any]:
             "input_shape": [3, 32, 32],  # (channels, height, width)
             "output_classes": 10,
             "conv_blocks": 2,
-            # Parameters not subject to optimization
-            "fixed_parameters": {
-                "activation_function": "relu",  # Options: relu, gelu, leaky_relu
-                "base_filters": 20,
-            },
+            "base_filters": 20,
             "hyperparameter_space": {
                 "width_scale": {
                     "type": "float",
@@ -101,7 +97,7 @@ def get_default_config() -> Dict[str, Any]:
                     "crossover",
                     "elitism",
                 ],  # Options: selection, mutation, crossover, elitism or random
-                "selection": {"type": "tournament", "tournament_size": 10},
+                "selection": {"type": "tournament"},
                 "crossover": {"type": "uniform", "crossover_prob": 0.8},
                 "mutation": {
                     "mutation_prob_discrete": 0.15,
@@ -118,10 +114,8 @@ def get_default_config() -> Dict[str, Any]:
                 "training_epochs": 20,
                 "data_subset_percentage": 1.0,
                 "mutation_decay_rate": 0.98,
-                "stratification_bins": 10,
                 "stop_conditions": {
-                    "max_generations": 10,
-                    "early_stop_generations": 999,
+                    "early_stop_generations": 5,
                     "early_stop_epochs": 6,
                     "fitness_goal": 0.99,
                     "time_limit_minutes": 0,
@@ -132,9 +126,7 @@ def get_default_config() -> Dict[str, Any]:
                 "generations": 70,
                 "training_epochs": 100,
                 "mutation_decay_rate": 0.98,
-                "stratification_bins": 3,
                 "stop_conditions": {
-                    "max_generations": 70,
                     "early_stop_generations": 20,
                     "early_stop_epochs": 15,
                     "fitness_goal": 0.99,

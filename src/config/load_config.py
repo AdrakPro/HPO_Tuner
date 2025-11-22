@@ -91,16 +91,7 @@ def _validate_neural_network_config(config: Dict[str, Any]):
         raise ValueError("input_shape must have exactly 3 values.")
     _check_non_negative_int(config["conv_blocks"], "conv_blocks")
     _check_non_negative_int(config["output_classes"], "output_classes")
-
-    # --- Fixed parameter validation ---
-    fixed_params = config["fixed_parameters"]
-    activation_function = fixed_params["activation_function"].lower()
-    allowed = get_enum_values(ActivationFn)
-    if activation_function not in allowed:
-        raise ValueError(
-            f"Allowed 'activation_function' are {allowed}', but received: '{fixed_params['activation_function']}'."
-        )
-    _check_non_negative_int(fixed_params["base_filters"], "base_filters")
+    _check_non_negative_int(config["base_filters"], "base_filters")
 
     # --- Hyperparameter space validation ---
     hyperparameters = config["hyperparameter_space"]
@@ -196,7 +187,6 @@ def _validate_nested_validation_config(config: Dict[str, Any]):
 def _validate_stop_conditions(config: Dict[str, Any], prefix: str):
     """Validates a 'stop_conditions' block."""
     for key in [
-        "max_generations",
         "early_stop_generations",
         "early_stop_epochs",
     ]:
@@ -222,7 +212,6 @@ def _validate_algorithm_run_config(
         "population_size",
         "generations",
         "training_epochs",
-        "stratification_bins",
     ]:
         _check_non_negative_int(config[key], f"{prefix}.{key}")
 
@@ -244,9 +233,6 @@ def _validate_genetic_algorithm_config(config: Dict[str, Any]):
 
     if operators["selection"]["type"] != "tournament":
         raise ValueError("'selection.type' must be 'tournament'.")
-    _check_non_negative_int(
-        operators["selection"]["tournament_size"], "tournament_size"
-    )
 
     if operators["crossover"]["type"] != "uniform":
         raise ValueError("'crossover.type' must be 'uniform'.")

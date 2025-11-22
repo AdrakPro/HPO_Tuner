@@ -22,13 +22,14 @@ from src.model.chromosome import (
     OptimizerSchedule,
     ActivationFn,
 )
-from src.utils.enum_helper import get_enum_names, get_enum_values
+from src.utils.enum_helper import get_enum_names
 from src.utils.file_helper import ensure_dir_exists
 
 console = Console(highlight=False)
+data_dir = os.environ.get("DATA_DIR", ".")
 
 # --- Constants ---
-CONFIG_DIR = os.path.abspath("configs")
+CONFIG_DIR = os.path.join(data_dir, "configs")
 PARALLEL_CONFIG = "parallel_config"
 NN_CONFIG = "neural_network_config"
 GA_CONFIG = "genetic_algorithm_config"
@@ -133,7 +134,7 @@ def _prompt_for_evaluation_mode() -> str:
 
 def _prompt_for_cpu_workers(max_cores: int) -> Optional[int]:
     """Prompts for the number of CPU cores to use."""
-    prompt = f"Enter the number of CPU cores (Available: {max_cores}, Enter = {max_cores}):"
+    prompt = f"Enter the number of CPU workers (Available: {max_cores}, Enter = {max_cores}):"
     cpu_input = console.input(prompt)
     if not cpu_input:
         return max_cores
@@ -314,13 +315,13 @@ def _prompt_for_hyperparameter_enum(
     string_enum_values = {
         "optimizer_schedule": get_enum_names(OptimizerSchedule),
         "aug_intensity": get_enum_names(AugmentationIntensity),
+        "activation_fn": get_enum_names(ActivationFn),
     }
     integer_enum_values = ["batch_size"]
 
     if name in string_enum_values:
         allowed = string_enum_values[name]
         prompt = f"Enter new comma-separated values (available: {allowed}): "
-
         new_values_str = console.input(prompt)
 
         if not new_values_str:
@@ -328,7 +329,7 @@ def _prompt_for_hyperparameter_enum(
             return None
 
         raw_new_values = [v.strip() for v in new_values_str.split(",")]
-        invalid_values = [v for v in raw_new_values if v not in allowed]
+        invalid_values = [v for v in raw_new_values if v.lower() not in allowed]
 
         if invalid_values:
             console.print(
@@ -388,9 +389,7 @@ def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
     """Prompts user for neural network architecture settings."""
     _print_header("Neural Network Architecture")
     nn_updates: Dict[str, Any] = {}
-    fixed_param_updates: Dict[str, Any] = {}
     nn_defaults = defaults[NN_CONFIG]
-    fixed_defaults = nn_defaults["fixed_parameters"]
 
     params_to_prompt = {
         "conv_blocks": {
@@ -400,13 +399,8 @@ def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         },
         "base_filters": {
             "prompt": "Number of base filters",
-            "default": fixed_defaults.get("base_filters", 32),
-            "target": fixed_param_updates,
-        },
-        "activation_function": {
-            "prompt": f"Activation function. Allowed: {get_enum_values(ActivationFn)}",
-            "default": fixed_defaults.get("activation_function", "relu"),
-            "target": fixed_param_updates,
+            "default": nn_defaults.get("base_filters", 32),
+            "target": nn_updates,
         },
     }
 
@@ -416,9 +410,6 @@ def _get_neural_network_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         )
         if val is not None:
             config["target"][key] = val
-
-    if fixed_param_updates:
-        nn_updates["fixed_parameters"] = fixed_param_updates
 
     return {NN_CONFIG: nn_updates} if nn_updates else {}
 
@@ -543,16 +534,6 @@ def _get_genetic_operators_config(defaults: Dict[str, Any]) -> Dict[str, Any]:
         "\n[bold]Adjust parameters for the selected operators:[/bold]"
     )
 
-    if "selection" in active_ops:
-        tourn_default = _get_nested_config(
-            op_defaults, ["selection", "tournament_size"], 5
-        )
-        tourn_size = _prompt_for_numeric(
-            "Enter tournament size for selection", tourn_default
-        )
-        if tourn_size is not None and tourn_size > 1:
-            updates.setdefault("selection", {})["tournament_size"] = tourn_size
-
     if "elitism" in active_ops:
         elitism_default = op_defaults.get("elitism_percent", 0.05)
         elitism = _prompt_for_numeric(
@@ -577,7 +558,6 @@ def _prompt_for_stop_conditions(defaults: Dict[str, Any]) -> Dict[str, Any]:
     stop_defaults = defaults[STOP_CONDITIONS]
 
     params = {
-        "max_generations": ("Maximum number of generations", int),
         "early_stop_generations": (
             "Number of generations for early stopping",
             int,
@@ -635,7 +615,6 @@ def _get_algorithm_settings(
         "generations": ("Enter the number of generations", int),
         "training_epochs": ("Enter the number of training epochs", int),
         "mutation_decay_rate": ("Enter the mutation decay rate percent", float),
-        "stratification_bins": ("Enter the number of stratification bins", int),
     }
     if config_key == CALIBRATION:
         params["data_subset_percentage"] = (

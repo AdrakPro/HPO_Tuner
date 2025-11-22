@@ -9,6 +9,34 @@ from typing import Callable
 from loguru import logger as loguru_logger
 
 
+class StreamToLogger:
+    """
+    Fake file-like stream object that redirects writes to a logger instance.
+    Used to capture sys.stderr and send it to the logger.
+    """
+
+    def __init__(self, logger_instance, level="ERROR"):
+        self.logger = logger_instance
+        self.level = level
+
+    def write(self, buffer):
+        """
+        Writes the buffer to the logger.
+        Splits lines to ensure each stderr line becomes a log entry.
+        """
+        for line in buffer.rstrip().splitlines():
+            if line.strip():
+                self.logger.opt(depth=1, exception=False).log(
+                    self.level, line.rstrip()
+                )
+
+    def flush(self):
+        """
+        Flush is required for file-like objects, but we log immediately.
+        """
+        pass
+
+
 class _Logger:
     """
     A configurable logger using Loguru that supports synchronized file
@@ -18,12 +46,14 @@ class _Logger:
     def __init__(
         self,
         console: bool = True,
+        capture_stderr: bool = False,
     ):
         """
         Initializes and configures the logger.
 
         Args:
             console (bool): If True, logs will also be printed to the console.
+            capture_stderr (bool): If True, redirects sys.stderr to the logger.
         """
         self.logger = loguru_logger
         self.logger.remove()
@@ -31,16 +61,23 @@ class _Logger:
         self._console_sink_id = None
         self._file_sink_id = None
 
-        if console and sys.stdout.isatty():
-            self._console_sink_id = self.logger.add(
-                sys.stderr,
-                level="INFO",
-                format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}",
-                filter=lambda record: not record["extra"].get(
-                    "file_only", False
-                ),
-                colorize=True,
-            )
+        if console:
+            target = sys.__stderr__ if sys.__stderr__ else sys.stderr
+
+            if sys.stdout.isatty():
+                self._console_sink_id = self.logger.add(
+                    target,
+                    level="INFO",
+                    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}",
+                    filter=lambda record: not record["extra"].get(
+                        "file_only", False
+                    ),
+                    colorize=True,
+                )
+
+        if capture_stderr:
+            # Redirect standard error to our logger
+            sys.stderr = StreamToLogger(self.logger, "ERROR")
 
     def add_file_sink(self, log_file_path: str) -> None:
         """Adds a synchronized file sink to the logger. Can only be called once."""

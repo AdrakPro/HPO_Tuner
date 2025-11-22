@@ -44,7 +44,7 @@ class TUI:
         self.progress = Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
+            BarColumn(bar_width=None),
             TextColumn("{task.completed} of {task.total} Evals"),
             expand=True,
         )
@@ -70,7 +70,6 @@ class TUI:
         """
         exec_cfg = get_nested_config(config, [PARALLEL_CONFIG, "execution"], {})
         nn_cfg = get_nested_config(config, [NN_CONFIG], {})
-        fixed_params = nn_cfg.get("fixed_parameters", {})
         hyperparams = nn_cfg.get(HYPERPARAM_SPACE, {})
         cal_cfg = get_nested_config(config, [GA_CONFIG, CALIBRATION_PHASE], {})
         main_cfg = get_nested_config(config, [GA_CONFIG, MAIN_ALGORITHM], {})
@@ -128,7 +127,7 @@ class TUI:
             for name, details in hyperparams.items()
         )
         config_right_details = (
-            f"[bold]Base Filters[/]: {fixed_params.get('base_filters')}\n"
+            f"[bold]Base Filters[/]: {nn_cfg.get('base_filters')}\n"
             f"[bold]Hyperparameters to Tune:[/]\n{hyper_str}"
         )
 
@@ -136,15 +135,19 @@ class TUI:
             config_left_details,
             title="[cyan]GA & Execution[/]",
             border_style="cyan",
+            expand=True,
         )
         panel_right = Panel(
             config_right_details,
             title="[cyan]Neural Net & Hyperparams[/]",
             border_style="cyan",
+            expand=True,
         )
 
+        self.layout["config_row"].visible = True
         self.layout["config_row"].split_row(
-            Layout(name="config_left"), Layout(name="config_right")
+            Layout(name="config_left", ratio=1),
+            Layout(name="config_right", ratio=1),
         )
         self.layout["config_left"].update(panel_left)
         self.layout["config_right"].update(panel_right)
@@ -156,7 +159,6 @@ class TUI:
         self.layout["config_row"].size = (
             max(left_height, right_height) + vertical_padding
         )
-        self.layout["config_row"].visible = True
 
         logger.info(
             f"Configuration:\n{json.dumps(config, indent=4)}",
@@ -199,11 +201,24 @@ class TUI:
         term_height = self.console.size.height
 
         header_height = self.layout["header"].size or 3
-        config_height = self.layout["config_row"].size or 0
-        progress_height = self.layout["progress"].size or 3
-        reserved_height = header_height + config_height + progress_height
 
-        max_logs_height = max(1, term_height - reserved_height)
+        config_height = self.layout["config_row"].size or 0
+        if not self.layout["config_row"].visible:
+            config_height = 0
+
+        progress_height = self.layout["progress"].size or 3
+
+        fold_status_height = self.layout["fold_status_row"].size or 0
+        if not self.layout["fold_status_row"].visible:
+            fold_status_height = 0
+
+        reserved_height = (
+            header_height + config_height + progress_height + fold_status_height
+        )
+
+        max_logs_height = max(
+            1, term_height - reserved_height - 2
+        )  # -2 for borders
 
         visible_logs = list(self._log_deque)[-max_logs_height:]
 
@@ -218,7 +233,6 @@ class TUI:
             expand=True,
         )
 
-        self.layout["logs"].size = max_logs_height
         self.layout["logs"].update(panel)
 
     def update(self) -> None:
@@ -253,7 +267,7 @@ class TUI:
 
         layout.split(
             Layout(name="header", size=3),
-            Layout(name="config_row", size=0, visible=False),
+            Layout(name="config_row", visible=False),
             Layout(name="fold_status_row", size=3, visible=False),
             Layout(name="progress", size=3),
             Layout(name="logs", ratio=1),
@@ -264,6 +278,7 @@ class TUI:
                 self.progress,
                 title="[bold magenta]Phase Progress[/]",
                 border_style="magenta",
+                expand=True,
             )
         )
         layout["logs"].update(

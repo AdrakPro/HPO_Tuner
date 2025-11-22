@@ -51,19 +51,16 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
     assigned_cores = getattr(worker_config, "core_ids", [])
     worker_type = getattr(worker_config, "type", "unknown")
-    device_spec = getattr(worker_config, "device", "cpu")
-    device_info = (
-        f"CPU" if worker_type == "cpu" else f"GPU device={device_spec}"
-    )
 
     if assigned_cores:
         pin_worker_to_cores(assigned_cores)
 
     # TODO make settings threads per worker in config cpu/gpu
     if worker_type == "gpu":
-        num_compute_threads = 1
+        num_compute_threads = assigned_cores
     elif worker_type == "cpu":
-        num_compute_threads = 14
+        # num_compute_threads = 14
+        num_compute_threads = assigned_cores
     else:
         num_compute_threads = 1
 

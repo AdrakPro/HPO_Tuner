@@ -8,7 +8,7 @@ import os
 import random
 import signal
 import sys
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 
 import numpy as np
 import torch.cuda
@@ -31,7 +31,7 @@ CROP_PADDING = 4
 IMG_SIZE = 32
 
 
-def dataloader_worker_init_fn():
+def dataloader_worker_init_fn(worker_id: int):
     """
     Sets the number of threads for a dataloader worker to 1.
     This prevents thread over-subscription when the main worker process
@@ -136,7 +136,7 @@ def get_dataset_loaders(
     model_dir = os.path.join(data_dir, task_id, "model_data")
     os.makedirs(model_dir, exist_ok=True)
 
-    transform_train, transform_test = get_transforms(aug_intensity, img_size)
+    transform_train, transform_test = get_transforms(aug_intensity)
 
     train_set_cls = SafeCIFAR10
     test_set_cls = SafeCIFAR10
@@ -189,7 +189,7 @@ def get_dataset_loaders(
 
 def get_transforms(
     aug_intensity: AugmentationIntensity,
-) -> tuple[transforms.Compose, transforms.Compose]:
+) -> Tuple[transforms.Compose, transforms.Compose]:
     """
     Get train and test transforms based on augmentation intensity.
     """

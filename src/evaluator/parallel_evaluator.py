@@ -275,11 +275,10 @@ class ParallelEvaluator(Evaluator):
                 self._pending_tasks[task.index] = task
                 self.gpu_task_queue.put(task)
         else:
-            target_queue = self.task_queues[0]
+            target_queue: mp.Queue = self.task_queues[0]
             for task in tasks:
                 self._pending_tasks[task.index] = task
                 target_queue.put(task)
-
         results_for_generation: List[Result] = []
         try:
             while (

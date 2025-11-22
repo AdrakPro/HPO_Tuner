@@ -52,10 +52,8 @@ class GeneticAlgorithm:
         else:
             self.active_operators = set()
 
-    def tournament_selection(
-        self, population: List[Any], fitness: List[float]
-    ) -> Any:
-        tournament_size: int = self.config["selection"]["tournament_size"]
+    def tournament_selection(self, population: List[Any], fitness: List[float]):
+        tournament_size = max(1, int(len(population) ** 0.5))
 
         if tournament_size > len(population):
             tournament_size = len(population)
@@ -254,7 +252,8 @@ class GeneticAlgorithm:
             num_dimensions = len(continuous_genes)
 
             if num_dimensions > 0:
-                sampler_seed = self.config["project"]["seed"]
+                # TODO make seed configurable, now self.config is genetic_config not overall object
+                sampler_seed = 2137
                 sampler = qmc.LatinHypercube(
                     d=num_dimensions,
                     seed=sampler_seed,

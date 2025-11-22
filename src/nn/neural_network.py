@@ -31,40 +31,31 @@ class CNN(nn.Module):
 
         input_channels: int = neural_config["input_shape"][0]
         output_classes: int = neural_config["output_classes"]
-        base_filters = int(neural_config["fixed_parameters"]["base_filters"])
+        base_filters: int = int(neural_config["base_filters"])
+        conv_blocks: int = int(neural_config["conv_blocks"])
         self.activation = chromosome.activation_fn.get_layer()
         self._activation_name = chromosome.activation_fn.name
 
         width_scale = chromosome.width_scale
         dropout_rate = chromosome.dropout_rate
-
-        f1 = int(base_filters * 1 * width_scale)
-        f2 = int(base_filters * 2 * width_scale)
-        f3 = int(base_filters * 4 * width_scale)
-
         feature_dropout_rate = dropout_rate / 2.0
 
         layers = []
         in_channels = input_channels
 
-        # --- Block 1 (f1 filters) ---
-        layers.extend(self._make_block(in_channels, f1, self.activation))
-        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))  # 32x32 -> 16x16
-        if dropout_rate > 0:
-            layers.append(nn.Dropout(feature_dropout_rate))
-        in_channels = f1
+        for i in range(conv_blocks):
+            current_filters = int(base_filters * (2**i) * width_scale)
 
-        # --- Block 2 (f2 filters) ---
-        layers.extend(self._make_block(in_channels, f2, self.activation))
-        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))  # 16x16 -> 8x8
-        if dropout_rate > 0:
-            layers.append(nn.Dropout(feature_dropout_rate))
-        in_channels = f2
+            layers.extend(
+                self._make_block(in_channels, current_filters, self.activation)
+            )
 
-        # --- Block 3 (f3 filters) ---
-        layers.extend(self._make_block(in_channels, f3, self.activation))
-        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))  # 8x8 -> 4x4
-        in_channels = f3
+            layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+
+            if dropout_rate > 0 and i < (conv_blocks - 1):
+                layers.append(nn.Dropout(feature_dropout_rate))
+
+            in_channels = current_filters
 
         self.features = nn.Sequential(*layers)
 
@@ -81,7 +72,6 @@ class CNN(nn.Module):
         )
         self.classifier = nn.Sequential(*classifier_layers)
 
-        # Store activation name for weight init
         self._initialize_weights()
 
     def _make_block(self, in_channels, out_channels, activation):

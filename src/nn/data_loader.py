@@ -3,8 +3,8 @@ Data loader module for CIFAR-10 using PyTorch.
 Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 """
 
-import os
 import gc
+import os
 import random
 import signal
 import sys
@@ -12,9 +12,9 @@ from typing import Optional, Union
 
 import numpy as np
 import torch.cuda
+from torch import set_num_threads, set_num_interop_threads
 from torch.utils.data import DataLoader, Subset, Dataset
 from torchvision import datasets, transforms
-from torch import set_num_threads, set_num_interop_threads
 
 from src.logger.logger import logger
 from src.model.chromosome import AugmentationIntensity
@@ -27,42 +27,20 @@ STDS = (0.2023, 0.1994, 0.2010)
 # Then it randomly selects a 32x32 window from within the 40x40 area.
 # Range [0, 6]
 CROP_PADDING = 4
-
+# TODO currently framework only supports CIFAR-10
 IMG_SIZE = 32
 
 
-def get_num_workers(num_workers_from_config: int) -> int:
-    """
-    Determine the number of workers for DataLoader.
-    If the current process is daemonic, return 0.
-    Otherwise, return the number provided from the (adjusted) config.
-    """
-    # try:
-    #     if mp.current_process().daemon:
-    #         return 0
-    # except:
-    #     return 0
-    return num_workers_from_config
-
-
-def dataloader_worker_init_fn(worker_id: int):
+def dataloader_worker_init_fn():
     """
     Sets the number of threads for a dataloader worker to 1.
     This prevents thread over-subscription when the main worker process
-    is already multi-threaded, which is crucial for data loading performance.
+    is already multithreaded, which is crucial for data loading performance.
     """
     num_dl_threads = 1
 
     set_num_threads(num_dl_threads)
     set_num_interop_threads(num_dl_threads)
-
-
-def safe_collate_fn(batch):
-    """Skip None samples returned by the dataset."""
-    batch = [b for b in batch if b is not None]
-    if len(batch) == 0:
-        return None  # all samples bad, handle this in training loop
-    return torch.utils.data.default_collate(batch)
 
 
 class SafeCIFAR10(datasets.CIFAR10):
@@ -153,19 +131,20 @@ def get_dataset_loaders(
     train_indices: Optional[np.ndarray] = None,
     test_indices: Optional[np.ndarray] = None,
 ) -> DataLoaderManager:
-    base = os.environ.get("SLURM_JOB_ID")
-    array_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
-    data_dir = f"./data"
-    os.makedirs(data_dir, exist_ok=True)
+    task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+    data_dir = os.environ.get("DATA_DIR", ".")
+    model_dir = os.path.join(data_dir, task_id, "model_data")
+    os.makedirs(model_dir, exist_ok=True)
 
-    transform_train, transform_test = get_transforms(aug_intensity)
+    transform_train, transform_test = get_transforms(aug_intensity, img_size)
 
     train_set_cls = SafeCIFAR10
+    test_set_cls = SafeCIFAR10
 
     # Load datasets
     if train_indices is not None and test_indices is not None:
         base_dataset = train_set_cls(
-            root=data_dir, train=True, download=False, transform=None
+            root=model_dir, train=True, download=False, transform=None
         )
         train_subset = Subset(base_dataset, train_indices)
         test_subset = Subset(base_dataset, test_indices)
@@ -174,10 +153,16 @@ def get_dataset_loaders(
         test_set = DatasetWrapper(test_subset, transform=transform_test)
     else:
         train_set = train_set_cls(
-            root=data_dir, train=True, download=False, transform=transform_train
+            root=model_dir,
+            train=True,
+            download=False,
+            transform=transform_train,
         )
         test_set = test_set_cls(
-            root=data_dir, train=False, download=False, transform=transform_test
+            root=model_dir,
+            train=False,
+            download=False,
+            transform=transform_test,
         )
         if subset_percentage < 1.0:
             num_samples = len(train_set)
@@ -186,15 +171,13 @@ def get_dataset_loaders(
             train_set = Subset(train_set, indices)
 
     # DataLoader args
-    num_workers = get_num_workers(num_dataloader_workers)
     loader_args = {
         "batch_size": batch_size,
-        "num_workers": num_workers,
+        "num_workers": num_dataloader_workers,
         "pin_memory": is_gpu,
         "worker_init_fn": dataloader_worker_init_fn,
-        # "collate_fn": safe_collate_fn,
         "multiprocessing_context": "spawn",
-        "persistent_workers": True,  # safer for multiprocessing
+        "persistent_workers": True,
         "prefetch_factor": 4,
     }
 
@@ -209,12 +192,6 @@ def get_transforms(
 ) -> tuple[transforms.Compose, transforms.Compose]:
     """
     Get train and test transforms based on augmentation intensity.
-
-    Args:
-        aug_intensity: AugmentationIntensity Enum.
-
-    Returns:
-        Tuple of train and test transforms.
     """
     if aug_intensity == AugmentationIntensity.NONE:
         train_transform = transforms.Compose(
@@ -276,10 +253,6 @@ def update_train_augmentation(
 ) -> None:
     """
     Dynamically updates the train dataset's augmentation transforms.
-
-    Args:
-        train_loader: The DataLoader object for training data.
-        aug_intensity: The new augmentation intensity (MEDIUM, STRONG, etc.).
     """
     if isinstance(aug_intensity, str):
         aug_intensity = AugmentationIntensity[aug_intensity.upper()]

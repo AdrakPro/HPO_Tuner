@@ -1,11 +1,8 @@
-# TODO: sprawdzic odpornosc TUI, t/n gdy wybrana jest s to i tak poleci bo nie t
-# TODO: future dont get block size, cuda can heursticly calculate it cudaOccupancyMaxPotentialBlockSize cuda_runtime.h
-# TODO: Enhancet: load last config, show with numbers to load last 5 latest configs
-
 """
 Text-based User Interface (TUI) for configuring the experiment.
 This module collects user input and returns a dictionary of configuration overrides.
 """
+
 import collections
 import os
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -678,7 +675,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     if callback_msg:
         logger.info(callback_msg)
 
-    return get_default_config()
+    default_config = get_default_config()
 
     _print_header("GENETIC OPTIMIZATION OF CNN")
     prompt = "[1] Create new configuration\n[2] Load last configuration file\n[3] Load configuration from a file\n[4] Exit\n> "
@@ -694,8 +691,6 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
         return load_newest_config(default_config, CONFIG_DIR)
     elif choice == "3":
         return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
-
-    return prompt_and_load_json_config(default_config, console, CONFIG_DIR)
 
     logger.info("New configuration started", file_only=True)
 

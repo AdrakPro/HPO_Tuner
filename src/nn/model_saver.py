@@ -17,10 +17,12 @@ class ModelSaver:
         Args:
             filename: Saved model's filename
         """
-        self.dir = f"./saved_models"
+        task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+        data_dir = os.environ.get("DATA_DIR", ".")
+        self.saved_models_dir = os.path.join(data_dir, task_id, "saved_models")
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename_with_time = f"{filename}_{timestamp}.pth"
-        self.filepath = os.path.join(self.dir, filename_with_time)
+        self.filepath = os.path.join(self.saved_models_dir, filename_with_time)
 
     def save(self, model: Module) -> str | None:
         """
@@ -29,7 +31,7 @@ class ModelSaver:
         Args:
             model: The PyTorch model to save.
         """
-        callback_msg = ensure_dir_exists(self.dir)
+        callback_msg = ensure_dir_exists(self.saved_models_dir)
         torch.save(model.state_dict(), self.filepath)
 
         return callback_msg

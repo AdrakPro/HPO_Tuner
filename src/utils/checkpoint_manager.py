@@ -26,18 +26,14 @@ class GaState:
     rng_state: Optional[Dict[str, Any]] = None
 
 
-class _CheckpointManager:
+class CheckpointManager:
     """
     Manages saving and loading of the application state for resuming interrupted runs.
     """
 
-    def __init__(
-        self,
-    ):
+    def __init__(self, data_dir: str):
         task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
-        self.checkpoint_dir = (
-            f"./checkpoints/{task_id}"
-        )
+        self.checkpoint_dir = os.path.join(data_dir, task_id, "checkpoints")
         self.filepath = os.path.join(self.checkpoint_dir, "ga_checkpoint.pkl")
         self.temp_filepath = f"{self.filepath}.tmp"
         os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -95,11 +91,11 @@ class _CheckpointManager:
                 state: GaState = pickle.load(f)
 
             rng_state = state.rng_state
-            # random.setstate(rng_state["python_random"])
-            # torch.set_rng_state(rng_state["torch_random"])
+            random.setstate(rng_state["python_random"])
+            torch.set_rng_state(rng_state["torch_random"])
 
-            # if torch.cuda.is_available() and rng_state.get("torch_cuda_random"):
-            #    torch.cuda.set_rng_state_all(rng_state["torch_cuda_random"])
+            if torch.cuda.is_available() and rng_state.get("torch_cuda_random"):
+                torch.cuda.set_rng_state_all(rng_state["torch_cuda_random"])
 
             if not hasattr(state, "outer_fold_k"):
                 logger.warning(
@@ -117,6 +113,3 @@ class _CheckpointManager:
         """Deletes the checkpoint file if it exists."""
         if self.is_checkpoint_exists():
             os.remove(self.filepath)
-
-
-checkpoint_manager = _CheckpointManager()

@@ -12,6 +12,8 @@ todo.txt
 # C extensions
 *.so
 
+*.swp
+
 # Distribution / packaging
 .Python
 build/

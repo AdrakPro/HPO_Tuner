@@ -1,11 +1,10 @@
-import math
 import json
+import math
 import random
 from copy import deepcopy
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import numpy as np
 from scipy.stats import qmc
 
 from src.logger.logger import logger
@@ -157,13 +156,8 @@ class GeneticAlgorithm:
                     list(self.available_operators), numer_of_ga_operators
                 )
             )
-            # print(f"Random mode: running with {active_ops}")
         else:
             active_ops = self.active_operators
-
-        # Always preserve the single best individual to avoid losing progress
-        best_overall_idx = max(range(len(fitness)), key=lambda i: fitness[i])
-        new_pop.append(deepcopy(population[best_overall_idx]))
 
         if "elitism" in active_ops:
             # Avoid adding the best individual twice
@@ -221,7 +215,6 @@ class GeneticAlgorithm:
         """
         population: List[Dict[str, Any]] = []
 
-        # 1. Guarantee categorical/discrete coverage
         guaranteed_individuals: List[Dict[str, Any]] = []
 
         for gene, info in self.chromosome_space.items():
@@ -245,14 +238,14 @@ class GeneticAlgorithm:
         population.extend(guaranteed_individuals)
 
         # De-duplicate guaranteed individuals (in case of overlap)
-        existing_population = {json.dumps(ind, sort_keys=True): ind for ind in population}
+        existing_population = {
+            json.dumps(ind, sort_keys=True): ind for ind in population
+        }
         population = list(existing_population.values())
 
-        # 2. Fill remaining population with Latin Hypercube Sampling
         num_remaining = pop_size - len(population)
 
         if num_remaining > 0:
-            # Identify all continuous genes
             continuous_genes = {
                 gene: info
                 for gene, info in self.chromosome_space.items()
@@ -261,28 +254,28 @@ class GeneticAlgorithm:
             num_dimensions = len(continuous_genes)
 
             if num_dimensions > 0:
-                # 1. Initialize LHS sampler
                 sampler_seed = self.config["project"]["seed"]
-                sampler = qmc.LatinHypercube(d=num_dimensions, seed=sampler_seed, optimization="random-cd")
+                sampler = qmc.LatinHypercube(
+                    d=num_dimensions,
+                    seed=sampler_seed,
+                    optimization="random-cd",
+                )
 
-                # 2. Get N unit-scaled samples (values 0.0 to 1.0)
+                # Get N unit-scaled samples (values 0.0 to 1.0)
                 unit_samples = sampler.random(n=num_remaining)
 
-                # 3. Rescale samples and create individuals
+                # Rescale samples and create individuals
                 lhs_individuals = []
                 gene_names = list(continuous_genes.keys())
 
                 for i in range(num_remaining):
-                    # Start with a random individual for categorical genes
                     individual = self._generate_individual()
                     sample_row = unit_samples[i]
 
-                    # Overwrite continuous genes with the rescaled LHS values
                     for j, gene in enumerate(gene_names):
                         info = continuous_genes[gene]
                         unit_val = sample_row[j]  # The 0-1 value for this gene
 
-                        # Rescale from [0, 1] to the gene's [min, max] range
                         if info.get("scale") == "log":
                             log_min = math.log10(info["min"])
                             log_max = math.log10(info["max"])
@@ -304,10 +297,7 @@ class GeneticAlgorithm:
             else:
                 pass
 
-        # Add individuals (guaranteed + LHS) and de-duplicate again
-        existing_population = {
-            str(ind): ind for ind in population
-        }
+        existing_population = {str(ind): ind for ind in population}
         population = list(existing_population.values())
 
         # 3. Fill up to pop_size with random individuals (if needed)
@@ -317,10 +307,8 @@ class GeneticAlgorithm:
                 population.append(individual)
                 existing_population[str(individual)] = individual
 
-        # 4. Shuffle to avoid bias before truncating
         random.shuffle(population)
 
-        # Return exactly pop_size
         return population[:pop_size]
 
     def _generate_individual(

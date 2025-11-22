@@ -6,7 +6,6 @@ import time
 from typing import List, Tuple
 
 
-# TODO: clean max_generations
 class StopConditions:
     """
     Encapsulates the logic for stopping the genetic algorithm based on configured criteria.
@@ -18,7 +17,7 @@ class StopConditions:
 
         Args:
             config: A dictionary containing stop condition parameters, e.g.,
-                    'max_generations', 'early_stop_generations', 'fitness_goal', 'time_limit_minutes'.
+                    early_stop_generations', 'fitness_goal', 'time_limit_minutes'.
         """
         self.early_stop_generations: int = config["early_stop_generations"]
         self.fitness_goal: float = config["fitness_goal"]

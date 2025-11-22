@@ -2,33 +2,28 @@ import os
 import queue
 import signal
 import time
-from typing import Union, Any, Callable, Tuple, List
 import traceback
+from typing import Union, List
 
-from torch import device, set_num_threads, set_num_interop_threads
 from torch import cuda
+from torch import device, set_num_threads, set_num_interop_threads
 
 from src.model.chromosome import Chromosome, OptimizerSchedule
 from src.model.parallel import Result, WorkerConfig
 from src.nn.data_loader import get_dataset_loaders
 from src.nn.train_and_eval import train_and_eval
-from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
+from src.utils.exceptions import NumericalInstabilityError
 from src.utils.thread_optimizer import ThreadOptimizer
 
 
 def pin_worker_to_cores(core_ids: List[int]):
     """Pins the current process to the specified core IDs."""
     if not core_ids:
-        print(f"PID {os.getpid()}: Warning - No core IDs provided for pinning.")
         return
     try:
         os.sched_setaffinity(0, core_ids)
-        # Optional: Log success, but can be noisy
-        # print(f"[{datetime.now().isoformat()}][PID {os.getpid()}] Successfully pinned to cores: {core_ids}")
-    except Exception as e:
-        print(
-            f"[{datetime.now().isoformat()}][PID {os.getpid()}] WARNING - Failed to pin to cores {core_ids}: {e}"
-        )
+    except Exception:
+        pass
 
 
 def init_device(device_id: Union[str, int]) -> device:
@@ -61,47 +56,19 @@ def worker_main(worker_config: WorkerConfig) -> None:
         f"CPU" if worker_type == "cpu" else f"GPU device={device_spec}"
     )
 
-    # print(f"[{start_time_iso}][PID {my_pid}] STARTING | Type: {worker_type} | Device: {device_info} | Target Cores: {assigned_cores}")
-
     if assigned_cores:
         pin_worker_to_cores(assigned_cores)
-    # else:
-    # print(f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: No core_ids provided, not pinning.")
 
-    num_dataloader_workers = getattr(worker_config, "num_dataloader_workers", 1)
-    num_cores_assigned = (
-        len(assigned_cores) if assigned_cores else os.cpu_count() or 1
-    )
-
+    # TODO make settings threads per worker in config cpu/gpu
     if worker_type == "gpu":
         num_compute_threads = 1
     elif worker_type == "cpu":
-        # num_compute_threads = max(1, num_cores_assigned - 1 - num_dataloader_workers)
         num_compute_threads = 14
     else:
         num_compute_threads = 1
 
-    actual_torch_threads = max(1, num_compute_threads)
-    try:
-        set_num_interop_threads(1)
-        set_num_threads(actual_torch_threads)
-        # print(f"[{datetime.now().isoformat()}][PID {my_pid}] Set torch interop=1, intraop={actual_torch_threads}")
-    except Exception as e:
-        print(
-            f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: Failed to set PyTorch threads: {e}"
-        )
-
-    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-    # os.environ["OMP_DYNAMIC"] = "FALSE"
-
-    # if worker_config.type == "gpu":
-    #     num_threads = 1
-    # else:
-    #     num_threads = 12
-    #
-    # set_num_threads(num_threads)
-    # set_num_interop_threads(1)
+    set_num_interop_threads(1)
+    set_num_threads(num_compute_threads)
 
     dev = init_device(worker_config.device)
     device_name = (
@@ -113,48 +80,12 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Restore signal handler after imports are complete
     signal.signal(signal.SIGINT, original_sigint_handler)
 
-    # local_logger = logging.getLogger(f"worker-{worker_config.worker_id}")
-    # local_logger.setLevel(logging.INFO)
-    # if getattr(worker_config, "log_queue", None) is not None:
-    #    try:
-    #        qh = QueueHandler(worker_config.log_queue)
-    #        if local_logger.handlers:
-    #            for h in list(local_logger.handlers):
-    #                local_logger.removeHandler(h)
-    #        local_logger.addHandler(qh)
-    #    except Exception:
-    #        local_logger = logger  # fallback to module logger
-    # else:
-    #    local_logger = logger
-    #
-    # def _emit_log(entry):
-    #    """
-    #    Accept either a string or a tuple (string, 'file_only'). If file_only is set, we only
-    #    keep it in the result.log_lines and skip emitting to the file (preserves original intent).
-    #    """
-    #    if isinstance(entry, tuple) and len(entry) >= 2 and entry[1] == "file_only":
-    #        return
-    #    try:
-    #        local_logger.info(entry)
-    #    except Exception:
-    #        pass  # do not crash worker because logging failed
-
     while True:
         try:
             task = worker_config.task_queue.get(timeout=1.0)
 
             if task is None:  # Sentinel to stop
                 break
-
-            def buffer_and_emit(log_time, entry):
-                if (
-                    isinstance(entry, tuple)
-                    and len(entry) >= 2
-                    and entry[1] == "file_only"
-                ):
-                    return
-                log_buffer.append(entry)
-                # _emit_log(m)
 
             log_buffer = [
                 f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
@@ -168,6 +99,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                 chromosome = Chromosome.from_dict(task.individual_hyperparams)
 
                 # Scaling LR based on optimizer
+                # TODO set REFERENCE_BATCH in config
                 REFERENCE_BATCH = 128
                 original_lr = chromosome.base_lr
                 scale_factor = 0.0
@@ -207,15 +139,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
                         f"[Worker-{worker_config.worker_id} / {device_name}] "
                         f"Using base_lr {chromosome.base_lr:.6f} for batch_size {chromosome.batch_size}"
                     )
-
-                # ZERO_PROB = 0.2
-                #
-                # if random.random() < ZERO_PROB:
-                #     chromosome.weight_decay = 0
-                #     log_buffer.append(
-                #         f"[Worker-{worker_config.worker_id} / {device_name}] "
-                #         f"Weight decay probability reached. Setting weight_decay to 0"
-                #     )
 
                 def epoch_logger(
                     epoch,
@@ -284,7 +207,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     worker_type=worker_config.type,
                 )
 
-            except (CudaOutOfMemoryError, NumericalInstabilityError) as e:
+            except NumericalInstabilityError as e:
                 log_buffer.append(
                     f"[Worker-{worker_config.worker_id} / {device_name}] Controlled failure for individual {task.index}: {e}"
                 )

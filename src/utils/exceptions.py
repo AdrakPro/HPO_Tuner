@@ -17,17 +17,3 @@ class NumericalInstabilityError(TrainingException):
     ):
         self.message = message
         super().__init__(self.message)
-
-
-class CudaOutOfMemoryError(TrainingException):
-    """Raised specifically for CUDA Out-of-Memory errors."""
-
-    def __init__(self, message: str = "CUDA out of memory."):
-        self.message = message
-        super().__init__(self.message)
-
-
-class GPUResourceError(Exception):
-    """Raised for errors related to GPU availability or initialization."""
-
-    pass

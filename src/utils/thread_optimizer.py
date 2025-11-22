@@ -1,5 +1,5 @@
 """
-Thread optimization for PyTorch to prevent oversubscription on multi-core systems.
+Thread optimization for PyTorch.
 """
 
 import torch

@@ -28,7 +28,6 @@ def create_evaluator(
     session_log_filename: str,
     train_indices: Optional[np.ndarray] = None,
     test_indices: Optional[np.ndarray] = None,
-    log_queue=None,
 ) -> Evaluator:
     """
     Selects and creates the appropriate evaluator (sequential or parallel)
@@ -61,7 +60,7 @@ def create_evaluator(
         logger.error(
             f"Unknown evaluation mode: {eval_mode}. Defaulting to sequential."
         )
-        # Todo: fix sequential evaluator, setting fixed batch size, progress bar advancing
+        # Todo: fix sequential evaluator progress bar advancing
         return IndividualEvaluator(
             neural_config=neural_config,
             training_epochs=training_epochs,
@@ -82,5 +81,4 @@ def create_evaluator(
         session_log_filename=session_log_filename,
         train_indices=train_indices,
         test_indices=test_indices,
-        log_queue=log_queue,
     )

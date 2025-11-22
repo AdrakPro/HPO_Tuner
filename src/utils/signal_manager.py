@@ -5,17 +5,18 @@ Centralized signal management to prevent conflicts and ensure proper cleanup.
 import signal
 import sys
 from typing import List, Callable
+
 from src.logger.logger import logger
 
 
-class SignalManager:
+class _SignalManager:
     _instance = None
     _cleanup_handlers: List[Callable] = []
     _original_handlers = {}
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(SignalManager, cls).__new__(cls)
+            cls._instance = super(_SignalManager, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
@@ -59,4 +60,4 @@ class SignalManager:
         sys.exit(1 if signum in (signal.SIGINT, signal.SIGTERM) else 0)
 
 
-signal_manager = SignalManager()
+signal_manager = _SignalManager()

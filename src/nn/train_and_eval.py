@@ -1,6 +1,7 @@
-from typing import Any, Dict, Tuple
 import traceback
-import os
+from datetime import datetime, timezone
+from typing import Any, Dict, Tuple
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,7 +15,7 @@ from src.model.chromosome import Chromosome, AugmentationIntensity
 from src.nn.data_loader import update_train_augmentation
 from src.nn.model_saver import ModelSaver
 from src.nn.neural_network import get_network, get_optimizer_and_scheduler
-from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
+from src.utils.exceptions import NumericalInstabilityError
 from src.utils.mixup import mixup_data, mixup_criterion, mixup_schedule
 
 
@@ -27,25 +28,9 @@ def train_epoch(
     lam_alpha: float,
     scaler: GradScaler = None,
     scheduler=None,
-) -> tuple[float, float]:
+) -> Tuple[float, float]:
     """
     Train the model for one epoch.
-
-    Args:
-        model: Neural network model.
-        loader: Training DataLoader.
-        criterion: Loss function.
-        optimizer: Optimizer.
-        device: Device to run computations on.
-        scaler: Scaler supporting Mixed Precision
-        profiler: Optional PyTorch profiler instance.
-
-    Returns:
-        Tuple of average loss and accuracy for the epoch.
-
-    Raises:
-        NumericalInstabilityError: If loss becomes NaN or infinity.
-        CudaOutOfMemoryError: If a CUDA OOM error is detected.
     """
     model.train()
     running_loss, correct, total = 0.0, 0, 0
@@ -142,7 +127,7 @@ def evaluate(
     loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
-) -> tuple[float, float]:
+) -> Tuple[float, float]:
     """
     Evaluate the model.
 
@@ -186,7 +171,7 @@ def train_and_eval(
     device: torch.device,
     train_loader: DataLoader,
     test_loader: DataLoader,
-    is_final: bool = False,
+    is_final=False,
     epoch_callback=None,
 ) -> Tuple[float, float]:
     """
@@ -222,10 +207,12 @@ def train_and_eval(
         if device.type == "cpu":
             try:
                 import intel_extension_for_pytorch as ipex
+
                 model, optimizer = ipex.optimize(model, optimizer=optimizer)
             except Exception as e:
                 logger.error(
-                    f"IPEX not available. Falling back to regular PyTorch. Reason: {e}")
+                    f"IPEX not available. Falling back to regular PyTorch. Reason: {e}"
+                )
         scaler = torch.amp.GradScaler() if device.type == "cuda" else None
 
         final_test_acc = 0.0
@@ -311,9 +298,17 @@ def train_and_eval(
                     )
                 break
 
+            if is_final:
+                timestamp = datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%d_%H-%M-%S"
+                )
+                model_name = f"model_{timestamp}"
+                model_saver = ModelSaver(model_name)
+                model_saver.save(model)
+
         return final_test_acc, final_test_loss
 
-    except (CudaOutOfMemoryError, NumericalInstabilityError):
+    except NumericalInstabilityError:
         raise
     except RuntimeError as e:
         if "DataLoader worker" in str(e) and (

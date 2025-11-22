@@ -9,8 +9,7 @@ from typing import Callable
 from loguru import logger as loguru_logger
 
 
-# TODO: After completion of optimization, change name log.log to unique name
-class Logger:
+class _Logger:
     """
     A configurable logger using Loguru that supports synchronized file
     and console outputs and can be safely used across multiple processes.
@@ -103,4 +102,4 @@ class Logger:
 
 
 # Global instance for the main process
-logger = Logger()
+logger = _Logger()

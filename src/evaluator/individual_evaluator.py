@@ -14,11 +14,10 @@ from src.logger.logger import logger
 from src.model.chromosome import Chromosome
 from src.model.evaluator_interface import Evaluator
 from src.model.parallel import Result
-from src.nn.train_and_eval import train_and_eval
 from src.nn.data_loader import get_dataset_loaders
+from src.nn.train_and_eval import train_and_eval
 
 
-# TODO: add missing features to individual evaluator
 class IndividualEvaluator(Evaluator):
     """
     Evaluates a population sequentially in the main process.
@@ -31,7 +30,6 @@ class IndividualEvaluator(Evaluator):
         early_stop_epochs: int,
         subset_percentage: float,
         progress: Progress,
-        task_id: TaskID,
         train_indices: Optional[np.ndarray],
         test_indices: Optional[np.ndarray],
     ):
@@ -46,7 +44,7 @@ class IndividualEvaluator(Evaluator):
         self.test_indices = test_indices
 
         self.progress = progress
-        self.task_id = task_id
+        self.task_id = None
         logger.info(
             f"Using sequential evaluator initialized on {self.device.type.upper()}"
         )
@@ -138,7 +136,8 @@ class IndividualEvaluator(Evaluator):
                 error_msg = str(e)
 
             duration = time.perf_counter() - start_time
-            self.progress.update(self.task_id, advance=1)
+            if self.task_id is not None:
+                self.progress.update(self.task_id, advance=1)
 
             logger.info(
                 f"Individual {i + 1} -> Accuracy: {accuracy:.4f}, Loss: {loss:.4f} | Duration: {duration:.2f}s"

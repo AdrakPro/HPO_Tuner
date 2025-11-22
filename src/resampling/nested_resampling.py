@@ -3,12 +3,12 @@ from typing import Dict, Optional
 
 import numpy as np
 
+from src.evaluator.create_evaluator import create_evaluator
 from src.ga_runner import run_optimization
 from src.logger.logger import logger
 from src.tui.tui_screen import TUI
 from src.utils.checkpoint_manager import GaState
 from src.utils.data_splitter import create_stratified_k_folds
-from src.evaluator.create_evaluator import create_evaluator
 
 
 def run_nested_resampling(
@@ -16,7 +16,6 @@ def run_nested_resampling(
     tui: TUI,
     session_log_filename: str,
     loaded_state: Optional[GaState],
-    log_queue=None,
 ):
     """
     Manages the nested resampling process.
@@ -25,26 +24,26 @@ def run_nested_resampling(
     nested_config = config["nested_validation_config"]
     outer_k_folds = nested_config["outer_k_folds"]
 
-    fold_to_run_str = os.environ.get("SLURM_ARRAY_TASK_ID")
-    is_slurm_array_job = fold_to_run_str is not None
+    task_id = os.environ.get("SLURM_ARRAY_TASK_ID")
+    is_slurm_array_job = task_id is not None
 
     if is_slurm_array_job:
         try:
-            fold_index = int(fold_to_run_str)
+            fold_index = int(task_id)
             logger.info(
                 f"Running as SLURM array task. Executing ONLY Fold {fold_index + 1}/{outer_k_folds}."
             )
+            # TODO: aggregation with multiple program instances need sync mechanism. For simplicity we will aggreagte manually from logs.
             _run_single_fold(
                 config,
                 tui,
                 session_log_filename,
                 loaded_state,
                 fold_index,
-                log_queue,
             )
         except (ValueError, IndexError):
             logger.error(
-                f"Invalid SLURM_ARRAY_TASK_ID: {fold_to_run_str}. Could not run fold."
+                f"Invalid SLURM_ARRAY_TASK_ID: {task_id}. Could not run fold."
             )
     else:
         logger.info("Not a SLURM array job. Running all folds sequentially.")
@@ -83,7 +82,6 @@ def run_nested_resampling(
                 session_log_filename,
                 current_fold_loaded_state,
                 k,
-                log_queue,
             )
             if final_fitness is not None:
                 all_fold_scores.append(final_fitness)
@@ -103,22 +101,23 @@ def _run_single_fold(
     session_log_filename: str,
     loaded_state: Optional[GaState],
     fold_index: int,
-    log_queue=None,
 ) -> (Optional[float], Optional[float], Optional[dict]):
     """
     Helper function to encapsulate the logic for running a single fold.
     This is now the core logic called by both sequential and parallel modes.
     """
     outer_k_folds = config["nested_validation_config"]["outer_k_folds"]
+    seed = config["project"]["seed"]
+    task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+    data_dir = os.environ.get("DATA_DIR", ".")
+    model_dir = os.path.join(data_dir, task_id, "model_data")
+    os.makedirs(model_dir, exist_ok=True)
+
     tui.update_fold_status(fold_index + 1, outer_k_folds)
     logger.info(f"--- Running Fold {fold_index + 1}/{outer_k_folds} ---")
-
-    base = os.environ.get("SLURM_JOB_ID")
-    array_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
-    data_dir = f"./data"
-    os.makedirs(data_dir, exist_ok=True)
-    seed = config["project"]["seed"]
-    fold_indices_list = create_stratified_k_folds(data_dir, outer_k_folds, seed)
+    fold_indices_list = create_stratified_k_folds(
+        model_dir, outer_k_folds, seed
+    )
 
     if fold_index >= len(fold_indices_list):
         logger.error(
@@ -128,17 +127,23 @@ def _run_single_fold(
 
     train_idx, test_idx = fold_indices_list[fold_index]
     ga_config = config["genetic_algorithm_config"]
+    training_epochs = ga_config["calibration"]["training_epochs"]
+    early_stop_epochs = ga_config["calibration"]["stop_conditions"][
+        "early_stop_epochs"
+    ]
+    subset_percentage = (
+        ga_config["calibration"]["data_subset_percentage"] or 1.0
+    )
 
     with create_evaluator(
-        config,
-        ga_config["calibration"]["training_epochs"],
-        ga_config["calibration"]["stop_conditions"]["early_stop_epochs"],
-        ga_config["calibration"].get("data_subset_percentage", 1.0),
-        tui,
-        session_log_filename,
+        config=config,
+        training_epochs=training_epochs,
+        early_stop_epochs=early_stop_epochs,
+        subset_percentage=subset_percentage,
+        tui=tui,
+        session_log_filename=session_log_filename,
         train_indices=train_idx,
         test_indices=test_idx,
-        log_queue=log_queue,
     ) as evaluator:
         best_individual, final_fitness, final_loss = run_optimization(
             config=config,

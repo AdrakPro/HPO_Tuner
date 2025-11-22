@@ -1,3 +1,4 @@
+import os
 import random
 import time
 from copy import deepcopy
@@ -13,15 +14,14 @@ from src.genetic.genetic_algorithm import (
 from src.genetic.stop_conditions import StopConditions
 from src.logger.logger import logger
 from src.tui.tui_screen import TUI
-from src.utils.checkpoint_manager import GaState, checkpoint_manager
-from src.utils.seed import seed_everything
+from src.utils.checkpoint_manager import GaState, CheckpointManager
 from src.utils.performance_tracker import performance_tracker, PhaseType
+from src.utils.seed import seed_everything
 
 CAL_PHASE = "calibration"
 MAIN_PHASE = "main_algorithm"
 
 
-# TODO: check IF strong aug affects calibration and maybe set it to medium
 def run_ga_phase(
     phase_name: str,
     config: Dict[str, Any],
@@ -48,10 +48,15 @@ def run_ga_phase(
     generations = phase_config["generations"]
     initial_epochs = phase_config["training_epochs"]
     mutation_decay_rate = phase_config["mutation_decay_rate"]
-    MINIMUM_PROGRESSIVE_EPOCHS = 20
     checkpoint_interval_per_generation = config["checkpoint_config"][
         "interval_per_gen"
     ]
+
+    task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
+    data_dir = os.environ.get("DATA_DIR", ".")
+    checkpoints_dir = os.path.join(data_dir, task_id, "checkpoints")
+    os.makedirs(checkpoints_dir, exist_ok=True)
+    checkpoint_manager = CheckpointManager(checkpoints_dir)
 
     logger.info(f"--- Starting {phase_name.upper()} Phase ---")
     logger.info(
@@ -86,16 +91,6 @@ def run_ga_phase(
     try:
         training_epochs = initial_epochs
         should_stop = False
-        enable_progressive_epochs = (
-            phase_name == MAIN_PHASE
-            and initial_epochs >= MINIMUM_PROGRESSIVE_EPOCHS
-        )
-        epoch_multiplier = 1.0
-
-        if not enable_progressive_epochs:
-            logger.warning(
-                f"Progressive epochs are disabled! To enable progression minimal training epochs must be at least ({MINIMUM_PROGRESSIVE_EPOCHS})."
-            )
 
         for gen in range(start_gen, generations + 1):
             performance_tracker.start_generation(gen, phase_type)
@@ -107,41 +102,21 @@ def run_ga_phase(
             )
 
             seq_prep_start = time.perf_counter()
-            # if enable_progressive_epochs:
-            #     progress = gen / generations
-            #     if progress <= 0.3:
-            #         epoch_multiplier = 0.5
-            #     elif progress <= 0.7:
-            #         epoch_multiplier = 0.75
-            #     else:
-            #         epoch_multiplier = 1.0
-            #
-            #     training_epochs = int(round(initial_epochs * epoch_multiplier))
-
             evaluator.set_training_epochs(training_epochs)
             seq_prep_time = time.perf_counter() - seq_prep_start
             performance_tracker.record_sequential_time(
-                seq_prep_time,
-                "generation_preparation",
-                {
-                    "training_epochs": training_epochs,
-                    "epoch_multiplier": (
-                        epoch_multiplier if enable_progressive_epochs else 1.0
-                    ),
-                },
+                seq_prep_time, "generation_preparation"
             )
 
             performance_tracker.start_parallel_section()
-
             evaluation_start_time = time.perf_counter()
 
             results = evaluator.evaluate_population(population, stop_conditions)
-
             evaluation_time = time.perf_counter() - evaluation_start_time
 
             seq_process_start = time.perf_counter()
 
-            # Safe check if resources are cleanuped
+            # Safe check if resources are freed
             fitness_scores = [
                 r.fitness for r in results if r.fitness is not None
             ]
@@ -165,9 +140,7 @@ def run_ga_phase(
 
             seq_process_time = time.perf_counter() - seq_process_start
             performance_tracker.record_sequential_time(
-                seq_process_time,
-                "result_processing",
-                {"population_size": len(population)},
+                seq_process_time, "result_processing"
             )
 
             logger.info("=" * 40)
@@ -254,9 +227,7 @@ def run_ga_phase(
             population = ga.run_generation(population, fitness_scores)
             genetic_time = time.perf_counter() - genetic_start
             performance_tracker.record_sequential_time(
-                genetic_time,
-                "genetic_operations",
-                {"mutation_decay_rate": mutation_decay_rate, "generation": gen},
+                genetic_time, "genetic_operations"
             )
 
             performance_tracker.end_generation(
@@ -270,7 +241,7 @@ def run_ga_phase(
 
         if phase_name == CAL_PHASE:
             logger.info(
-                "Starting final evaluation with full data and long epochs for the best population..."
+                "Starting final evaluation with full data and longer epochs for the best population..."
             )
 
             evaluator.set_training_epochs(
@@ -444,7 +415,6 @@ def run_optimization(
     try:
         if not is_calibration_complete and ga_config[CAL_PHASE]["enabled"]:
             start_gen_cal = 1
-            fitness_scores_cal = None
 
             if loaded_state and loaded_state.phase == CAL_PHASE:
                 logger.info(
@@ -452,7 +422,6 @@ def run_optimization(
                 )
                 initial_population_cal = loaded_state.population
                 start_gen_cal = loaded_state.generation + 1
-                fitness_scores_cal = loaded_state.fitness_scores
             else:
                 initial_pop_size = ga_config[CAL_PHASE]["population_size"]
                 initial_population_cal = ga.initial_population(initial_pop_size)
@@ -474,14 +443,13 @@ def run_optimization(
 
         main_starting_population = []
         start_gen_main = 1
-        fitness_scores_main = None
 
         if loaded_state and loaded_state.phase == MAIN_PHASE:
             logger.info(
                 f"Resuming main phase from generation {loaded_state.generation + 1}."
             )
             main_starting_population = loaded_state.population
-            # TODO What if i am resuming for the last one, would generation exceeded?
+
             if (
                 loaded_state.generation + 1
                 <= loaded_state.config["genetic_algorithm_config"][
@@ -491,7 +459,6 @@ def run_optimization(
                 start_gen_main = loaded_state.generation + 1
             else:
                 start_gen_main = loaded_state.generation
-            fitness_scores_main = loaded_state.fitness_scores
         else:
             main_pop_size = ga_config[MAIN_PHASE]["population_size"]
 
@@ -499,6 +466,7 @@ def run_optimization(
                 logger.info(
                     "Seeding main algorithm with population from calibration phase."
                 )
+
                 num_elites = min(
                     int(main_pop_size * 0.3), len(calibrated_population)
                 )

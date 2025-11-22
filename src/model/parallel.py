@@ -2,9 +2,9 @@
 Data structures for parallel execution.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union, Tuple
 import multiprocessing as mp
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Any, Union, Tuple
 
 
 @dataclass
@@ -19,7 +19,6 @@ class WorkerConfig:
     num_dataloader_workers: int
     total_cpu_workers: Optional[int] = None
     core_ids: Optional[List[int]] = None
-    log_queue: mp.Queue = None
 
     @property
     def type(self) -> str:

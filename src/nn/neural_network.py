@@ -3,8 +3,6 @@ Core CNN model for CIFAR-10 classification.
 Allows user-defined number of convolutional blocks with global config for padding, stride, activation.
 """
 
-import math
-from enum import Enum, auto
 from typing import Any, Dict, Tuple
 
 import torch
@@ -134,7 +132,7 @@ class CNN(nn.Module):
 
 def get_network(chromosome: Chromosome, neural_config: Dict[str, Any]) -> CNN:
     """Factory function to create the CNN model."""
-    return FAV_CNN(chromosome, neural_config)
+    return CNN(chromosome, neural_config)
 
 
 def get_optimizer_and_scheduler(

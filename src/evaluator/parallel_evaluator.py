@@ -3,13 +3,11 @@ Handles the parallel evaluation of a population of individuals using a persisten
 """
 
 import atexit
-import queue
-import time
-import threading
-from collections import deque
-import random
-from typing import Any, Dict, List, Optional, Callable, Tuple
 import math
+import queue
+import random
+import threading
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -40,9 +38,7 @@ class ParallelEvaluator(Evaluator):
         session_log_filename: str,
         train_indices: Optional[np.ndarray],
         test_indices: Optional[np.ndarray],
-        log_queue=None,
     ):
-        self.log_queue = log_queue
         self.training_epochs = training_epochs
         self.early_stop_epochs = early_stop_epochs
         self.subset_percentage = subset_percentage
@@ -78,7 +74,6 @@ class ParallelEvaluator(Evaluator):
             result_queue=self.result_queue,
             execution_config=self.execution_config,
             session_log_filename=session_log_filename,
-            log_queue=self.log_queue,
         )
         self._workers: List[mp.Process] = launch_results["workers"]
 
@@ -125,6 +120,7 @@ class ParallelEvaluator(Evaluator):
         """
         logger.info("Task stealer thread started.")
 
+        # TODO make this configurable
         speed_ratio = 7.0
         wakeup_timeout = 5.0
         min_gpu_threshold = self.num_gpu_workers * speed_ratio
@@ -143,14 +139,12 @@ class ParallelEvaluator(Evaluator):
                 gpu_qsize = self.gpu_task_queue.qsize()
                 cpu_qsize = self.cpu_task_queue.qsize()
 
-                # --- NEW: Ratio-Based Workload Calculation ---
-                # Calculate a "normalized" workload for each queue.
-                # The CPU workload is scaled by the speed_ratio to make it comparable to the GPU workload.
                 normalized_cpu_workload = (
                     cpu_qsize / self.num_cpu_workers
                 ) * speed_ratio
                 normalized_gpu_workload = gpu_qsize / self.num_gpu_workers
-                # Prevent race condition or stale state 1.5 CPU > 1.5 GPU gave true
+
+                # Prevent race condition or stale state
                 move_cost_buffer = (1 / self.num_cpu_workers) * speed_ratio
 
                 # --- Stealing Condition ---
@@ -161,10 +155,7 @@ class ParallelEvaluator(Evaluator):
                     available_cpu_slots = self.num_cpu_workers - cpu_qsize
                     if available_cpu_slots > 0:
 
-                        # --- NEW: Ratio-Based tasks_to_move Calculation ---
-                        # We want to find N (tasks_to_move) such that the workloads become equal:
                         # ((cpu_qsize + N) / num_cpu) * ratio == ((gpu_qsize - N) / num_gpu)
-                        # Solving for N gives the formula below.
                         numerator = (
                             (normalized_gpu_workload - normalized_cpu_workload)
                             * self.num_gpu_workers
@@ -266,18 +257,20 @@ class ParallelEvaluator(Evaluator):
             num_to_preload = min(len(tasks), self.num_cpu_workers)
 
             logger.info(f"Pre-loading CPU queue with {num_to_preload} tasks.")
+            tasks_queued_count = 0
             for i in range(num_to_preload):
                 if self._pending_cpu_tasks.acquire(blocking=False):
                     task = tasks[i]
                     self._pending_tasks[task.index] = task
                     self.cpu_task_queue.put(task)
+                    tasks_queued_count += 1
                 else:
                     logger.warning(
                         "Could not acquire CPU semaphore for pre-loading."
                     )
                     break
 
-            remaining_tasks = tasks[num_to_preload:]
+            remaining_tasks = tasks[tasks_queued_count:]
             for task in remaining_tasks:
                 self._pending_tasks[task.index] = task
                 self.gpu_task_queue.put(task)
@@ -324,11 +317,6 @@ class ParallelEvaluator(Evaluator):
             self._shutting_down = True
             raise
 
-        if len(results_for_generation) < len(population):
-            self._fill_missing_results(
-                results_for_generation, len(population), stop_conditions
-            )
-
         results_for_generation.sort(key=lambda x: x.index)
         return results_for_generation
 
@@ -348,9 +336,14 @@ class ParallelEvaluator(Evaluator):
         for q in self.task_queues:
             for _ in range(self.num_workers * 2):  # Send plenty of sentinels
                 try:
-                    q.put_nowait(None)
-                except (queue.Full, OSError):
-                    break
+                    q.put(None, timeout=0.1)
+                except queue.Full:
+                    # If still full, try to purge one item to make room for the kill signal
+                    try:
+                        q.get_nowait()
+                        q.put(None, timeout=0.1)
+                    except:
+                        pass
 
         alive_workers = [p for p in self._workers if p.is_alive()]
         for p in alive_workers:
@@ -411,6 +404,40 @@ class ParallelEvaluator(Evaluator):
             logger.info(
                 f"Fitness goal {stop_conditions.fitness_goal} met by individual {result.index}. Triggering early stop."
             )
+
+    def _clear_pending_tasks(self):
+        """
+        Helper to drain pending map on early exit to prevent memory leaks
+        or stale state references in the task stealer.
+        """
+        if self._pending_tasks:
+            logger.debug(
+                f"Clearing {len(self._pending_tasks)} pending tasks from tracking."
+            )
+            self._pending_tasks.clear()
+
+    def _generate_placeholder_results(
+        self, count: int, message: str
+    ) -> List[Result]:
+        """
+        Returns dummy results if shutdown occurs before start.
+        Ensures the GA loop receives a full list of results even if evaluation failed.
+        """
+        results = []
+        for i in range(count):
+            # Create a 'failed' Result object
+            results.append(
+                Result(
+                    index=i,
+                    fitness=0.0,
+                    status="SKIPPED",
+                    log_lines=[],
+                    worker_type="none",
+                    duration_seconds=0.0,
+                    loss=0.0,
+                )
+            )
+        return results
 
     def _is_any_worker_alive(self) -> bool:
         return any(p.is_alive() for p in self._workers)

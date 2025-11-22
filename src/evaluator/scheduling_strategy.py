@@ -5,16 +5,22 @@ This module uses the Strategy design pattern to encapsulate different ways of
 distributing the evaluation workload (e.g., CPU only, GPU only, Hybrid).
 """
 
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 
 import torch
 import torch.multiprocessing as mp
-import time
 
 from src.evaluator.worker import worker_main
 from src.logger.logger import logger
 from src.model.parallel import WorkerConfig
+
+# TODO make this configurable
+# --- Configuration Constants ---
+TOTAL_CORES = 64
+CORES_PER_NODE = 16
+GPU_TO_NODE_MAP = {0: 1, 1: 0, 2: 3, 3: 2}
 
 
 class SchedulingStrategy(ABC):
@@ -27,11 +33,9 @@ class SchedulingStrategy(ABC):
     def launch_workers(
         self,
         ctx,
-        task_queue: mp.Queue,
         result_queue: mp.Queue,
         execution_config: Dict,
         session_log_filename: str,
-        log_queue: Any = None,
     ) -> List[mp.Process]:
         """
         The core method for a strategy. It must launch the necessary
@@ -46,15 +50,18 @@ class SchedulingStrategy(ABC):
 class CPUOnlyStrategy(SchedulingStrategy):
     """Schedules all tasks to be run on CPU workers."""
 
+    # TODO: check for cpu count if we dont assign more than it is (what about hyperthreading?)
     def launch_workers(self, **kwargs) -> List[mp.Process]:
         logger.info("Using CPU-Only scheduling strategy.")
+        ctx = kwargs["ctx"]
+        task_queue = ctx.Queue()
         exec_config = kwargs["execution_config"]
         num_cpu_workers = exec_config["cpu_workers"]
 
         dl_config = exec_config["dataloader_workers"]
         dl_per_cpu = dl_config["per_cpu"]
 
-        return _spawn_processes(
+        workers = _spawn_processes(
             ctx=kwargs["ctx"],
             task_queue=kwargs["task_queue"],
             result_queue=kwargs["result_queue"],
@@ -62,6 +69,8 @@ class CPUOnlyStrategy(SchedulingStrategy):
             session_log_filename=kwargs["session_log_filename"],
             dl_workers_per_cpu=dl_per_cpu,
         )
+
+        return {"workers": workers, "task_queues": [task_queue]}
 
 
 class GPUOnlyStrategy(SchedulingStrategy):
@@ -143,7 +152,6 @@ class HybridStrategy(SchedulingStrategy):
             task_queue=gpu_task_queue,
             result_queue=kwargs["result_queue"],
             num_gpu_workers=num_gpu_workers,
-            log_queue=kwargs.get("log_queue", None),
             session_log_filename=kwargs["session_log_filename"],
             dl_workers_per_gpu=dl_per_gpu,
         )
@@ -152,7 +160,6 @@ class HybridStrategy(SchedulingStrategy):
             ctx=ctx,
             task_queue=cpu_task_queue,
             result_queue=kwargs["result_queue"],
-            log_queue=kwargs.get("log_queue", None),
             num_cpu_workers=num_cpu_workers,
             session_log_filename=kwargs["session_log_filename"],
             dl_workers_per_cpu=dl_per_cpu,
@@ -166,60 +173,66 @@ class HybridStrategy(SchedulingStrategy):
         }
 
 
-# def _spawn_processes(
-#     ctx: Any,
-#     result_queue: mp.Queue,
-#     session_log_filename: str,
-#     task_queue: mp.Queue,
-#     log_queue: Any = None,
-#     num_gpu_workers: int = 0,
-#     num_cpu_workers: int = 0,
-#     dl_workers_per_gpu: int = 1,
-#     dl_workers_per_cpu: int = 1,
-#     fixed_batch_size: Optional[int] = None,
-#     gpu_worker_offset: int = 0,
-# ) -> List[mp.Process]:
-#     """Helper to spawn and start worker processes."""
-#     workers = []
-#
-#     for i in range(num_cpu_workers):
-#         w_config = WorkerConfig(
-#             worker_id=i,
-#             device="cpu",
-#             task_queue=task_queue,
-#             result_queue=result_queue,
-#             log_queue=log_queue,
-#             session_log_filename=session_log_filename,
-#             num_dataloader_workers=dl_workers_per_cpu,
-#             fixed_batch_size=fixed_batch_size,
-#             total_cpu_workers=num_cpu_workers,
-#         )
-#         p = ctx.Process(target=worker_main, args=(w_config,))
-#         p.start()
-#         workers.append(p)
-#
-#     # Przesunięcie dla procesów GPU będzie równe liczbie procesów CPU
-#     gpu_worker_start_id = num_cpu_workers
-#     time.sleep(1.0)  # Zachowujemy opóźnienie, by dać CPU czas na inicjalizację
-#
-#     # 2. Spawn GPU workers (NOWA KOLEJNOŚĆ)
-#     for i in range(num_gpu_workers):
-#         w_config = WorkerConfig(
-#             # ID procesów GPU zaczynają się od ID pierwszego worker-a CPU + num_cpu_workers
-#             worker_id=i + gpu_worker_start_id,
-#             device=i,
-#             task_queue=task_queue,
-#             result_queue=result_queue,
-#             session_log_filename=session_log_filename,
-#             log_queue=log_queue,
-#             num_dataloader_workers=dl_workers_per_gpu,
-#             fixed_batch_size=fixed_batch_size,
-#         )
-#         p = ctx.Process(target=worker_main, args=(w_config,))
-#         p.start()
-#         workers.append(p)
-#
-#     return workers
+class NumaCoreAllocator:
+    """
+    Manages core availability and allocation to prevent conflicts.
+    Ensures atomic allocation (all requested cores or none).
+    """
+
+    def __init__(
+        self,
+        total_cores: int = TOTAL_CORES,
+        cores_per_node: int = CORES_PER_NODE,
+    ):
+        self.total_cores = total_cores
+        self.assigned_mask = [False] * total_cores
+        # Pre-calculate node ranges: {0: [0..15], 1: [16..31], ...}
+        self.node_cores = {
+            i: list(range(i * cores_per_node, (i + 1) * cores_per_node))
+            for i in range(total_cores // cores_per_node)
+        }
+
+    def allocate(
+        self, node_id: int, count: int, from_end: bool = False
+    ) -> Optional[List[int]]:
+        """
+        Attempts to allocate 'count' cores from 'node_id'.
+        Returns list of core_ids on success, or None on failure.
+        """
+        if node_id not in self.node_cores:
+            logger.error(f"Invalid NUMA Node ID: {node_id}")
+            return None
+
+        available_cores = self.node_cores[node_id]
+
+        if len(available_cores) < count:
+            logger.error(
+                f"Node {node_id} has insufficient total cores for request of {count}."
+            )
+            return None
+
+        # Select candidates based on strategy (First available vs Last available)
+        candidates = (
+            available_cores[-count:] if from_end else available_cores[:count]
+        )
+
+        if any(self.assigned_mask[c] for c in candidates):
+            logger.error(
+                f"Core conflict detected on Node {node_id} for requested cores {candidates}."
+            )
+            return None
+
+        for c in candidates:
+            self.assigned_mask[c] = True
+
+        return candidates
+
+
+def _spawn_single_worker(ctx: Any, config: WorkerConfig) -> mp.Process:
+    """Boilerplate wrapper to create and start a process."""
+    p = ctx.Process(target=worker_main, args=(config,))
+    p.start()
+    return p
 
 
 def _spawn_processes(
@@ -227,7 +240,6 @@ def _spawn_processes(
     result_queue: mp.Queue,
     session_log_filename: str,
     task_queue: mp.Queue,
-    log_queue: Any = None,
     num_gpu_workers: int = 0,
     num_cpu_workers: int = 0,
     dl_workers_per_gpu: int = 1,
@@ -235,151 +247,98 @@ def _spawn_processes(
     gpu_worker_offset: int = 0,
 ) -> List[mp.Process]:
     """
-    Helper to spawn GPU and/or CPU workers using the provided task queue.
-
-    Implements NUMA-aware core pinning based on the 64-core system:
-    - CPU Workers: 12 cores each, assigned to the first available cores on a NUMA node.
-    - GPU Workers: 4 cores each, assigned to the last available cores on their GPU's NUMA node.
-    Handles cases where num_cpu_workers or num_gpu_workers is 0.
+    Spawns GPU and CPU workers with NUMA-aware core pinning.
     """
     workers = []
+    allocator = NumaCoreAllocator()
+
+    # TODO make this configurable
+    CORES_FOR_CPU_WORKER = 14
+    CORES_FOR_GPU_WORKER = 2
 
     if num_gpu_workers <= 0 and num_cpu_workers <= 0:
         return workers
 
-    gpu_to_node_map = {0: 1, 1: 0, 2: 3, 3: 2}
-
-    # Core IDs for each NUMA node (16 cores each, no Hyper-threading)
-    node_cores = {
-        0: list(range(0, 16)),  # NUMA Node 0: Cores 0-15
-        1: list(range(16, 32)),  # NUMA Node 1: Cores 16-31
-        2: list(range(32, 48)),  # NUMA Node 2: Cores 32-47
-        3: list(range(48, 64)),  # NUMA Node 3: Cores 48-63
-    }
-
-    cores_per_cpu_worker = 14
-    cores_per_gpu_worker = 2
-    total_cores_available = 64
-
-    assigned_core_mask = [False] * total_cores_available
-
-    # --- 1. Spawn GPU Workers (If requested in this call) ---
+    # --- 1. Spawn GPU Workers ---
     if num_gpu_workers > 0:
         logger.info(
-            f"Spawning {num_gpu_workers} GPU workers ({cores_per_gpu_worker} cores each, NUMA-aware)..."
+            f"Spawning {num_gpu_workers} GPU workers ({CORES_FOR_GPU_WORKER} cores each)..."
         )
-        for device_id in range(num_gpu_workers):
-            if device_id not in gpu_to_node_map:
-                logger.error(
-                    f"Missing NUMA mapping for GPU device ID {device_id}. Skipping."
-                )
-                continue
-            node_id = gpu_to_node_map[device_id]
-            if (
-                node_id not in node_cores
-                or len(node_cores[node_id]) < cores_per_gpu_worker
-            ):
-                logger.error(
-                    f"NUMA Node {node_id} invalid/insufficient cores for GPU {device_id}."
-                )
-                continue
-            core_ids = node_cores[node_id][-cores_per_gpu_worker:]
-            conflict = False
-            for core in core_ids:
-                if (
-                    not (0 <= core < total_cores_available)
-                    or assigned_core_mask[core]
-                ):
-                    logger.error(
-                        f"Core conflict/invalid core {core} for GPU {device_id} on Node {node_id}."
-                    )
-                    conflict = True
-                    break
-                assigned_core_mask[core] = (
-                    True  # Mark core assigned *within this call*
-                )
-            if conflict:
+
+        for i in range(num_gpu_workers):
+            device_id = i
+
+            if device_id not in GPU_TO_NODE_MAP:
+                logger.error(f"No NUMA mapping for GPU {device_id}. Skipping.")
                 continue
 
-            worker_id = (
-                device_id + gpu_worker_offset
+            node_id = GPU_TO_NODE_MAP[device_id]
+
+            core_ids = allocator.allocate(
+                node_id, CORES_FOR_GPU_WORKER, from_end=True
             )
+
+            if not core_ids:
+                logger.warning(
+                    f"Failed to allocate cores for GPU {device_id} on Node {node_id}."
+                )
+                continue
+
+            worker_id = device_id + gpu_worker_offset
             logger.info(
-                f"  Spawning Worker-{worker_id} (GPU device={device_id}) -> Node {node_id} (Cores {core_ids[0]}-{core_ids[-1]})"
+                f"  Worker-{worker_id} (GPU-{device_id}) -> Node {node_id} (Cores {core_ids})"
             )
+
             w_config = WorkerConfig(
                 worker_id=worker_id,
                 device=device_id,
                 core_ids=core_ids,
                 task_queue=task_queue,
                 result_queue=result_queue,
-                log_queue=log_queue,
                 session_log_filename=session_log_filename,
                 num_dataloader_workers=dl_workers_per_gpu,
             )
-            p = ctx.Process(target=worker_main, args=(w_config,))
-            p.start()
-            workers.append(p)
+            workers.append(_spawn_single_worker(ctx, w_config))
+
         time.sleep(1.0)
 
-    # --- 2. Spawn CPU Workers (If requested in this call) ---
+    # --- 2. Spawn CPU Workers ---
     if num_cpu_workers > 0:
         logger.info(
-            f"Spawning {num_cpu_workers} CPU workers ({cores_per_cpu_worker} cores each, NUMA-aware)..."
+            f"Spawning {num_cpu_workers} CPU workers ({CORES_FOR_CPU_WORKER} cores each)..."
         )
-        cpu_node_assignment_order = sorted(list(node_cores.keys()))
+
+        node_ids = sorted(allocator.node_cores.keys())
+
         for i in range(num_cpu_workers):
-            node_id = cpu_node_assignment_order[
-                i % len(cpu_node_assignment_order)
-            ]
-            if (
-                node_id not in node_cores
-                or len(node_cores[node_id]) < cores_per_cpu_worker
-            ):
-                logger.error(
-                    f"NUMA Node {node_id} invalid/insufficient cores for CPU {i}."
+            node_id = node_ids[i % len(node_ids)]
+
+            core_ids = allocator.allocate(
+                node_id, CORES_FOR_CPU_WORKER, from_end=False
+            )
+
+            if not core_ids:
+                logger.warning(
+                    f"Failed to allocate cores for CPU Worker {i} on Node {node_id}."
                 )
-                continue
-            core_ids = node_cores[node_id][:cores_per_cpu_worker]
-            conflict = False
-            for core in core_ids:
-                if (
-                    not (0 <= core < total_cores_available)
-                    or assigned_core_mask[core]
-                ):
-                    logger.error(
-                        f"Core conflict/invalid core {core} for CPU {i} on Node {node_id}."
-                    )
-                    conflict = True
-                    break
-                assigned_core_mask[core] = (
-                    True  # Mark core assigned *within this call*
-                )
-            if conflict:
                 continue
 
             worker_id = i
             logger.info(
-                f"  Spawning Worker-{worker_id} (CPU) -> Node {node_id} (Cores {core_ids[0]}-{core_ids[-1]})"
+                f"  Worker-{worker_id} (CPU) -> Node {node_id} (Cores {core_ids})"
             )
+
             w_config = WorkerConfig(
                 worker_id=worker_id,
                 device="cpu",
                 core_ids=core_ids,
                 task_queue=task_queue,
                 result_queue=result_queue,
-                log_queue=log_queue,
                 session_log_filename=session_log_filename,
                 num_dataloader_workers=dl_workers_per_cpu,
-                fixed_batch_size=fixed_batch_size,
                 total_cpu_workers=num_cpu_workers,
             )
-            p = ctx.Process(target=worker_main, args=(w_config,))
-            p.start()
-            workers.append(p)
+            workers.append(_spawn_single_worker(ctx, w_config))
 
-    logger.info(
-        f"Finished spawning group. Workers created in this call: {len(workers)}."
-    )
-
+    logger.info(f"Spawned total {len(workers)} workers.")
     return workers

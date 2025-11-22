@@ -5,7 +5,11 @@ from datetime import datetime
 from typing import Any, Dict
 
 from src.logger.logger import logger
-from src.model.chromosome import AugmentationIntensity, OptimizerSchedule, ActivationFn
+from src.model.chromosome import (
+    AugmentationIntensity,
+    OptimizerSchedule,
+    ActivationFn,
+)
 from src.utils.enum_helper import get_enum_names, get_enum_values
 
 

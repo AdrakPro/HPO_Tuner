@@ -11,6 +11,7 @@ from src.model.chromosome import OptimizerSchedule, AugmentationIntensity
 from torchvision import datasets
 from src.logger.logger import logger
 
+
 def prepare_dataset():
     """
     Downloads the CIFAR-10 dataset to the './model_data' directory if it doesn't exist.
@@ -29,6 +30,7 @@ def prepare_dataset():
         print("Please check your network connection and directory permissions.")
         # This is a fatal error, so we should exit.
         raise SystemExit(1)
+
 
 def run_debug():
     """
@@ -57,11 +59,11 @@ def run_debug():
         result_queue=result_queue,
         session_log_filename="debug_log.log",
         num_dataloader_workers=1,
-        fixed_batch_size=None,
     )
-    print(f"[DEBUG] Created WorkerConfig for worker {worker_config.worker_id} on device '{worker_config.device}'.")
+    print(
+        f"[DEBUG] Created WorkerConfig for worker {worker_config.worker_id} on device '{worker_config.device}'."
+    )
     print(f"[DEBUG] Dataloader workers: {worker_config.num_dataloader_workers}")
-
 
     # 2. Create a single Task with the full configuration
     task = Task(
@@ -83,30 +85,43 @@ def run_debug():
                     "type": "enum",
                     "values": ["SGD_ONECYCLE", "SGD_COSINE", "SGD_EXPONENTIAL"],
                 },
-                "base_lr": {"type": "float", "range": [0.005, 0.1], "scale": "log"},
-                "aug_intensity": {"type": "enum", "values": ["MEDIUM", "STRONG"]},
-                "weight_decay": {"type": "float", "range": [1e-4, 1e-3], "scale": "log"},
+                "base_lr": {
+                    "type": "float",
+                    "range": [0.005, 0.1],
+                    "scale": "log",
+                },
+                "aug_intensity": {
+                    "type": "enum",
+                    "values": ["MEDIUM", "STRONG"],
+                },
+                "weight_decay": {
+                    "type": "float",
+                    "range": [1e-4, 1e-3],
+                    "scale": "log",
+                },
                 "batch_size": {"type": "enum", "values": [128, 256]},
             },
         },
         individual_hyperparams={
-            'width_scale': 1.0,
-            'mixup_alpha': 0.1,
-            'dropout_rate': 0.2,
-            'optimizer_schedule': "SGD_COSINE",
-            'base_lr': 0.01,
-            'aug_intensity': "MEDIUM",
-            'weight_decay': 0.0001,
-            'batch_size': 128,
+            "width_scale": 1.0,
+            "mixup_alpha": 0.1,
+            "dropout_rate": 0.2,
+            "optimizer_schedule": "SGD_COSINE",
+            "base_lr": 0.01,
+            "aug_intensity": "MEDIUM",
+            "weight_decay": 0.0001,
+            "batch_size": 128,
         },
         training_epochs=1,  # Use a small number of epochs for a quick test
         early_stop_epochs=1,
-        subset_percentage=1.0, # Use a small subset of data to speed up test
+        subset_percentage=1.0,  # Use a small subset of data to speed up test
         is_final=False,
         train_indices=None,
         test_indices=None,
     )
-    print(f"[DEBUG] Created dummy Task with {task.training_epochs} epochs and {task.subset_percentage*100}% of data.")
+    print(
+        f"[DEBUG] Created dummy Task with {task.training_epochs} epochs and {task.subset_percentage*100}% of data."
+    )
 
     # 3. Put the task on the queue
     task_queue.put(task)
@@ -115,32 +130,36 @@ def run_debug():
     # 4. Run the worker
     # We will run the worker in a separate process to closely mimic the real environment.
     print("\n--- Launching Worker Process ---")
-    print("If the script hangs here, the deadlock is happening inside worker_main.")
-    
+    print(
+        "If the script hangs here, the deadlock is happening inside worker_main."
+    )
+
     worker_process = mp.Process(target=worker_main, args=(worker_config,))
     worker_process.start()
 
     # 5. Wait for the result
     print("\n--- Waiting for Result ---")
     print("Waiting for the worker to complete the task. Max wait: 5 minutes.")
-    
+
     try:
         # Wait for a result with a timeout. If it hangs, this will eventually terminate.
-        result = result_queue.get(timeout=600) 
+        result = result_queue.get(timeout=600)
         print("\n--- Result Received! ---")
         print(f"Status: {result.status}")
         print(f"Fitness: {result.fitness}")
         print(f"Duration: {result.duration_seconds:.2f}s")
         if result.error_message:
             print(f"Error: {result.error_message}")
-        
+
         print("\n[SUCCESS] The worker process completed successfully.")
-        
+
     except queue.Empty:
         print("\n[FAILURE] Timed out waiting for a result.")
         print("The worker process is likely deadlocked or stuck.")
-        print("Please check the console for any errors from the worker process.")
-        
+        print(
+            "Please check the console for any errors from the worker process."
+        )
+
     finally:
         # Clean up the worker process
         if worker_process.is_alive():
@@ -149,7 +168,7 @@ def run_debug():
             worker_process.join(timeout=5)
             if worker_process.is_alive():
                 worker_process.kill()
-        
+
         print("\n--- Debug Script Finished ---")
 
 

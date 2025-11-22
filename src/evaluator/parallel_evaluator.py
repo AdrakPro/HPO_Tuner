@@ -23,6 +23,7 @@ from src.model.evaluator_interface import Evaluator
 from src.model.parallel import Result, Task
 from src.utils.signal_manager import signal_manager
 
+
 class ParallelEvaluator(Evaluator):
     """
     Orchestrates evaluation across multiple processes using a persistent worker pool.
@@ -39,8 +40,7 @@ class ParallelEvaluator(Evaluator):
         session_log_filename: str,
         train_indices: Optional[np.ndarray],
         test_indices: Optional[np.ndarray],
-        fixed_batch_size: Optional[int] = None,
-        log_queue = None,
+        log_queue=None,
     ):
         self.log_queue = log_queue
         self.training_epochs = training_epochs
@@ -71,24 +71,22 @@ class ParallelEvaluator(Evaluator):
         self._stealer_thread: Optional[threading.Thread] = None
         self._stop_stealer_event: Optional[threading.Event] = None
         self._stealer_wakeup_event: Optional[threading.Event] = None
-        
+
         logger.info("Initializing worker pool...")
         launch_results = self.strategy.launch_workers(
             ctx=ctx,
             result_queue=self.result_queue,
             execution_config=self.execution_config,
             session_log_filename=session_log_filename,
-            fixed_batch_size=fixed_batch_size,
-            log_queue=self.log_queue
+            log_queue=self.log_queue,
         )
         self._workers: List[mp.Process] = launch_results["workers"]
 
-        # Check if the current strategy is the main HybridStrategy (with task stealing)
         if isinstance(self.strategy, HybridStrategy):
             self.gpu_task_queue = launch_results["gpu_task_queue"]
             self.cpu_task_queue = launch_results["cpu_task_queue"]
             self.task_queues = [self.gpu_task_queue, self.cpu_task_queue]
-            
+
             self._stop_stealer_event = threading.Event()
             self._stealer_wakeup_event = threading.Event()
             self._pending_cpu_tasks = threading.Semaphore(self.num_cpu_workers)
@@ -102,8 +100,12 @@ class ParallelEvaluator(Evaluator):
             self.task_queues = launch_results["task_queues"]
 
         if not self._workers:
-            raise RuntimeError("The selected scheduling strategy failed to launch any workers.")
-        logger.info(f"Worker pool initialized with {len(self._workers)} workers.")
+            raise RuntimeError(
+                "The selected scheduling strategy failed to launch any workers."
+            )
+        logger.info(
+            f"Worker pool initialized with {len(self._workers)} workers."
+        )
 
         signal_manager.initialize()
         signal_manager.register_cleanup_handler(self.cleanup_workers)
@@ -122,15 +124,16 @@ class ParallelEvaluator(Evaluator):
         independent of absolute task durations.
         """
         logger.info("Task stealer thread started.")
-        
+
         speed_ratio = 7.0
         wakeup_timeout = 5.0
-        min_gpu_threshold = self.num_gpu_workers * speed_ratio 
+        min_gpu_threshold = self.num_gpu_workers * speed_ratio
 
         while not self._stop_stealer_event.is_set():
             self._stealer_wakeup_event.wait(timeout=wakeup_timeout)
 
-            if self._stop_stealer_event.is_set(): break
+            if self._stop_stealer_event.is_set():
+                break
 
             try:
                 if self.num_gpu_workers == 0 or self.num_cpu_workers == 0:
@@ -143,39 +146,55 @@ class ParallelEvaluator(Evaluator):
                 # --- NEW: Ratio-Based Workload Calculation ---
                 # Calculate a "normalized" workload for each queue.
                 # The CPU workload is scaled by the speed_ratio to make it comparable to the GPU workload.
-                normalized_cpu_workload = (cpu_qsize / self.num_cpu_workers) * speed_ratio
-                normalized_gpu_workload = (gpu_qsize / self.num_gpu_workers)
+                normalized_cpu_workload = (
+                    cpu_qsize / self.num_cpu_workers
+                ) * speed_ratio
+                normalized_gpu_workload = gpu_qsize / self.num_gpu_workers
                 # Prevent race condition or stale state 1.5 CPU > 1.5 GPU gave true
                 move_cost_buffer = (1 / self.num_cpu_workers) * speed_ratio
 
                 # --- Stealing Condition ---
-                if (normalized_gpu_workload - normalized_cpu_workload) > move_cost_buffer and gpu_qsize > min_gpu_threshold:
-                    
+                if (
+                    normalized_gpu_workload - normalized_cpu_workload
+                ) > move_cost_buffer and gpu_qsize > min_gpu_threshold:
+
                     available_cpu_slots = self.num_cpu_workers - cpu_qsize
                     if available_cpu_slots > 0:
-                        
+
                         # --- NEW: Ratio-Based tasks_to_move Calculation ---
                         # We want to find N (tasks_to_move) such that the workloads become equal:
                         # ((cpu_qsize + N) / num_cpu) * ratio == ((gpu_qsize - N) / num_gpu)
                         # Solving for N gives the formula below.
-                        numerator = (normalized_gpu_workload - normalized_cpu_workload) * self.num_gpu_workers * self.num_cpu_workers
-                        denominator = (speed_ratio * self.num_gpu_workers) + self.num_cpu_workers
-                        
-                        tasks_needed_to_balance = math.ceil(numerator / denominator)
+                        numerator = (
+                            (normalized_gpu_workload - normalized_cpu_workload)
+                            * self.num_gpu_workers
+                            * self.num_cpu_workers
+                        )
+                        denominator = (
+                            speed_ratio * self.num_gpu_workers
+                        ) + self.num_cpu_workers
+
+                        tasks_needed_to_balance = math.ceil(
+                            numerator / denominator
+                        )
 
                         tasks_to_move = min(
                             tasks_needed_to_balance,
                             gpu_qsize - min_gpu_threshold,
-                            available_cpu_slots
+                            available_cpu_slots,
                         )
 
                         if tasks_to_move > 0:
                             moved_count = 0
                             for _ in range(int(tasks_to_move)):
-                                if self._pending_cpu_tasks.acquire(blocking=False):
+                                if self._pending_cpu_tasks.acquire(
+                                    blocking=False
+                                ):
                                     try:
 
-                                        task = self.gpu_task_queue.get(block=False)
+                                        task = self.gpu_task_queue.get(
+                                            block=False
+                                        )
                                         self.cpu_task_queue.put(task)
                                         moved_count += 1
                                     except queue.Empty:
@@ -183,11 +202,13 @@ class ParallelEvaluator(Evaluator):
                                         break
                                     except Exception as e:
                                         self._pending_cpu_tasks.release()
-                                        logger.error(f"[TaskStealer] Error during task move: {e}")
+                                        logger.error(
+                                            f"[TaskStealer] Error during task move: {e}"
+                                        )
                                         break
                                 else:
                                     break
-                            
+
                             if moved_count > 0:
                                 logger.info(
                                     f"[TaskStealer] Moved {moved_count} task(s) to CPU. "
@@ -215,28 +236,35 @@ class ParallelEvaluator(Evaluator):
         self._goal_achiever_index = None
 
         if self._shutting_down:
-            return self._generate_placeholder_results(len(population), "Shutdown in progress.")
-        
+            return self._generate_placeholder_results(
+                len(population), "Shutdown in progress."
+            )
+
         tasks = []
         for per_gen_index, ind in enumerate(population):
-            tasks.append(Task(
-                index=per_gen_index,
-                neural_network_config=self.neural_network_config,
-                individual_hyperparams=ind,
-                training_epochs=self.training_epochs,
-                early_stop_epochs=self.early_stop_epochs,
-                subset_percentage=self.subset_percentage,
-                pop_size=self._current_pop_size,
-                is_final=is_final,
-                train_indices=self.train_indices,
-                test_indices=self.test_indices,
-            ))
-        
+            tasks.append(
+                Task(
+                    index=per_gen_index,
+                    neural_network_config=self.neural_network_config,
+                    individual_hyperparams=ind,
+                    training_epochs=self.training_epochs,
+                    early_stop_epochs=self.early_stop_epochs,
+                    subset_percentage=self.subset_percentage,
+                    pop_size=self._current_pop_size,
+                    is_final=is_final,
+                    train_indices=self.train_indices,
+                    test_indices=self.test_indices,
+                )
+            )
+
         random.shuffle(tasks)
 
-        if isinstance(self.strategy, HybridStrategy) and self.num_cpu_workers > 0:
-            num_to_preload = min(len(tasks), self.num_cpu_workers) 
-            
+        if (
+            isinstance(self.strategy, HybridStrategy)
+            and self.num_cpu_workers > 0
+        ):
+            num_to_preload = min(len(tasks), self.num_cpu_workers)
+
             logger.info(f"Pre-loading CPU queue with {num_to_preload} tasks.")
             for i in range(num_to_preload):
                 if self._pending_cpu_tasks.acquire(blocking=False):
@@ -244,9 +272,11 @@ class ParallelEvaluator(Evaluator):
                     self._pending_tasks[task.index] = task
                     self.cpu_task_queue.put(task)
                 else:
-                    logger.warning("Could not acquire CPU semaphore for pre-loading.")
+                    logger.warning(
+                        "Could not acquire CPU semaphore for pre-loading."
+                    )
                     break
-            
+
             remaining_tasks = tasks[num_to_preload:]
             for task in remaining_tasks:
                 self._pending_tasks[task.index] = task
@@ -256,14 +286,20 @@ class ParallelEvaluator(Evaluator):
             for task in tasks:
                 self._pending_tasks[task.index] = task
                 target_queue.put(task)
-        
+
         results_for_generation: List[Result] = []
         try:
-            while len(results_for_generation) < len(population) and not self._shutting_down:
+            while (
+                len(results_for_generation) < len(population)
+                and not self._shutting_down
+            ):
                 try:
                     result: Result = self.result_queue.get(timeout=1.0)
 
-                    if result.worker_type == 'cpu' and self._stealer_wakeup_event:
+                    if (
+                        result.worker_type == "cpu"
+                        and self._stealer_wakeup_event
+                    ):
                         self._pending_cpu_tasks.release()
                         self._stealer_wakeup_event.set()
 
@@ -273,25 +309,32 @@ class ParallelEvaluator(Evaluator):
                     if self._fitness_goal_met:
                         self._clear_pending_tasks()
                         break
-                
+
                 except queue.Empty:
                     if not self._is_any_worker_alive():
-                        raise RuntimeError("All workers have died unexpectedly.")
+                        raise RuntimeError(
+                            "All workers have died unexpectedly."
+                        )
                     continue
 
         except (RuntimeError, KeyboardInterrupt) as e:
-            logger.warning(f"Evaluation interrupted: {e}. Shutting down worker pool...")
+            logger.warning(
+                f"Evaluation interrupted: {e}. Shutting down worker pool..."
+            )
             self._shutting_down = True
             raise
-        
+
         if len(results_for_generation) < len(population):
-            self._fill_missing_results(results_for_generation, len(population), stop_conditions)
+            self._fill_missing_results(
+                results_for_generation, len(population), stop_conditions
+            )
 
         results_for_generation.sort(key=lambda x: x.index)
         return results_for_generation
 
     def cleanup_workers(self, timeout_per_worker: float = 30.0) -> None:
-        if self._cleaned_up: return
+        if self._cleaned_up:
+            return
         logger.info("Cleaning up worker pool...")
         self._shutting_down = True
         self._cleaned_up = True
@@ -303,63 +346,96 @@ class ParallelEvaluator(Evaluator):
             self._stealer_thread.join(timeout=5.0)
 
         for q in self.task_queues:
-            for _ in range(self.num_workers * 2): # Send plenty of sentinels
-                try: q.put_nowait(None)
-                except (queue.Full, OSError): break
-        
+            for _ in range(self.num_workers * 2):  # Send plenty of sentinels
+                try:
+                    q.put_nowait(None)
+                except (queue.Full, OSError):
+                    break
+
         alive_workers = [p for p in self._workers if p.is_alive()]
         for p in alive_workers:
             p.join(timeout=5.0)
-        
+
         still_alive = [p for p in alive_workers if p.is_alive()]
         if still_alive:
-            logger.warning(f"Force terminating {len(still_alive)} stuck workers")
-            for p in still_alive: self._terminate_process(p)
+            logger.warning(
+                f"Force terminating {len(still_alive)} stuck workers"
+            )
+            for p in still_alive:
+                self._terminate_process(p)
 
         self._drain_queues()
         self._close_queues()
         self._workers.clear()
 
-        if torch.cuda.is_available(): torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         signal_manager.unregister_cleanup_handler(self.cleanup_workers)
         logger.info("Worker pool cleanup complete.")
-        
+
     def _drain_queues(self):
         for q in self.task_queues + [self.result_queue]:
             try:
-                while not q.empty(): q.get_nowait()
-            except (queue.Empty, OSError): pass
+                while not q.empty():
+                    q.get_nowait()
+            except (queue.Empty, OSError):
+                pass
 
     def _close_queues(self):
         for q in self.task_queues + [self.result_queue]:
             try:
-                q.close(); q.join_thread()
-            except (OSError, ValueError): pass
+                q.close()
+                q.join_thread()
+            except (OSError, ValueError):
+                pass
 
-    def _process_result(self, result: Result, stop_conditions: Optional[StopConditions]):
+    def _process_result(
+        self, result: Result, stop_conditions: Optional[StopConditions]
+    ):
         if result.index in self._pending_tasks:
             del self._pending_tasks[result.index]
         if self.task_id is not None:
             self.progress.update(self.task_id, advance=1)
         for entry in result.log_lines:
-            logger.info(entry[0] if isinstance(entry, tuple) else entry, 
-                        file_only=isinstance(entry, tuple) and entry[1] == "file_only")
-        if stop_conditions and result.status == "SUCCESS" and result.fitness >= stop_conditions.fitness_goal:
+            logger.info(
+                entry[0] if isinstance(entry, tuple) else entry,
+                file_only=isinstance(entry, tuple) and entry[1] == "file_only",
+            )
+        if (
+            stop_conditions
+            and result.status == "SUCCESS"
+            and result.fitness >= stop_conditions.fitness_goal
+        ):
             self._fitness_goal_met = True
             self._goal_achiever_index = result.index
-            logger.info(f"Fitness goal {stop_conditions.fitness_goal} met by individual {result.index}. Triggering early stop.")
+            logger.info(
+                f"Fitness goal {stop_conditions.fitness_goal} met by individual {result.index}. Triggering early stop."
+            )
 
     def _is_any_worker_alive(self) -> bool:
         return any(p.is_alive() for p in self._workers)
 
-    def set_training_epochs(self, epochs: int): self.training_epochs = epochs
-    def set_subset_percentage(self, subset_percentage: float): self.subset_percentage = subset_percentage
+    def set_training_epochs(self, epochs: int):
+        self.training_epochs = epochs
+
+    def set_subset_percentage(self, subset_percentage: float):
+        self.subset_percentage = subset_percentage
+
     @staticmethod
     def _terminate_process(p: mp.Process):
         try:
-            if p.is_alive(): p.terminate(); p.join(2.0)
-            if p.is_alive(): p.kill(); p.join(1.0)
-        except Exception as e: logger.error(f"Error terminating process {p.pid}: {e}")
+            if p.is_alive():
+                p.terminate()
+                p.join(2.0)
+            if p.is_alive():
+                p.kill()
+                p.join(1.0)
+        except Exception as e:
+            logger.error(f"Error terminating process {p.pid}: {e}")
+
     @property
-    def num_workers(self) -> int: return len(self._workers)
-    def set_task_id(self, task_id: TaskID): self.task_id = task_id
+    def num_workers(self) -> int:
+        return len(self._workers)
+
+    def set_task_id(self, task_id: TaskID):
+        self.task_id = task_id

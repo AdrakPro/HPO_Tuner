@@ -135,7 +135,7 @@ def get_default_config() -> Dict[str, Any]:
                 "stratification_bins": 3,
                 "stop_conditions": {
                     "max_generations": 70,
-                    "early_stop_generations": 20 ,
+                    "early_stop_generations": 20,
                     "early_stop_epochs": 15,
                     "fitness_goal": 0.99,
                     "time_limit_minutes": 0,
@@ -143,5 +143,3 @@ def get_default_config() -> Dict[str, Any]:
             },
         },
     }
-
-

@@ -5,8 +5,8 @@ from copy import deepcopy
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np  # <-- CHANGED: Added for LHS
-from scipy.stats import qmc  # <-- CHANGED: Added for LHS
+import numpy as np
+from scipy.stats import qmc
 
 from src.logger.logger import logger
 
@@ -51,10 +51,8 @@ class GeneticAlgorithm:
         if not self._is_random_mode:
             self.active_operators = set(self.config["active"])
         else:
-            self.active_operators = set()  # Will be chosen per generation
+            self.active_operators = set()
 
-    # ... (tournament_selection, uniform_crossover, mutate, elitism, set_adaptive_mutation) ...
-    # ... (These functions are unchanged) ...
     def tournament_selection(
         self, population: List[Any], fitness: List[float]
     ) -> Any:
@@ -212,8 +210,7 @@ class GeneticAlgorithm:
 
         return new_pop[:pop_size]
 
-
-    def initial_population(  # <-- CHANGED: Removed 'strat_bins' parameter
+    def initial_population(
         self, pop_size: int, print_warning: bool = True
     ) -> List[Dict]:
         """
@@ -221,7 +218,7 @@ class GeneticAlgorithm:
         1. Guarantees coverage for all categorical/discrete values.
         2. Fills the remaining population using Latin Hypercube Sampling (LHS)
            for all continuous values to ensure broad, even exploration.
-        """  # <-- CHANGED: Docstring updated
+        """
         population: List[Dict[str, Any]] = []
 
         # 1. Guarantee categorical/discrete coverage
@@ -231,7 +228,7 @@ class GeneticAlgorithm:
             if info["type"] in [DataType.DISCRETE, DataType.CATEGORICAL]:
                 for v in info["values"]:
                     # Use the simplified generator
-                    individual = self._generate_individual(  # <-- CHANGED
+                    individual = self._generate_individual(
                         forced_gene=gene, forced_value=v
                     )
                     guaranteed_individuals.append(individual)
@@ -246,19 +243,14 @@ class GeneticAlgorithm:
             )
 
         population.extend(guaranteed_individuals)
-        
+
         # De-duplicate guaranteed individuals (in case of overlap)
-        existing_population = {json.dumps(ind, sort_keys=True): ind for ind in population} # <-- CHANGED
-        population = list(existing_population.values()) # <-- CHANGED
+        existing_population = {json.dumps(ind, sort_keys=True): ind for ind in population}
+        population = list(existing_population.values())
 
-        # ---
-        # <-- CHANGED: Removed the old "Stratification for continuous genes" loop.
-        # ---
-
-        # <-- CHANGED: START of new LHS block
         # 2. Fill remaining population with Latin Hypercube Sampling
         num_remaining = pop_size - len(population)
-        
+
         if num_remaining > 0:
             # Identify all continuous genes
             continuous_genes = {
@@ -267,10 +259,10 @@ class GeneticAlgorithm:
                 if info["type"] == DataType.CONTINUOUS
             }
             num_dimensions = len(continuous_genes)
-            
+
             if num_dimensions > 0:
                 # 1. Initialize LHS sampler
-                sampler_seed = random.randint(0, 2**32 - 1)
+                sampler_seed = self.config["project"]["seed"]
                 sampler = qmc.LatinHypercube(d=num_dimensions, seed=sampler_seed, optimization="random-cd")
 
                 # 2. Get N unit-scaled samples (values 0.0 to 1.0)
@@ -279,7 +271,7 @@ class GeneticAlgorithm:
                 # 3. Rescale samples and create individuals
                 lhs_individuals = []
                 gene_names = list(continuous_genes.keys())
-                
+
                 for i in range(num_remaining):
                     # Start with a random individual for categorical genes
                     individual = self._generate_individual()
@@ -294,26 +286,29 @@ class GeneticAlgorithm:
                         if info.get("scale") == "log":
                             log_min = math.log10(info["min"])
                             log_max = math.log10(info["max"])
-                            scaled_log = log_min + unit_val * (log_max - log_min)
-                            value = 10 ** scaled_log
+                            scaled_log = log_min + unit_val * (
+                                log_max - log_min
+                            )
+                            value = 10**scaled_log
                         else:
-                            value = info["min"] + unit_val * (info["max"] - info["min"])
+                            value = info["min"] + unit_val * (
+                                info["max"] - info["min"]
+                            )
 
                         individual[gene] = float(value)
-                    
+
                     lhs_individuals.append(individual)
-                
+
                 population.extend(lhs_individuals)
-            
+
             else:
-                # No continuous genes, just fill with random
-                pass # The fill-up loop below will handle this
-        # <-- CHANGED: END of new LHS block
-        
+                pass
 
         # Add individuals (guaranteed + LHS) and de-duplicate again
-        existing_population = {str(ind): ind for ind in population} # <-- CHANGED
-        population = list(existing_population.values()) # <-- CHANGED
+        existing_population = {
+            str(ind): ind for ind in population
+        }
+        population = list(existing_population.values())
 
         # 3. Fill up to pop_size with random individuals (if needed)
         while len(population) < pop_size:
@@ -332,17 +327,16 @@ class GeneticAlgorithm:
         self,
         forced_gene: Optional[str] = None,
         forced_value: Optional[Any] = None,
-    ) -> Dict[str, Any]: # <-- CHANGED: Removed strat_gene and bin_range
+    ) -> Dict[str, Any]:
         """
         Generate an individual, optionally forcing a value for a specific gene.
-        """ # <-- CHANGED: Docstring simplified
+        """
         individual: Dict[str, Any] = {}
         for gene, info in self.chromosome_space.items():
             if forced_gene is not None and gene == forced_gene:
                 individual[gene] = self._sample_gene_value(
                     info, forced_value=forced_value
                 )
-            # <-- CHANGED: Removed the 'elif (strat_gene...' block
             else:
                 individual[gene] = self._sample_gene_value(info)
         return individual
@@ -351,26 +345,24 @@ class GeneticAlgorithm:
     def _sample_gene_value(
         info: Dict[str, Any],
         forced_value: Optional[Any] = None,
-    ): # <-- CHANGED: Removed 'bin_range'
+    ):
         """
         Helper for sampling a value for a gene.
         If forced_value is provided, use it.
         Otherwise, sample according to type.
-        """ # <-- CHANGED: Docstring simplified
-        
+        """
+
         if forced_value is not None:
             return forced_value
-            
+
         if info["type"] in [DataType.DISCRETE, DataType.CATEGORICAL]:
             return random.choice(info["values"])
         elif info["type"] == DataType.CONTINUOUS:
             if info.get("scale") == "log":
                 log_min = math.log10(info["min"])
                 log_max = math.log10(info["max"])
-                # <-- CHANGED: Removed 'if bin_range...'
                 return float(10 ** random.uniform(log_min, log_max))
             else:
-                # <-- CHANGED: Removed 'if bin_range...'
                 return float(random.uniform(info["min"], info["max"]))
         raise ValueError(f"Unknown gene type: {info['type']}")
 
@@ -406,7 +398,8 @@ def get_chromosome_search_space(config: Dict[str, Any]) -> dict:
         elif params["type"] == "enum":
             gene_info["type"] = (
                 DataType.CATEGORICAL
-                if gene_name in ("aug_intensity", "activation_fn", "optimizer_schedule")
+                if gene_name
+                in ("aug_intensity", "activation_fn", "optimizer_schedule")
                 else DataType.DISCRETE
             )
             gene_info["values"] = params["values"]

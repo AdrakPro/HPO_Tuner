@@ -2,6 +2,7 @@
 Data loader module for CIFAR-10 using PyTorch.
 Responsible for downloading, loading, and batching the CIFAR-10 dataset.
 """
+
 import os
 import gc
 import random
@@ -29,6 +30,7 @@ CROP_PADDING = 4
 
 IMG_SIZE = 32
 
+
 def get_num_workers(num_workers_from_config: int) -> int:
     """
     Determine the number of workers for DataLoader.
@@ -42,6 +44,7 @@ def get_num_workers(num_workers_from_config: int) -> int:
     #     return 0
     return num_workers_from_config
 
+
 def dataloader_worker_init_fn(worker_id: int):
     """
     Sets the number of threads for a dataloader worker to 1.
@@ -49,10 +52,11 @@ def dataloader_worker_init_fn(worker_id: int):
     is already multi-threaded, which is crucial for data loading performance.
     """
     num_dl_threads = 1
-    
+
     set_num_threads(num_dl_threads)
     set_num_interop_threads(num_dl_threads)
-    
+
+
 def safe_collate_fn(batch):
     """Skip None samples returned by the dataset."""
     batch = [b for b in batch if b is not None]
@@ -60,8 +64,10 @@ def safe_collate_fn(batch):
         return None  # all samples bad, handle this in training loop
     return torch.utils.data.default_collate(batch)
 
+
 class SafeCIFAR10(datasets.CIFAR10):
     """CIFAR-10 that catches corrupt images and returns a dummy tensor."""
+
     def __getitem__(self, index):
         try:
             return super().__getitem__(index)
@@ -69,6 +75,7 @@ class SafeCIFAR10(datasets.CIFAR10):
             print(f"[Warning] Error loading sample {index}: {e}")
             # Return dummy image and label
             return torch.zeros(3, 32, 32), 0
+
 
 class DataLoaderManager:
     """A context manager to ensure DataLoader workers are properly shut down."""
@@ -118,6 +125,7 @@ class DatasetWrapper(Dataset):
     """
     A wrapper to apply a specific transform to a Subset of a Dataset.
     """
+
     def __init__(self, dataset, transform=None):
         self.dataset = dataset
         self.transform = transform
@@ -135,6 +143,7 @@ class DatasetWrapper(Dataset):
     def __len__(self):
         return len(self.dataset)
 
+
 def get_dataset_loaders(
     batch_size: int,
     aug_intensity: AugmentationIntensity,
@@ -146,7 +155,7 @@ def get_dataset_loaders(
 ) -> DataLoaderManager:
     base = os.environ.get("SLURM_JOB_ID")
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
-    data_dir = f"/mnt/lscratch/slurm/{base}/{array_id}"
+    data_dir = f"./data"
     os.makedirs(data_dir, exist_ok=True)
 
     transform_train, transform_test = get_transforms(aug_intensity)
@@ -155,15 +164,21 @@ def get_dataset_loaders(
 
     # Load datasets
     if train_indices is not None and test_indices is not None:
-        base_dataset = train_set_cls(root=data_dir, train=True, download=False, transform=None)
+        base_dataset = train_set_cls(
+            root=data_dir, train=True, download=False, transform=None
+        )
         train_subset = Subset(base_dataset, train_indices)
         test_subset = Subset(base_dataset, test_indices)
 
         train_set = DatasetWrapper(train_subset, transform=transform_train)
         test_set = DatasetWrapper(test_subset, transform=transform_test)
     else:
-        train_set = train_set_cls(root=data_dir, train=True, download=False, transform=transform_train)
-        test_set = test_set_cls(root=data_dir, train=False, download=False, transform=transform_test)
+        train_set = train_set_cls(
+            root=data_dir, train=True, download=False, transform=transform_train
+        )
+        test_set = test_set_cls(
+            root=data_dir, train=False, download=False, transform=transform_test
+        )
         if subset_percentage < 1.0:
             num_samples = len(train_set)
             subset_size = max(1, int(num_samples * subset_percentage))
@@ -177,7 +192,7 @@ def get_dataset_loaders(
         "num_workers": num_workers,
         "pin_memory": is_gpu,
         "worker_init_fn": dataloader_worker_init_fn,
-        #"collate_fn": safe_collate_fn,
+        # "collate_fn": safe_collate_fn,
         "multiprocessing_context": "spawn",
         "persistent_workers": True,  # safer for multiprocessing
         "prefetch_factor": 4,
@@ -187,6 +202,7 @@ def get_dataset_loaders(
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
 
     return DataLoaderManager(train_loader, test_loader, is_gpu_context=is_gpu)
+
 
 def get_transforms(
     aug_intensity: AugmentationIntensity,

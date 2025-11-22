@@ -85,11 +85,16 @@ class PerformanceTracker:
         self.gen_start_clock_time = time.process_time()
 
     def record_sequential_time(
-        self, duration: float, operation: str = "unknown", metadata: Optional[Dict] = None
+        self,
+        duration: float,
+        operation: str = "unknown",
+        metadata: Optional[Dict] = None,
     ):
         """Record time spent in sequential operations"""
         if self.gen_start_wall_time is None:
-            raise RuntimeError("Cannot record sequential time before starting a generation.")
+            raise RuntimeError(
+                "Cannot record sequential time before starting a generation."
+            )
         self.sequential_accumulator += duration
         self.sequential_measurements.append(
             SequentialMeasurement(
@@ -104,7 +109,9 @@ class PerformanceTracker:
     def start_parallel_section(self):
         """Mark the start of parallel evaluation"""
         if self.gen_start_wall_time is None:
-            raise RuntimeError("Cannot start parallel section before starting a generation.")
+            raise RuntimeError(
+                "Cannot start parallel section before starting a generation."
+            )
         self.parallel_start_wall_time = time.perf_counter()
 
     def end_generation(
@@ -115,8 +122,13 @@ class PerformanceTracker:
         population_size: int,
     ) -> GenerationPerformance:
         """End timing for current generation and calculate performance laws"""
-        if self.gen_start_wall_time is None or self.gen_start_clock_time is None:
-            raise RuntimeError("Cannot end generation because no generation was started.")
+        if (
+            self.gen_start_wall_time is None
+            or self.gen_start_clock_time is None
+        ):
+            raise RuntimeError(
+                "Cannot end generation because no generation was started."
+            )
 
         end_wall_time = time.perf_counter()
         end_clock_time = time.process_time()
@@ -172,7 +184,11 @@ class PerformanceTracker:
         return performance
 
     def _calculate_performance_laws(
-        self, sequential_time: float, parallel_time: float, num_workers: int, total_wall_time: float
+        self,
+        sequential_time: float,
+        parallel_time: float,
+        num_workers: int,
+        total_wall_time: float,
     ) -> Tuple[float, float, float, float, float, float]:
         """Calculate Amdahl's and Gustafson's laws for given measurements"""
         if total_wall_time == 0:
@@ -184,19 +200,30 @@ class PerformanceTracker:
 
         effective_workers = num_workers * self.gpu_speedup_factor
         if effective_workers <= 0:
-            return sequential_fraction, parallel_fraction, 1.0, 1.0, 100.0, 100.0
+            return (
+                sequential_fraction,
+                parallel_fraction,
+                1.0,
+                1.0,
+                100.0,
+                100.0,
+            )
 
         # Amdahl's Law (fixed problem size)
         # Speedup = 1 / ( (1 - P) + P/N ), where P is the parallel fraction
         # Here, (1-P) is not just S, but S + Untracked time.
         non_parallel_fraction = 1 - parallel_fraction
-        denominator = non_parallel_fraction + (parallel_fraction / effective_workers)
+        denominator = non_parallel_fraction + (
+            parallel_fraction / effective_workers
+        )
         amdahl_speedup = 1 / denominator if denominator > 0 else float("inf")
         amdahl_efficiency = (amdahl_speedup / effective_workers) * 100
 
         # Gustafson's Law (scaled problem size)
         # Speedup = (1 - P) + P*N
-        gustafson_speedup = non_parallel_fraction + (parallel_fraction * effective_workers)
+        gustafson_speedup = non_parallel_fraction + (
+            parallel_fraction * effective_workers
+        )
         gustafson_efficiency = (gustafson_speedup / effective_workers) * 100
 
         return (
@@ -231,19 +258,23 @@ class PerformanceTracker:
             from src.logger.logger import logger
         except ImportError:
             import logging
+
             logger = logging.getLogger(__name__)
             if not logger.handlers:
                 logger.addHandler(logging.StreamHandler())
                 logger.setLevel(logging.INFO)
-
 
         perf = self.get_generation_performance(generation)
         if not perf:
             logger.warning(f"No performance data for generation {generation}")
             return
 
-        logger.info(f"--- PERFORMANCE REPORT FOR GENERATION {perf.generation} (Phase: {perf.phase.value}) ---")
-        logger.info(f"Wall Time: {perf.wall_time:.8f}s | Clock Time: {perf.clock_time:.8f}s")
+        logger.info(
+            f"--- PERFORMANCE REPORT FOR GENERATION {perf.generation} (Phase: {perf.phase.value}) ---"
+        )
+        logger.info(
+            f"Wall Time: {perf.wall_time:.8f}s | Clock Time: {perf.clock_time:.8f}s"
+        )
         logger.info(f"Sequential Time: {perf.sequential_time:.8f}s")
         logger.info(f"Parallel Time: {perf.parallel_time:.8f}s")
         logger.info(f"Untracked Time: {perf.untracked_time:.8f}s")
@@ -273,6 +304,7 @@ class PerformanceTracker:
             from src.logger.logger import logger
         except ImportError:
             import logging
+
             logger = logging.getLogger(__name__)
             if not logger.handlers:
                 logger.addHandler(logging.StreamHandler())
@@ -287,18 +319,24 @@ class PerformanceTracker:
         total_wall = sum(p.wall_time for p in self.generation_performances)
         total_clock = sum(p.clock_time for p in self.generation_performances)
 
-        avg_workers = np.mean([p.num_workers for p in self.generation_performances])
+        avg_workers = np.mean(
+            [p.num_workers for p in self.generation_performances]
+        )
 
         # Calculate overall fractions based on the sum of times
         overall_seq_frac = total_seq / total_wall if total_wall > 0 else 0
         overall_par_frac = total_par / total_wall if total_wall > 0 else 0
-        
+
         effective_workers = avg_workers * self.gpu_speedup_factor
-        
+
         non_par_frac_overall = 1 - overall_par_frac
-        denominator = non_par_frac_overall + (overall_par_frac / effective_workers)
+        denominator = non_par_frac_overall + (
+            overall_par_frac / effective_workers
+        )
         overall_amdahl = 1 / denominator if denominator > 0 else float("inf")
-        overall_gustafson = non_par_frac_overall + (overall_par_frac * effective_workers)
+        overall_gustafson = non_par_frac_overall + (
+            overall_par_frac * effective_workers
+        )
 
         logger.info("=" * 40)
         logger.info("OVERALL PERFORMANCE SUMMARY")
@@ -306,8 +344,12 @@ class PerformanceTracker:
         logger.info(f"Total Generations: {len(self.generation_performances)}")
         logger.info(f"Total Wall Time: {total_wall:.2f}s")
         logger.info(f"Total Clock Time: {total_clock:.2f}s")
-        logger.info(f"Total Sequential: {total_seq:.2f}s ({overall_seq_frac * 100:.1f}%)")
-        logger.info(f"Total Parallel: {total_par:.2f}s ({overall_par_frac * 100:.1f}%)")
+        logger.info(
+            f"Total Sequential: {total_seq:.2f}s ({overall_seq_frac * 100:.1f}%)"
+        )
+        logger.info(
+            f"Total Parallel: {total_par:.2f}s ({overall_par_frac * 100:.1f}%)"
+        )
         logger.info(f"Average Workers: {avg_workers:.1f}")
         logger.info(f"Effective Workers: {effective_workers:.1f}")
 
@@ -316,12 +358,15 @@ class PerformanceTracker:
         logger.info(f"Gustafson's Law Speedup: {overall_gustafson:.2f}x")
 
         # Per-phase breakdown
-        phases = sorted(list(set(p.phase for p in self.generation_performances)), key=lambda x: x.value)
+        phases = sorted(
+            list(set(p.phase for p in self.generation_performances)),
+            key=lambda x: x.value,
+        )
         for phase in phases:
             phase_perfs = self.get_phase_performances(phase)
             phase_seq = sum(p.sequential_time for p in phase_perfs)
             phase_wall = sum(p.wall_time for p in phase_perfs)
-            
+
             if phase_wall > 0:
                 phase_seq_frac = phase_seq / phase_wall
                 logger.info(

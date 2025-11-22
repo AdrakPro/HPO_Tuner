@@ -20,7 +20,11 @@ from src.config.load_config import (
     prompt_and_save_json_config,
 )
 from src.logger.logger import logger
-from src.model.chromosome import AugmentationIntensity, OptimizerSchedule, ActivationFn
+from src.model.chromosome import (
+    AugmentationIntensity,
+    OptimizerSchedule,
+    ActivationFn,
+)
 from src.utils.enum_helper import get_enum_names, get_enum_values
 from src.utils.file_helper import ensure_dir_exists
 
@@ -680,7 +684,7 @@ def run_tui_configurator() -> Optional[Dict[str, Any]]:
     prompt = "[1] Create new configuration\n[2] Load last configuration file\n[3] Load configuration from a file\n[4] Exit\n> "
     error_msg = "Invalid choice. Please enter 1, 2, 3 or 4."
     choice = _prompt_for_validated_input(
-            prompt, lambda x: x in ["1", "2", "3", "4"], error_msg
+        prompt, lambda x: x in ["1", "2", "3", "4"], error_msg
     )
 
     if choice == "4":

@@ -20,8 +20,14 @@ def mixup_data(x, y, alpha=0.2, device="cuda"):
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-def mixup_schedule(epoch: int, total_epochs: int, base_alpha: float,
-                   warmup_frac: float = 0.15, cooldown_frac: float = 0.15) -> float:
+
+def mixup_schedule(
+    epoch: int,
+    total_epochs: int,
+    base_alpha: float,
+    warmup_frac: float = 0.15,
+    cooldown_frac: float = 0.15,
+) -> float:
     warmup_e = int(total_epochs * warmup_frac)
     cooldown_e = int(total_epochs * cooldown_frac)
     hold_end = total_epochs - cooldown_e

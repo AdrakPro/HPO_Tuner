@@ -28,7 +28,6 @@ def create_evaluator(
     session_log_filename: str,
     train_indices: Optional[np.ndarray] = None,
     test_indices: Optional[np.ndarray] = None,
-    fixed_batch_size: Optional[int] = None,
     log_queue=None,
 ) -> Evaluator:
     """
@@ -73,7 +72,6 @@ def create_evaluator(
             test_indices=test_indices,
         )
 
-
     return ParallelEvaluator(
         config=config,
         training_epochs=training_epochs,
@@ -84,6 +82,5 @@ def create_evaluator(
         session_log_filename=session_log_filename,
         train_indices=train_indices,
         test_indices=test_indices,
-        fixed_batch_size=fixed_batch_size,
         log_queue=log_queue,
     )

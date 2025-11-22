@@ -3,7 +3,7 @@ Manages the stopping conditions for the genetic algorithm.
 """
 
 import time
-from typing import List
+from typing import List, Tuple
 
 
 # TODO: clean max_generations
@@ -49,7 +49,7 @@ class StopConditions:
 
     def should_stop_algorithm(
         self, current_generation: int, best_fitness: float
-    ) -> tuple[bool, str]:
+    ) -> Tuple[bool, str]:
         """
         Checks if the main genetic algorithm loop should terminate.
 
@@ -62,11 +62,7 @@ class StopConditions:
         """
         self.best_fitness_history.append(best_fitness)
 
-        # 1. Max generations
-        # if current_generation >= self.max_generations:
-        #     return True, f"Reached max generations ({self.max_generations})."
-
-        # 2. Time limit
+        # Time limit
         if self.time_limit_minutes != 0:
             elapsed_time_minutes = (time.monotonic() - self.start_time) / 60
             if elapsed_time_minutes >= self.time_limit_minutes:
@@ -75,9 +71,8 @@ class StopConditions:
                     f"Exceeded time limit of {self.time_limit_minutes} minutes.",
                 )
 
-        # 3. Early stopping
+        # Early stopping generation
         if current_generation > self.early_stop_generations:
-            # Look at the last `early_stop_generations` fitness values
             recent_history = self.best_fitness_history[
                 -self.early_stop_generations :
             ]

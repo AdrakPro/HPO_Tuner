@@ -428,11 +428,6 @@ def run_optimization(
 
     close_evaluator = False
 
-    if not is_calibration_complete and ga_config[CAL_PHASE]["enabled"]:
-        fixed_batch_size = 64
-    else:
-        fixed_batch_size = None
-
     if evaluator is None:
         evaluator = create_evaluator(
             config,
@@ -443,7 +438,6 @@ def run_optimization(
             session_log_filename,
             train_indices,
             test_indices,
-            fixed_batch_size,
         ).__enter__()
         close_evaluator = True
 
@@ -461,9 +455,7 @@ def run_optimization(
                 fitness_scores_cal = loaded_state.fitness_scores
             else:
                 initial_pop_size = ga_config[CAL_PHASE]["population_size"]
-                initial_population_cal = ga.initial_population(
-                    initial_pop_size 
-                )
+                initial_population_cal = ga.initial_population(initial_pop_size)
 
             calibrated_population, best_fitness, best_loss, _ = run_ga_phase(
                 CAL_PHASE,
@@ -548,9 +540,7 @@ def run_optimization(
                 logger.info(
                     "Calibration disabled. Starting main algorithm with random population."
                 )
-                main_starting_population = ga.initial_population(
-                    main_pop_size 
-                )
+                main_starting_population = ga.initial_population(main_pop_size)
 
         final_population, best_fitness, best_loss, should_stop = run_ga_phase(
             MAIN_PHASE,

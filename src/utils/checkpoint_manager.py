@@ -35,7 +35,9 @@ class _CheckpointManager:
         self,
     ):
         task_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
-        self.checkpoint_dir = f"/lustre/pd01/hpc-adamak7184-1759856296/checkpoints/{task_id}"
+        self.checkpoint_dir = (
+            f"./checkpoints/{task_id}"
+        )
         self.filepath = os.path.join(self.checkpoint_dir, "ga_checkpoint.pkl")
         self.temp_filepath = f"{self.filepath}.tmp"
         os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -93,10 +95,10 @@ class _CheckpointManager:
                 state: GaState = pickle.load(f)
 
             rng_state = state.rng_state
-            #random.setstate(rng_state["python_random"])
-            #torch.set_rng_state(rng_state["torch_random"])
+            # random.setstate(rng_state["python_random"])
+            # torch.set_rng_state(rng_state["torch_random"])
 
-            #if torch.cuda.is_available() and rng_state.get("torch_cuda_random"):
+            # if torch.cuda.is_available() and rng_state.get("torch_cuda_random"):
             #    torch.cuda.set_rng_state_all(rng_state["torch_cuda_random"])
 
             if not hasattr(state, "outer_fold_k"):

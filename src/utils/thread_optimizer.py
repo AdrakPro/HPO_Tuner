@@ -4,6 +4,7 @@ Thread optimization for PyTorch to prevent oversubscription on multi-core system
 
 import torch
 
+
 class ThreadOptimizer:
     @staticmethod
     def enable_tf32():
@@ -17,4 +18,3 @@ class ThreadOptimizer:
             else:
                 torch.backends.cuda.matmul.allow_tf32 = False
                 torch.backends.cudnn.allow_tf32 = False
-

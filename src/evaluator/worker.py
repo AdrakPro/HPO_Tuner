@@ -15,6 +15,7 @@ from src.nn.train_and_eval import train_and_eval
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
 from src.utils.thread_optimizer import ThreadOptimizer
 
+
 def pin_worker_to_cores(core_ids: List[int]):
     """Pins the current process to the specified core IDs."""
     if not core_ids:
@@ -25,7 +26,10 @@ def pin_worker_to_cores(core_ids: List[int]):
         # Optional: Log success, but can be noisy
         # print(f"[{datetime.now().isoformat()}][PID {os.getpid()}] Successfully pinned to cores: {core_ids}")
     except Exception as e:
-        print(f"[{datetime.now().isoformat()}][PID {os.getpid()}] WARNING - Failed to pin to cores {core_ids}: {e}")
+        print(
+            f"[{datetime.now().isoformat()}][PID {os.getpid()}] WARNING - Failed to pin to cores {core_ids}: {e}"
+        )
+
 
 def init_device(device_id: Union[str, int]) -> device:
     """
@@ -53,22 +57,26 @@ def worker_main(worker_config: WorkerConfig) -> None:
     assigned_cores = getattr(worker_config, "core_ids", [])
     worker_type = getattr(worker_config, "type", "unknown")
     device_spec = getattr(worker_config, "device", "cpu")
-    device_info = f"CPU" if worker_type == "cpu" else f"GPU device={device_spec}"
+    device_info = (
+        f"CPU" if worker_type == "cpu" else f"GPU device={device_spec}"
+    )
 
     # print(f"[{start_time_iso}][PID {my_pid}] STARTING | Type: {worker_type} | Device: {device_info} | Target Cores: {assigned_cores}")
 
     if assigned_cores:
         pin_worker_to_cores(assigned_cores)
     # else:
-        # print(f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: No core_ids provided, not pinning.")
+    # print(f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: No core_ids provided, not pinning.")
 
-    num_dataloader_workers = getattr(worker_config, 'num_dataloader_workers', 1)
-    num_cores_assigned = len(assigned_cores) if assigned_cores else os.cpu_count() or 1
+    num_dataloader_workers = getattr(worker_config, "num_dataloader_workers", 1)
+    num_cores_assigned = (
+        len(assigned_cores) if assigned_cores else os.cpu_count() or 1
+    )
 
     if worker_type == "gpu":
         num_compute_threads = 1
     elif worker_type == "cpu":
-        #num_compute_threads = max(1, num_cores_assigned - 1 - num_dataloader_workers)
+        # num_compute_threads = max(1, num_cores_assigned - 1 - num_dataloader_workers)
         num_compute_threads = 14
     else:
         num_compute_threads = 1
@@ -79,19 +87,21 @@ def worker_main(worker_config: WorkerConfig) -> None:
         set_num_threads(actual_torch_threads)
         # print(f"[{datetime.now().isoformat()}][PID {my_pid}] Set torch interop=1, intraop={actual_torch_threads}")
     except Exception as e:
-        print(f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: Failed to set PyTorch threads: {e}")
+        print(
+            f"[{datetime.now().isoformat()}][PID {my_pid}] WARNING: Failed to set PyTorch threads: {e}"
+        )
 
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    #os.environ["OMP_DYNAMIC"] = "FALSE"
+    # os.environ["OMP_DYNAMIC"] = "FALSE"
 
-   # if worker_config.type == "gpu":
-   #     num_threads = 1
-   # else:
-   #     num_threads = 12
-   # 
-   # set_num_threads(num_threads)
-   # set_num_interop_threads(1)
+    # if worker_config.type == "gpu":
+    #     num_threads = 1
+    # else:
+    #     num_threads = 12
+    #
+    # set_num_threads(num_threads)
+    # set_num_interop_threads(1)
 
     dev = init_device(worker_config.device)
     device_name = (
@@ -103,9 +113,9 @@ def worker_main(worker_config: WorkerConfig) -> None:
     # Restore signal handler after imports are complete
     signal.signal(signal.SIGINT, original_sigint_handler)
 
-    #local_logger = logging.getLogger(f"worker-{worker_config.worker_id}")
-    #local_logger.setLevel(logging.INFO)
-    #if getattr(worker_config, "log_queue", None) is not None:
+    # local_logger = logging.getLogger(f"worker-{worker_config.worker_id}")
+    # local_logger.setLevel(logging.INFO)
+    # if getattr(worker_config, "log_queue", None) is not None:
     #    try:
     #        qh = QueueHandler(worker_config.log_queue)
     #        if local_logger.handlers:
@@ -114,10 +124,10 @@ def worker_main(worker_config: WorkerConfig) -> None:
     #        local_logger.addHandler(qh)
     #    except Exception:
     #        local_logger = logger  # fallback to module logger
-    #else:
+    # else:
     #    local_logger = logger
     #
-    #def _emit_log(entry):
+    # def _emit_log(entry):
     #    """
     #    Accept either a string or a tuple (string, 'file_only'). If file_only is set, we only
     #    keep it in the result.log_lines and skip emitting to the file (preserves original intent).
@@ -137,10 +147,14 @@ def worker_main(worker_config: WorkerConfig) -> None:
                 break
 
             def buffer_and_emit(log_time, entry):
-                if isinstance(entry, tuple) and len(entry) >= 2 and entry[1] == "file_only":
+                if (
+                    isinstance(entry, tuple)
+                    and len(entry) >= 2
+                    and entry[1] == "file_only"
+                ):
                     return
                 log_buffer.append(entry)
-                #_emit_log(m)
+                # _emit_log(m)
 
             log_buffer = [
                 f"[Worker-{worker_config.worker_id} / {device_name}] Evaluating Individual {task.index}/{task.pop_size} ({task.training_epochs} epochs)",
@@ -225,8 +239,6 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
                     log_buffer.append(line)
 
-                # if worker_config.fixed_batch_size is not None:
-                #     chromosome.batch_size = worker_config.fixed_batch_size
                 with get_dataset_loaders(
                     batch_size=chromosome.batch_size,
                     aug_intensity=chromosome.aug_intensity,
@@ -256,9 +268,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                 )
 
                 if dev.type == "cuda":
-                    gpu_usage = (
-                        cuda.max_memory_allocated(dev) / 1024**3
-                    )
+                    gpu_usage = cuda.max_memory_allocated(dev) / 1024**3
                     log_buffer.append(
                         f"[Worker-{worker_config.worker_id} / {device_name}] GPU memory used: {gpu_usage:.2f} GB"
                     )
@@ -271,7 +281,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     duration_seconds=duration,
                     status="SUCCESS",
                     log_lines=log_buffer,
-                    worker_type=worker_config.type
+                    worker_type=worker_config.type,
                 )
 
             except (CudaOutOfMemoryError, NumericalInstabilityError) as e:
@@ -286,7 +296,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     status="FAILURE",
                     error_message=str(e),
                     log_lines=log_buffer,
-                    worker_type=worker_config.type
+                    worker_type=worker_config.type,
                 )
             except Exception as e:
                 tb_str = traceback.format_exc()
@@ -301,7 +311,7 @@ def worker_main(worker_config: WorkerConfig) -> None:
                     status="FAILURE",
                     error_message=str(e),
                     log_lines=log_buffer,
-                    worker_type=worker_config.type
+                    worker_type=worker_config.type,
                 )
 
             worker_config.result_queue.put(result)

@@ -17,6 +17,7 @@ from src.nn.neural_network import get_network, get_optimizer_and_scheduler
 from src.utils.exceptions import CudaOutOfMemoryError, NumericalInstabilityError
 from src.utils.mixup import mixup_data, mixup_criterion, mixup_schedule
 
+
 def train_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -26,7 +27,6 @@ def train_epoch(
     lam_alpha: float,
     scaler: GradScaler = None,
     scheduler=None,
-    profiler: torch.profiler.profile = None,
 ) -> tuple[float, float]:
     """
     Train the model for one epoch.
@@ -120,9 +120,6 @@ def train_epoch(
         else:
             optimizer.step()
 
-        if profiler:
-            profiler.step()
-
         # Metrics
         running_loss += loss.item() * inputs.size(0)
         _, predicted = outputs.max(1)
@@ -135,7 +132,7 @@ def train_epoch(
     if total == 0:
         return float("inf"), 0.0
 
-    epoch_loss = running_loss / total 
+    epoch_loss = running_loss / total
     epoch_acc = correct / total
     return epoch_loss, epoch_acc
 
@@ -211,13 +208,10 @@ def train_and_eval(
     """
 
     if len(train_loader) == 0:
-        logger.warning("Train loader is empty. Skipping training and returning 0 fitness.")
+        logger.warning(
+            "Train loader is empty. Skipping training and returning 0 fitness."
+        )
         return 0.0, float("inf")
-
-
-    profiling_enabled = os.environ.get("ENABLE_PROFILER") == "1"
-    profiler = None
-    
 
     try:
         model: nn.Module = get_network(chromosome, neural_config).to(device)
@@ -226,8 +220,12 @@ def train_and_eval(
             model, chromosome, train_loader, epochs
         )
         if device.type == "cpu":
-            import intel_extension_for_pytorch as ipex
-            model, optimizer = ipex.optimize(model, optimizer=optimizer)
+            try:
+                import intel_extension_for_pytorch as ipex
+                model, optimizer = ipex.optimize(model, optimizer=optimizer)
+            except Exception as e:
+                logger.error(
+                    f"IPEX not available. Falling back to regular PyTorch. Reason: {e}")
         scaler = torch.amp.GradScaler() if device.type == "cuda" else None
 
         final_test_acc = 0.0
@@ -239,22 +237,6 @@ def train_and_eval(
 
         light_switch_epoch = int(0.1 * epochs)
         strong_switch_epoch = int(0.4 * epochs)
-        
-        # --- Profiler Setup ---
-        if profiling_enabled:
-            logger.info(f"Profiler enabled for PID: {os.getpid()}. Output will be in profile_{os.getpid()}.txt")
-            activities = [torch.profiler.ProfilerActivity.CPU]
-            if device.type == "cuda":
-                activities.append(torch.profiler.ProfilerActivity.CUDA)
-            
-            profiler = torch.profiler.profile(
-                activities=activities,
-                schedule=torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1),
-                record_shapes=True,
-                profile_memory=True,
-                with_stack=True,
-            )
-            profiler.__enter__() # Manually enter context
 
         for epoch in range(epochs):
             if epoch == light_switch_epoch:
@@ -284,7 +266,6 @@ def train_and_eval(
                 lam_epoch,
                 scaler,
                 scheduler,
-                profiler, # Pass profiler to train_epoch
             )
             test_loss, test_acc = evaluate(
                 model, test_loader, criterion, device
@@ -307,22 +288,12 @@ def train_and_eval(
                     f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}"
                 )
 
-
-            if epoch + 1 == 5 and profiling_enabled and profiler:
-                profiler.__exit__(None, None, None) # Manually exit context
-
-                profile_result = profiler.key_averages().table(sort_by="cuda_time_total", row_limit=50)
-                output_filename = f"/lustre/pd01/hpc-adamak7184-1759856296/profile.txt"
-                with open(output_filename, "w") as f:
-                    f.write(profile_result)
-
             if test_acc > best_acc_so_far:
                 best_acc_so_far = test_acc
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
 
-            early_stop_epochs = 15 
             if epochs_without_improvement >= early_stop_epochs:
                 if epoch_callback is not None:
                     epoch_callback(
@@ -339,18 +310,6 @@ def train_and_eval(
                         f"due to no improvement for {early_stop_epochs} epochs."
                     )
                 break
-        
-        # --- Profiler Teardown ---
-            #saver = ModelSaver("model")
-            #callback_msg = saver.save(model)
-            callback_msg = "" 
-            if callback_msg:
-                if epoch_callback is not None:
-                    epoch_callback(
-                        None, None, None, None, None, final_msg=callback_msg
-                    )
-                else:
-                    logger.info(callback_msg)
 
         return final_test_acc, final_test_loss
 
@@ -369,16 +328,7 @@ def train_and_eval(
         raise
     except Exception as e:
         b_str = traceback.format_exc()
-        logger.error(f"An unexpected error occurred in train_and_eval: {e} -> {b_str}")
+        logger.error(
+            f"An unexpected error occurred in train_and_eval: {e} -> {b_str}"
+        )
         raise
-    finally:
-        if profiling_enabled and profiler:
-            logger.info("Function exit or interrupt detected. Saving profiler data...")
-            profiler.__exit__(None, None, None) # Manually exit context
-            
-            # Sort by self_cpu_time_total to see the biggest offenders first
-            profile_result = profiler.key_averages().table(sort_by="self_cpu_time_total", row_limit=50)
-            output_filename = f"/lustre/pd01/hpc-adamak7184-1759856296/profile.txt"
-            with open(output_filename, "w") as f:
-                f.write(profile_result)
-            logger.info(f"Profiler results saved to {output_filename}")	        

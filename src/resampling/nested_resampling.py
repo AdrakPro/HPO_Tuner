@@ -35,16 +35,19 @@ def run_nested_resampling(
                 f"Running as SLURM array task. Executing ONLY Fold {fold_index + 1}/{outer_k_folds}."
             )
             _run_single_fold(
-                config, tui, session_log_filename, loaded_state, fold_index, log_queue
+                config,
+                tui,
+                session_log_filename,
+                loaded_state,
+                fold_index,
+                log_queue,
             )
         except (ValueError, IndexError):
             logger.error(
                 f"Invalid SLURM_ARRAY_TASK_ID: {fold_to_run_str}. Could not run fold."
             )
     else:
-        logger.info(
-            "Not a SLURM array job. Running all folds sequentially."
-        )
+        logger.info("Not a SLURM array job. Running all folds sequentially.")
         if not nested_config["enabled"] or outer_k_folds <= 1:
             run_optimization(config, tui, session_log_filename, loaded_state)
             return
@@ -61,10 +64,14 @@ def run_nested_resampling(
                 loaded_state.phase == "main_algorithm"
                 and loaded_state.phase_completed
             ):
-                logger.info(f"Fold {start_fold + 1} was already completed. Resuming from Fold {start_fold + 2}.")
+                logger.info(
+                    f"Fold {start_fold + 1} was already completed. Resuming from Fold {start_fold + 2}."
+                )
                 start_fold += 1
             else:
-                logger.info(f"Resuming nested resampling from Fold {start_fold + 1}/{outer_k_folds}.")
+                logger.info(
+                    f"Resuming nested resampling from Fold {start_fold + 1}/{outer_k_folds}."
+                )
 
         for k in range(start_fold, outer_k_folds):
             current_fold_loaded_state = (
@@ -76,7 +83,7 @@ def run_nested_resampling(
                 session_log_filename,
                 current_fold_loaded_state,
                 k,
-                log_queue
+                log_queue,
             )
             if final_fitness is not None:
                 all_fold_scores.append(final_fitness)
@@ -108,19 +115,19 @@ def _run_single_fold(
 
     base = os.environ.get("SLURM_JOB_ID")
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID", "0")
-    data_dir = f"/mnt/lscratch/slurm/{base}/{array_id}"
+    data_dir = f"./data"
     os.makedirs(data_dir, exist_ok=True)
     seed = config["project"]["seed"]
     fold_indices_list = create_stratified_k_folds(data_dir, outer_k_folds, seed)
-    
+
     if fold_index >= len(fold_indices_list):
-        logger.error(f"Fold index {fold_index} is out of bounds for {len(fold_indices_list)} folds.")
+        logger.error(
+            f"Fold index {fold_index} is out of bounds for {len(fold_indices_list)} folds."
+        )
         return None, None, None
 
     train_idx, test_idx = fold_indices_list[fold_index]
     ga_config = config["genetic_algorithm_config"]
-    
-    fixed_batch_size = ga_config.get("fixed_batch_size_for_cal", 64)
 
     with create_evaluator(
         config,
@@ -131,7 +138,6 @@ def _run_single_fold(
         session_log_filename,
         train_indices=train_idx,
         test_indices=test_idx,
-        fixed_batch_size=fixed_batch_size,
         log_queue=log_queue,
     ) as evaluator:
         best_individual, final_fitness, final_loss = run_optimization(

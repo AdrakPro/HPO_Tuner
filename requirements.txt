@@ -9,6 +9,7 @@ numpy>=2.2.0
 flake8>=7.0
 isort>=6.0
 pytest>=8.0
+pytest-mock
 pytest-cov>=5.0
 intel-extension-for-pytorch==2.8.0
 scipy>=1.16.0

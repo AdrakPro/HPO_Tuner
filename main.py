@@ -71,6 +71,8 @@ def main():
         logger.add_tui_sink(tui.get_loguru_sink())
 
         with tui:
+            tui.build_config_panel(config)
+
             logger.info(
                 f"Logger initialized. Log file at {session_log_filename}"
             )

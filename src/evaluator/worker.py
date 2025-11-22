@@ -57,10 +57,10 @@ def worker_main(worker_config: WorkerConfig) -> None:
 
     # TODO make settings threads per worker in config cpu/gpu
     if worker_type == "gpu":
-        num_compute_threads = assigned_cores
+        num_compute_threads = 1
     elif worker_type == "cpu":
         # num_compute_threads = 14
-        num_compute_threads = assigned_cores
+        num_compute_threads = 1
     else:
         num_compute_threads = 1
 

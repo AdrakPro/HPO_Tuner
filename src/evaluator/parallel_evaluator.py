@@ -410,7 +410,7 @@ class ParallelEvaluator(Evaluator):
         or stale state references in the task stealer.
         """
         if self._pending_tasks:
-            logger.debug(
+            logger.warning(
                 f"Clearing {len(self._pending_tasks)} pending tasks from tracking."
             )
             self._pending_tasks.clear()

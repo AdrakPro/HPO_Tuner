@@ -178,7 +178,7 @@ def get_dataset_loaders(
         "worker_init_fn": dataloader_worker_init_fn,
     }
 
-    if num_dataloader_workers > 1:
+    if num_dataloader_workers > 0:
         loader_args["multiprocessing_context"] = "spawn"
         loader_args["persistent_workers"] = True
         loader_args["prefetch_factor"] = 4

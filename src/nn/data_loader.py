@@ -176,10 +176,12 @@ def get_dataset_loaders(
         "num_workers": num_dataloader_workers,
         "pin_memory": is_gpu,
         "worker_init_fn": dataloader_worker_init_fn,
-        "multiprocessing_context": "spawn",
-        "persistent_workers": True,
-        "prefetch_factor": 4,
     }
+
+    if num_dataloader_workers > 1:
+        loader_args["multiprocessing_context"] = "spawn"
+        loader_args["persistent_workers"] = True
+        loader_args["prefetch_factor"] = 4
 
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     test_loader = DataLoader(test_set, shuffle=False, **loader_args)
